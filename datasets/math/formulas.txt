@@ -1,0 +1,9 @@
+Area of a rectangle = length × width
+
+Area of a triangle = base × height / 2
+
+Circumference = 2 × π × radius
+
+Pythagorean theorem:
+
+a² + b² = c²

@@ -1,0 +1,108 @@
+# =========================
+# Python
+# =========================
+__pycache__/
+*.py[cod]
+*.pyo
+
+# =========================
+# Virtual environments
+# =========================
+.venv/
+.venv311/
+venv/
+env/
+
+# =========================
+# Environment variables / secrets
+# =========================
+.env
+.env.*
+!.env.example
+
+# =========================
+# Logs
+# =========================
+*.log
+logs/
+
+# =========================
+# IDEs
+# =========================
+.vscode/
+.idea/
+
+# =========================
+# OS files
+# =========================
+.DS_Store
+Thumbs.db
+
+# =========================
+# Local models / model weights
+# =========================
+models/
+model/
+checkpoints/
+saved_models/
+*.bin
+*.pt
+*.pth
+*.safetensors
+
+# =========================
+# Local databases
+# =========================
+*.db
+*.sqlite
+*.sqlite3
+database/
+
+# =========================
+# Build / cache
+# =========================
+build/
+dist/
+*.egg-info/
+.pytest_cache/
+cache/
+
+# =========================
+# Node
+# =========================
+node_modules/
+
+# =========================
+# Temporary files
+# =========================
+*.tmp
+*.temp
+
+# =========================
+# Nova local/generated data
+# =========================
+data/
+users/
+database/
+
+memory/*.json
+memory/storage/
+memory/profiles/*
+memory/sessions/*
+memory/preferences/*
+
+memory.json
+
+backend/memory/*.json
+backend/memory/storage/
+
+# =========================
+# Local project backups
+# =========================
+backup_v1/
+
+# =========================
+# Generated/debug files
+# =========================
+nova_structure.txt
+backend_tree.txt

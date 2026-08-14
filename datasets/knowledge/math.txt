@@ -1,0 +1,28 @@
+Area of a triangle = base × height ÷ 2
+
+Area of a rectangle = length × width
+
+Perimeter = sum of every side.
+
+Pythagorean theorem:
+a²+b²=c²
+
+Slope = rise/run.
+
+A fraction represents part of a whole.
+The circumference of a circle equals 2 × π × radius.
+
+The area of a circle equals π × radius².
+
+The volume of a cube equals side³.
+
+The average equals the sum divided by the number of values.
+
+A percentage means "out of one hundred."
+A square has four equal sides.
+
+A cube has six square faces.
+
+A decimal is another way to write fractions.
+
+The median is the middle value in ordered data.

@@ -1,0 +1,24 @@
+Area of triangle = base × height ÷ 2
+
+Area of square = side²
+
+Area of rectangle = length × width
+
+Area of circle = πr²
+
+Circumference = 2πr
+
+Perimeter = sum of all sides
+
+Volume of cube = side³
+
+Volume of rectangular prism = length × width × height
+
+Pythagorean theorem:
+a²+b²=c²
+
+Slope = rise/run
+
+Distance formula:
+
+√((x₂−x₁)²+(y₂−y₁)²)

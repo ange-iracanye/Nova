@@ -1,0 +1,26 @@
+Cell:
+Basic unit of life.
+
+Nucleus:
+Controls the cell.
+
+DNA:
+Contains genetic information.
+
+Mitochondria:
+Produces energy.
+
+Ribosomes:
+Produce proteins.
+
+Photosynthesis:
+Plants convert sunlight into energy.
+
+Respiration:
+Cells release energy from glucose.
+
+Evolution:
+Species change over generations.
+
+Natural selection:
+Organisms with useful traits survive more often.

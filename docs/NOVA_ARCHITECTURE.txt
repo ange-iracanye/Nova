@@ -1,0 +1,21 @@
+USER
+│
+├── Website
+├── Mobile App
+├── API
+│
+▼
+ENGINE
+│
+├── Planner
+├── Intent Detector
+├── Subject Detector
+├── Thinking
+├── Memory
+├── Retrieval
+├── Internet
+├── Tutor
+├── Response Builder
+│
+▼
+OUTPUT

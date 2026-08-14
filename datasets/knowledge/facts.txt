@@ -1,0 +1,41 @@
+== Biology ==
+
+DNA contains genetic information.
+
+RNA helps build proteins.
+
+The nucleus controls the cell.
+
+...
+
+== Physics ==
+
+Gravity attracts masses.
+
+Force = mass × acceleration.
+
+Velocity is speed with direction.
+
+...
+
+== Chemistry ==
+
+Atoms are made of protons...
+
+...
+
+== Mathematics ==
+
+Area of circle = πr²
+
+Area of triangle = base × height ÷ 2
+
+...
+
+== History ==
+
+Johannes Gutenberg invented the printing press.
+
+The Industrial Revolution began in Britain.
+
+...

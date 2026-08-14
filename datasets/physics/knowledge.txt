@@ -1,0 +1,7 @@
+Gravity is a force that attracts objects toward each other.
+
+The Earth attracts every object toward its center.
+
+Gravity gives objects weight.
+
+The acceleration due to gravity on Earth is about 9.81 m/s².

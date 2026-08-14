@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+
+    <title>Nova Chat</title>
+
+    <link rel="stylesheet" href="/static/css/chat.css">
+
+</head>
+
+<body>
+
+<div class="sidebar">
+
+    <h1>Nova</h1>
+
+    <hr>
+
+    <a href="/">🏠 Dashboard</a>
+
+    <a href="/chatpage">💬 Chat</a>
+
+    <a href="/history">🕒 History</a>
+
+    <a href="/study">📚 Study</a>
+
+    <a href="/quiz">📝 Quiz</a>
+
+    <a href="/upload">📄 PDF</a>
+
+    <a href="/settings">⚙ Settings</a>
+
+</div>
+
+<div class="chat-container">
+
+    <div class="topbar">
+
+        <h2>Nova AI</h2>
+
+        <span>Personal AI Tutor</span>
+
+    </div>
+
+    <div id="chat" class="messages"></div>
+
+    <div class="input-area">
+
+        <input
+            id="message"
+            placeholder="Message Nova..."
+            autocomplete="off">
+
+        <button onclick="sendMessage()">Send</button>
+
+        <button class="new-chat-btn" onclick="newChat()">
+            + New Chat
+        </button>
+
+    </div>
+
+</div>
+
+<script src="/static/js/history.js"></script>
+
+<script src="/static/js/script.js"></script>
+
+</body>
+
+</html>

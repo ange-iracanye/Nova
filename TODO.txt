@@ -1,0 +1,29 @@
+== CURRENT GOAL ==
+
+Build Nova Tutor v1
+
+------------------------
+
+[ ] Student Learning Profile
+
+[ ] Long-Term Memory
+
+[ ] Study Session System
+
+[ ] Personalized Quiz Engine
+
+[ ] Learning Graph
+
+[ ] Progress Dashboard
+
+[ ] Website
+
+[ ] Voice
+
+[ ] Mobile App
+
+------------------------
+
+CURRENT TASK:
+
+Student Learning Profile

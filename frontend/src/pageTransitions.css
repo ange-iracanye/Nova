@@ -1,0 +1,568 @@
+import {
+    BrowserRouter,
+    Routes,
+    Route,
+    useLocation
+} from "react-router-dom";
+
+import Home from "./pages/Home";
+import Chat from "./pages/Chat";
+import Dashboard from "./pages/Dashboard";
+import Login from "./pages/Login";
+import Register from "./pages/Register";
+import Settings from "./pages/Settings";
+import NotFound from "./pages/NotFound";
+
+import {
+    useEffect,
+    useRef,
+    useState
+} from "react";
+
+
+// =====================================
+// REMEMBER LAST LEARNING PAGE
+// =====================================
+
+function RouteMemory() {
+
+    const location = useLocation();
+
+    useEffect(() => {
+
+        const pathname =
+            location.pathname;
+
+        const currentRoute =
+            pathname +
+            location.search;
+
+
+        /*
+         * Only remember actual learning
+         * destinations.
+         *
+         * Home, Login, Register and Settings
+         * are not saved as learning destinations.
+         */
+
+        const learningRoutes = [
+            "/chat",
+            "/dashboard"
+        ];
+
+
+        const shouldRemember =
+            learningRoutes.some(
+                route =>
+                    pathname === route
+            );
+
+
+        if (shouldRemember) {
+
+            localStorage.setItem(
+                "nova_last_route",
+                currentRoute
+            );
+
+        }
+
+    }, [
+        location.pathname,
+        location.search
+    ]);
+
+
+    return null;
+
+}
+
+
+// =====================================
+// PAGE TRANSITION
+// =====================================
+
+function PageTransition({ children }) {
+
+    const location =
+        useLocation();
+
+
+    const previousLocation =
+        useRef(location);
+
+
+    const [direction, setDirection] =
+        useState("forward");
+
+
+    useEffect(() => {
+
+        const previousPath =
+            previousLocation.current.pathname;
+
+        const currentPath =
+            location.pathname;
+
+
+        /*
+         * Returning to Home:
+         *
+         * Chat / Dashboard / Settings
+         *          ↓
+         *        Home
+         *
+         * Page moves from LEFT → RIGHT.
+         */
+
+        if (
+            currentPath === "/" &&
+            previousPath !== "/"
+        ) {
+
+            setDirection("back");
+
+        }
+
+        /*
+         * Everything else:
+         *
+         * Home → Chat
+         * Home → Dashboard
+         * Chat → Dashboard
+         * etc.
+         *
+         * Page moves RIGHT → LEFT.
+         */
+
+        else {
+
+            setDirection("forward");
+
+        }
+
+
+        previousLocation.current =
+            location;
+
+    }, [
+        location.pathname,
+        location.search
+    ]);
+
+
+    const transitionKey =
+        location.pathname +
+        location.search;
+
+
+    return (
+
+        <div
+            key={transitionKey}
+            className={`
+                nova-page-transition
+                ${
+                    direction === "back"
+                        ? "nova-page-back"
+                        : "nova-page-forward"
+                }
+            `}
+        >
+
+            {children}
+
+        </div>
+
+    );
+
+}
+
+
+// =====================================
+// APP ROUTER
+// =====================================
+
+function AppContent() {
+
+    return (
+
+        <>
+
+            <RouteMemory />
+
+
+            <PageTransition>
+
+                <Routes>
+
+                    {/* =================================
+                        HOME
+                    ================================= */}
+
+                    <Route
+                        path="/"
+                        element={
+                            <Home />
+                        }
+                    />
+
+
+                    {/* =================================
+                        CHAT
+                    ================================= */}
+
+                    <Route
+                        path="/chat"
+                        element={
+                            <Chat />
+                        }
+                    />
+
+
+                    {/* =================================
+                        DASHBOARD
+                    ================================= */}
+
+                    <Route
+                        path="/dashboard"
+                        element={
+                            <Dashboard />
+                        }
+                    />
+
+
+                    {/* =================================
+                        SETTINGS
+                    ================================= */}
+
+                    <Route
+                        path="/settings"
+                        element={
+                            <Settings />
+                        }
+                    />
+
+
+                    {/* =================================
+                        LOGIN
+                    ================================= */}
+
+                    <Route
+                        path="/login"
+                        element={
+                            <Login />
+                        }
+                    />
+
+
+                    {/* =================================
+                        REGISTER
+                    ================================= */}
+
+                    <Route
+                        path="/register"
+                        element={
+                            <Register />
+                        }
+                    />
+
+
+                    {/* =================================
+                        NOT FOUND
+                    ================================= */}
+
+                    <Route
+                        path="*"
+                        element={
+                            <NotFound />
+                        }
+                    />
+
+                </Routes>
+
+            </PageTransition>
+
+
+            {/* =====================================
+                GLOBAL NOVA THEME + TRANSITIONS
+            ===================================== */}
+
+            <style>{`
+
+                /*
+                 * =================================
+                 * GLOBAL DARK BACKGROUND
+                 * =================================
+                 *
+                 * This prevents the browser's white
+                 * background from appearing around
+                 * the moving page.
+                 */
+
+                html {
+
+                    background:
+                        #020617;
+
+                }
+
+
+                body {
+
+                    margin: 0;
+
+                    background:
+                        #020617;
+
+                    color:
+                        white;
+
+                    overflow-x: hidden;
+
+                }
+
+
+                #root {
+
+                    min-height: 100vh;
+
+                    background:
+                        #020617;
+
+                    overflow-x: hidden;
+
+                }
+
+
+                /*
+                 * =================================
+                 * PAGE TRANSITION BASE
+                 * =================================
+                 */
+
+                .nova-page-transition {
+
+                    min-height: 100vh;
+
+                    width: 100%;
+
+                    background:
+                        #020617;
+
+                    backface-visibility: hidden;
+
+                    transform-style:
+                        preserve-3d;
+
+                    will-change:
+                        transform,
+                        filter;
+
+                }
+
+
+                /*
+                 * =================================
+                 * FORWARD
+                 * =================================
+                 *
+                 * New page enters from the RIGHT
+                 * and settles toward the LEFT.
+                 */
+
+                .nova-page-forward {
+
+                    animation:
+                        novaForward
+                        0.58s
+                        cubic-bezier(
+                            0.16,
+                            1,
+                            0.3,
+                            1
+                        );
+
+                }
+
+
+                @keyframes novaForward {
+
+                    0% {
+
+                        transform:
+                            translateX(100%)
+                            scale(0.985);
+
+                        filter:
+                            blur(3px);
+
+                    }
+
+
+                    35% {
+
+                        transform:
+                            translateX(28px)
+                            scale(0.995);
+
+                        filter:
+                            blur(1px);
+
+                    }
+
+
+                    72% {
+
+                        transform:
+                            translateX(-5px)
+                            scale(1.002);
+
+                        filter:
+                            blur(0);
+
+                    }
+
+
+                    100% {
+
+                        transform:
+                            translateX(0)
+                            scale(1);
+
+                        filter:
+                            blur(0);
+
+                    }
+
+                }
+
+
+                /*
+                 * =================================
+                 * BACK TO HOME
+                 * =================================
+                 *
+                 * Home enters from the LEFT
+                 * and settles toward the RIGHT.
+                 */
+
+                .nova-page-back {
+
+                    animation:
+                        novaBack
+                        0.58s
+                        cubic-bezier(
+                            0.16,
+                            1,
+                            0.3,
+                            1
+                        );
+
+                }
+
+
+                @keyframes novaBack {
+
+                    0% {
+
+                        transform:
+                            translateX(-100%)
+                            scale(0.985);
+
+                        filter:
+                            blur(3px);
+
+                    }
+
+
+                    35% {
+
+                        transform:
+                            translateX(-28px)
+                            scale(0.995);
+
+                        filter:
+                            blur(1px);
+
+                    }
+
+
+                    72% {
+
+                        transform:
+                            translateX(5px)
+                            scale(1.002);
+
+                        filter:
+                            blur(0);
+
+                    }
+
+
+                    100% {
+
+                        transform:
+                            translateX(0)
+                            scale(1);
+
+                        filter:
+                            blur(0);
+
+                    }
+
+                }
+
+
+                /*
+                 * =================================
+                 * REDUCED MOTION
+                 * =================================
+                 *
+                 * Respect users who have disabled
+                 * animation in their OS/browser.
+                 */
+
+                @media (
+                    prefers-reduced-motion: reduce
+                ) {
+
+                    .nova-page-transition {
+
+                        animation:
+                            none !important;
+
+                    }
+
+                }
+
+            `}</style>
+
+        </>
+
+    );
+
+}
+
+
+// =====================================
+// ROOT
+// =====================================
+
+function App() {
+
+    return (
+
+        <BrowserRouter>
+
+            <AppContent />
+
+        </BrowserRouter>
+
+    );
+
+}
+
+
+export default App;

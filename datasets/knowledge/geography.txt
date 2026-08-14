@@ -1,0 +1,22 @@
+Earth has seven continents.
+
+Mount Everest:
+Highest mountain above sea level.
+
+Pacific Ocean:
+Largest ocean.
+
+Sahara:
+Largest hot desert.
+
+Amazon River:
+Largest river by volume.
+
+Nile:
+Longest river.
+
+Japan:
+Island nation.
+
+Australia:
+Smallest continent.

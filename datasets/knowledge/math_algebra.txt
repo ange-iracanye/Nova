@@ -1,0 +1,29 @@
+Order of operations:
+
+Parentheses
+
+Exponents
+
+Multiplication
+
+Division
+
+Addition
+
+Subtraction
+
+Distributive property
+
+Like terms
+
+Linear equations
+
+Quadratic equations
+
+Factoring
+
+Functions
+
+Slope intercept form
+
+y=mx+b

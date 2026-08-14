@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+
+<html>
+
+<head>
+
+<title>History</title>
+
+<link rel="stylesheet" href="/static/css/chat.css">
+
+</head>
+
+<body>
+
+<div class="sidebar">
+
+<h2>History</h2>
+
+<a href="/chatpage">← Back</a>
+
+</div>
+
+<div class="chat-container">
+
+<div id="history"></div>
+
+</div>
+
+<script>
+
+const history=JSON.parse(localStorage.getItem("nova_conversations"))||[];
+
+const container=document.getElementById("history");
+
+history.forEach(chat=>{
+
+const card=document.createElement("div");
+
+card.className="nova";
+
+card.style.margin="20px";
+
+card.innerHTML=`<h3>${chat.date}</h3>`;
+
+chat.messages.forEach(msg=>{
+
+card.innerHTML+=`<p><b>${msg.sender}:</b> ${msg.text}</p>`;
+
+});
+
+container.appendChild(card);
+
+});
+
+</script>
+
+</body>
+
+</html>
