@@ -70,13 +70,6 @@ class NovaCore:
         # =====================================
         # STUDENT PROFILE
         # =====================================
-        #
-        # There is intentionally ONE
-        # StudentProfile instance.
-        #
-        # TutorEngine receives this same
-        # instance below.
-        #
 
         self.student = StudentProfile()
 
@@ -213,12 +206,6 @@ class NovaCore:
         )
 
         # =====================================
-        # STUDENT PROFILE
-        # =====================================
-
-        self.student.add_question()
-
-        # =====================================
         # INTENT
         # =====================================
 
@@ -276,11 +263,6 @@ class NovaCore:
             subject
         )
 
-        self.understanding_tracker.update(
-            subject,
-            "easy"
-        )
-
         if subject:
 
             self.learning.add_subject(
@@ -336,6 +318,30 @@ class NovaCore:
                 brain_strategy["confidence"]
             )
         )
+
+        # =====================================
+        # UNDERSTANDING TRACKER
+        # =====================================
+
+        if subject:
+
+            difficulty_level = None
+
+            if isinstance(
+                difficulty,
+                dict
+            ):
+
+                difficulty_level = (
+                    difficulty.get(
+                        "level"
+                    )
+                )
+
+            self.understanding_tracker.update(
+                subject,
+                difficulty_level
+            )
 
         # =====================================
         # LONG-TERM MEMORY
@@ -704,3 +710,4 @@ Student's original question:
             "conversation_id":
                 conversation_id
         }
+

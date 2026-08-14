@@ -18,6 +18,40 @@ class StudentProfile:
 
                 self.profile = json.load(f)
 
+            # =====================================
+            # ENSURE REQUIRED FIELDS EXIST
+            # =====================================
+
+            self.profile.setdefault(
+                "name",
+                "Student"
+            )
+
+            self.profile.setdefault(
+                "level",
+                "beginner"
+            )
+
+            self.profile.setdefault(
+                "strengths",
+                []
+            )
+
+            self.profile.setdefault(
+                "weaknesses",
+                []
+            )
+
+            self.profile.setdefault(
+                "topics_seen",
+                []
+            )
+
+            self.profile.setdefault(
+                "questions_asked",
+                0
+            )
+
         else:
 
             self.profile = {
@@ -33,7 +67,6 @@ class StudentProfile:
                 "topics_seen": [],
 
                 "questions_asked": 0
-
             }
 
             self.save()
@@ -63,9 +96,9 @@ class StudentProfile:
 
         if topic:
 
-            if topic not in self.profile["topics_seen"]:
-
-                self.profile["topics_seen"].append(topic)
+            self.profile["topics_seen"].append(
+                topic
+            )
 
         self.save()
 
