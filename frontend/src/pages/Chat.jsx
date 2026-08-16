@@ -1026,7 +1026,7 @@ export default function Chat() {
 
     const interval = setInterval(
       checkBackend,
-      30000
+      3000
     );
 
     return () => {

@@ -2,663 +2,1999 @@ import {
     ArrowRight,
     Sparkles,
     Bot,
-    RotateCcw
+    Play,
+    BookOpen,
+    Brain,
+    ShieldCheck,
+    Zap,
+    ChevronDown
 } from "lucide-react";
 
 import {
+    useCallback,
     useEffect,
+    useMemo,
     useState
 } from "react";
 
 import {
+    useLocation,
     useNavigate
 } from "react-router-dom";
 
 
+// ============================================================
+// CONSTANTS
+// ============================================================
+
+const STORAGE_KEYS = {
+    USER: "nova_user",
+    LAST_ROUTE: "nova_last_route",
+    LAST_PAGE: "nova_last_page",
+    CURRENT_CONVERSATION:
+        "nova_current_conversation"
+};
+
+
+// ============================================================
+// SAFE STORAGE
+// ============================================================
+
+function getStoredUser() {
+
+    try {
+
+        const raw =
+            localStorage.getItem(
+                STORAGE_KEYS.USER
+            );
+
+        if (!raw) {
+            return null;
+        }
+
+        const parsed =
+            JSON.parse(raw);
+
+        if (
+            !parsed ||
+            typeof parsed !== "object"
+        ) {
+            return null;
+        }
+
+        return parsed;
+
+    } catch {
+
+        return null;
+
+    }
+
+}
+
+
+// ============================================================
+// SAFE LAST ROUTE
+// ============================================================
+
+function getLastRoute() {
+
+    try {
+
+        const route =
+            localStorage.getItem(
+                STORAGE_KEYS.LAST_ROUTE
+            );
+
+        const page =
+            localStorage.getItem(
+                STORAGE_KEYS.LAST_PAGE
+            );
+
+        const candidate =
+            route || page;
+
+        if (
+            !candidate ||
+            typeof candidate !== "string"
+        ) {
+            return null;
+        }
+
+        if (
+            !candidate.startsWith("/")
+        ) {
+            return null;
+        }
+
+        if (
+            candidate === "/" ||
+            candidate.startsWith("/login") ||
+            candidate.startsWith("/register")
+        ) {
+            return null;
+        }
+
+        return candidate;
+
+    } catch {
+
+        return null;
+
+    }
+
+}
+
+
+// ============================================================
+// HERO
+// ============================================================
+
 export default function Hero() {
 
-    const navigate = useNavigate();
+    const navigate =
+        useNavigate();
 
-    const [user, setUser] =
-        useState(null);
-
-    const [animationKey, setAnimationKey] =
-        useState(0);
+    const location =
+        useLocation();
 
 
-    // =====================================
-    // CHECK ACCOUNT
-    // =====================================
+    // ========================================================
+    // STATE
+    // ========================================================
+
+    const [
+        user,
+        setUser
+    ] = useState(
+        getStoredUser
+    );
+
+
+    const [
+        activeAction,
+        setActiveAction
+    ] = useState(null);
+
+
+    const [
+        showMore,
+        setShowMore
+    ] = useState(false);
+
+
+    const [
+        mousePosition,
+        setMousePosition
+    ] = useState({
+        x: 0,
+        y: 0
+    });
+
+
+    const [
+        isVisible,
+        setIsVisible
+    ] = useState(false);
+
+
+    // ========================================================
+    // LOAD USER
+    // ========================================================
+
+    const refreshUser =
+        useCallback(() => {
+
+            setUser(
+                getStoredUser()
+            );
+
+        }, []);
+
 
     useEffect(() => {
 
-        try {
+        refreshUser();
 
-            const storedUser =
-                JSON.parse(
-                    localStorage.getItem(
-                        "nova_user"
-                    ) || "null"
-                );
-
-            setUser(storedUser);
-
-        } catch {
-
-            setUser(null);
-
-        }
-
-        setAnimationKey(
-            previous => previous + 1
+        window.addEventListener(
+            "storage",
+            refreshUser
         );
+
+
+        /*
+         * Same-tab authentication changes do not
+         * automatically trigger the storage event.
+         *
+         * Nova can dispatch this custom event
+         * whenever login/logout happens.
+         */
+
+        window.addEventListener(
+            "nova-auth-change",
+            refreshUser
+        );
+
+
+        return () => {
+
+            window.removeEventListener(
+                "storage",
+                refreshUser
+            );
+
+            window.removeEventListener(
+                "nova-auth-change",
+                refreshUser
+            );
+
+        };
+
+    }, [
+        refreshUser
+    ]);
+
+
+    // ========================================================
+    // HERO INTRO
+    // ========================================================
+
+    useEffect(() => {
+
+        const timer =
+            requestAnimationFrame(() => {
+
+                setIsVisible(true);
+
+            });
+
+
+        return () => {
+
+            cancelAnimationFrame(
+                timer
+            );
+
+        };
 
     }, []);
 
 
-    // =====================================
-    // START LEARNING
-    // =====================================
+    // ========================================================
+    // MOUSE PARALLAX
+    // ========================================================
 
-    function startLearning() {
+    useEffect(() => {
 
-        navigate("/login");
-
-    }
-
-
-    // =====================================
-    // DEMO
-    // =====================================
-
-    function viewDemo() {
-
-        /*
-         * Demo mode is handled by Chat.
-         *
-         * demo=true tells Chat not to use
-         * the user's account, history or
-         * personalization.
-         */
-
-        navigate("/chat?demo=true");
-
-    }
-
-
-    // =====================================
-    // CONTINUE
-    // =====================================
-
-    function continueLearning() {
-
-        const lastRoute =
-            localStorage.getItem(
-                "nova_last_route"
+        const mediaQuery =
+            window.matchMedia(
+                "(prefers-reduced-motion: reduce)"
             );
 
-        if (
-            lastRoute &&
-            lastRoute !== "/"
-        ) {
 
-            navigate(lastRoute);
+        if (mediaQuery.matches) {
+            return undefined;
+        }
 
-            return;
+
+        let frame = null;
+
+
+        function handlePointerMove(event) {
+
+            if (frame) {
+                cancelAnimationFrame(frame);
+            }
+
+
+            frame =
+                requestAnimationFrame(() => {
+
+                    const x =
+                        (
+                            event.clientX /
+                            window.innerWidth
+                        ) - 0.5;
+
+
+                    const y =
+                        (
+                            event.clientY /
+                            window.innerHeight
+                        ) - 0.5;
+
+
+                    setMousePosition({
+                        x,
+                        y
+                    });
+
+                });
 
         }
 
-        navigate("/chat");
+
+        window.addEventListener(
+            "pointermove",
+            handlePointerMove,
+            {
+                passive: true
+            }
+        );
+
+
+        return () => {
+
+            window.removeEventListener(
+                "pointermove",
+                handlePointerMove
+            );
+
+
+            if (frame) {
+
+                cancelAnimationFrame(
+                    frame
+                );
+
+            }
+
+        };
+
+    }, []);
+
+
+    // ========================================================
+    // LAST ROUTE
+    // ========================================================
+
+    const lastRoute =
+        useMemo(
+            () => getLastRoute(),
+            [
+                user,
+                location.pathname
+            ]
+        );
+
+
+    // ========================================================
+    // USER DISPLAY NAME
+    // ========================================================
+
+    const userLabel =
+        useMemo(() => {
+
+            if (!user) {
+                return null;
+            }
+
+
+            if (
+                user.name &&
+                typeof user.name === "string"
+            ) {
+
+                return user.name;
+
+            }
+
+
+            if (
+                user.username &&
+                typeof user.username === "string"
+            ) {
+
+                return user.username;
+
+            }
+
+
+            if (
+                user.email &&
+                typeof user.email === "string"
+            ) {
+
+                return user.email
+                    .split("@")[0];
+
+            }
+
+
+            return "Student";
+
+        }, [
+            user
+        ]);
+
+
+    // ========================================================
+    // START LEARNING
+    // ========================================================
+
+    const startLearning =
+        useCallback(() => {
+
+            setActiveAction(
+                "start"
+            );
+
+            navigate(
+                "/login"
+            );
+
+        }, [
+            navigate
+        ]);
+
+
+    // ========================================================
+    // OPEN DEMO
+    // ========================================================
+
+    const openDemo =
+        useCallback(() => {
+
+            setActiveAction(
+                "demo"
+            );
+
+            navigate(
+                "/chat?demo=true"
+            );
+
+        }, [
+            navigate
+        ]);
+
+
+    // ========================================================
+    // CONTINUE LEARNING
+    // ========================================================
+
+    const continueLearning =
+        useCallback(() => {
+
+            setActiveAction(
+                "continue"
+            );
+
+
+            if (lastRoute) {
+
+                navigate(
+                    lastRoute
+                );
+
+                return;
+
+            }
+
+
+            navigate(
+                "/chat"
+            );
+
+        }, [
+            lastRoute,
+            navigate
+        ]);
+
+
+    // ========================================================
+    // NEW LEARNING SESSION
+    // ========================================================
+
+    const startFresh =
+        useCallback(() => {
+
+            setActiveAction(
+                "new"
+            );
+
+
+            /*
+             * The current Chat implementation already
+             * understands nova_current_conversation.
+             *
+             * Removing it guarantees that the next
+             * Chat page starts a fresh conversation.
+             */
+
+            try {
+
+                localStorage.removeItem(
+                    STORAGE_KEYS.CURRENT_CONVERSATION
+                );
+
+            } catch {
+                // Storage can fail in restricted browsers.
+            }
+
+
+            navigate(
+                "/chat"
+            );
+
+        }, [
+            navigate
+        ]);
+
+
+    // ========================================================
+    // OPEN DASHBOARD
+    // ========================================================
+
+    const openDashboard =
+        useCallback(() => {
+
+            setActiveAction(
+                "dashboard"
+            );
+
+            navigate(
+                "/dashboard"
+            );
+
+        }, [
+            navigate
+        ]);
+
+
+    // ========================================================
+    // SCROLL TO FEATURES
+    // ========================================================
+
+    const scrollToFeatures =
+        useCallback(() => {
+
+            const element =
+                document.getElementById(
+                    "features"
+                );
+
+
+            if (!element) {
+                return;
+            }
+
+
+            element.scrollIntoView({
+                behavior: "smooth",
+                block: "start"
+            });
+
+        }, []);
+
+
+    // ========================================================
+    // KEYBOARD SHORTCUT
+    // ========================================================
+
+    useEffect(() => {
+
+        function handleKeyDown(event) {
+
+            if (
+                event.key === "Escape"
+            ) {
+
+                setShowMore(false);
+
+            }
+
+        }
+
+
+        window.addEventListener(
+            "keydown",
+            handleKeyDown
+        );
+
+
+        return () => {
+
+            window.removeEventListener(
+                "keydown",
+                handleKeyDown
+            );
+
+        };
+
+    }, []);
+
+
+    // ========================================================
+    // BUTTON COMPONENT
+    // ========================================================
+
+    function ActionButton({
+        action,
+        onClick,
+        children,
+        icon: Icon,
+        primary = false
+    }) {
+
+        const loading =
+            activeAction === action;
+
+
+        return (
+
+            <button
+                type="button"
+                onClick={onClick}
+                disabled={Boolean(activeAction)}
+                aria-label={
+                    typeof children === "string"
+                        ? children
+                        : undefined
+                }
+                className={`
+                    group
+                    relative
+                    inline-flex
+                    items-center
+                    justify-center
+                    gap-3
+                    overflow-hidden
+                    rounded-2xl
+                    px-7
+                    py-4
+                    font-semibold
+                    transition-all
+                    duration-300
+                    disabled:cursor-wait
+                    disabled:opacity-70
+                    focus:outline-none
+                    focus-visible:ring-2
+                    focus-visible:ring-blue-400
+                    focus-visible:ring-offset-2
+                    focus-visible:ring-offset-slate-950
+
+                    ${
+                        primary
+                            ? `
+                                bg-blue-600
+                                text-white
+                                shadow-xl
+                                shadow-blue-950/40
+                                hover:bg-blue-500
+                                hover:-translate-y-1
+                                hover:shadow-blue-900/50
+                            `
+                            : `
+                                border
+                                border-slate-700/80
+                                bg-slate-900/60
+                                text-slate-200
+                                backdrop-blur-xl
+                                hover:bg-slate-800
+                                hover:border-slate-600
+                                hover:text-white
+                                hover:-translate-y-1
+                            `
+                    }
+                `}
+            >
+
+                {primary && (
+
+                    <span
+                        aria-hidden="true"
+                        className="
+                            absolute
+                            inset-0
+                            -translate-x-full
+                            bg-gradient-to-r
+                            from-transparent
+                            via-white/10
+                            to-transparent
+                            transition-transform
+                            duration-700
+                            group-hover:translate-x-full
+                        "
+                    />
+
+                )}
+
+
+                <span
+                    className="
+                        relative
+                        flex
+                        items-center
+                        gap-3
+                    "
+                >
+
+                    {loading ? (
+
+                        <span
+                            className="
+                                h-5
+                                w-5
+                                rounded-full
+                                border-2
+                                border-current
+                                border-t-transparent
+                                animate-spin
+                            "
+                        />
+
+                    ) : (
+
+                        <Icon
+                            size={19}
+                            strokeWidth={2}
+                            className="
+                                transition-transform
+                                duration-300
+                                group-hover:scale-110
+                            "
+                        />
+
+                    )}
+
+
+                    {children}
+
+                    {!loading && primary && (
+
+                        <ArrowRight
+                            size={18}
+                            className="
+                                transition-transform
+                                duration-300
+                                group-hover:translate-x-1
+                            "
+                        />
+
+                    )}
+
+                </span>
+
+            </button>
+
+        );
 
     }
 
 
-    // =====================================
-    // NEW TOPIC
-    // =====================================
-
-    function learnSomethingNew() {
-
-        /*
-         * new=true tells Chat to start
-         * completely fresh.
-         */
-
-        navigate("/chat?new=true");
-
-    }
-
+    // ========================================================
+    // RENDER
+    // ========================================================
 
     return (
 
         <section
-            key={animationKey}
-            className="
+            className={`
                 relative
-                min-h-[620px]
+                isolate
+                min-h-[680px]
+                md:min-h-[760px]
                 flex
                 items-center
                 justify-center
                 overflow-hidden
-            "
+                bg-slate-950
+                text-white
+                ${
+                    isVisible
+                        ? "nova-hero-visible"
+                        : ""
+                }
+            `}
+            aria-labelledby="nova-hero-title"
         >
 
-            {/* =================================
-                BACKGROUND EFFECTS
-            ================================= */}
+            {/* ==================================================
+                BACKGROUND
+            ================================================== */}
 
             <div
+                aria-hidden="true"
                 className="
                     absolute
                     inset-0
                     pointer-events-none
+                    overflow-hidden
                 "
             >
 
+                {/* Main glow */}
+
                 <div
                     className="
                         absolute
-                        top-10
                         left-1/2
+                        top-[-180px]
+                        h-[520px]
+                        w-[760px]
                         -translate-x-1/2
-                        w-[500px]
-                        h-[300px]
+                        rounded-full
                         bg-blue-600/10
+                        blur-[130px]
+                    "
+                />
+
+
+                {/* Secondary glow */}
+
+                <div
+                    className="
+                        absolute
+                        -left-32
+                        top-1/3
+                        h-72
+                        w-72
+                        rounded-full
+                        bg-indigo-500/10
+                        blur-[110px]
+                        nova-float-left
+                    "
+                />
+
+
+                <div
+                    className="
+                        absolute
+                        -right-32
+                        bottom-1/4
+                        h-80
+                        w-80
+                        rounded-full
+                        bg-cyan-500/5
                         blur-[120px]
-                        rounded-full
-                        animate-pulse
+                        nova-float-right
                     "
                 />
+
+
+                {/* Grid */}
 
                 <div
                     className="
                         absolute
+                        inset-0
+                        opacity-[0.035]
+                        nova-grid
+                    "
+                />
+
+
+                {/* Top radial light */}
+
+                <div
+                    className="
+                        absolute
+                        inset-x-0
+                        top-0
+                        h-96
+                        bg-[radial-gradient(circle_at_center,rgba(59,130,246,0.08),transparent_65%)]
+                    "
+                />
+
+
+                {/* Parallax orb */}
+
+                <div
+                    className="
+                        absolute
+                        left-1/2
                         top-1/2
-                        left-1/4
-                        w-32
-                        h-32
-                        bg-blue-500/5
-                        blur-3xl
+                        h-64
+                        w-64
                         rounded-full
-                        animate-floating-one
+                        border
+                        border-blue-400/5
+                        transition-transform
+                        duration-700
+                        ease-out
                     "
+                    style={{
+                        transform: `
+                            translate(
+                                ${mousePosition.x * 35}px,
+                                ${mousePosition.y * 35}px
+                            )
+                        `
+                    }}
                 />
+
 
                 <div
                     className="
                         absolute
-                        bottom-20
-                        right-1/4
-                        w-40
-                        h-40
-                        bg-indigo-500/5
-                        blur-3xl
+                        left-1/2
+                        top-1/2
+                        h-96
+                        w-96
                         rounded-full
-                        animate-floating-two
+                        border
+                        border-blue-400/[0.025]
+                        transition-transform
+                        duration-1000
+                        ease-out
                     "
+                    style={{
+                        transform: `
+                            translate(
+                                ${mousePosition.x * -20}px,
+                                ${mousePosition.y * -20}px
+                            )
+                        `
+                    }}
                 />
 
             </div>
 
 
-            {/* =================================
-                HERO CONTENT
-            ================================= */}
+            {/* ==================================================
+                CONTENT
+            ================================================== */}
 
             <div
                 className="
                     relative
                     z-10
-                    max-w-5xl
                     mx-auto
-                    text-center
+                    w-full
+                    max-w-6xl
                     px-6
+                    py-24
+                    md:py-32
                 "
             >
 
-                {/* MINI LABEL */}
-
                 <div
                     className="
-                        nova-assemble
-                        nova-assemble-1
-                        inline-flex
-                        items-center
-                        gap-2
-                        px-4
-                        py-2
-                        rounded-full
-                        border
-                        border-blue-500/20
-                        bg-blue-500/5
-                        text-blue-400
-                        text-sm
-                        font-medium
-                        mb-7
+                        mx-auto
+                        max-w-4xl
+                        text-center
                     "
                 >
 
-                    <Sparkles
-                        size={16}
-                    />
-
-                    AI-Powered Learning
-
-                </div>
-
-
-                {/* LOGO */}
-
-                <div
-                    className="
-                        nova-assemble
-                        nova-assemble-2
-                        flex
-                        justify-center
-                        mb-6
-                    "
-                >
+                    {/* ==================================================
+                        BADGE
+                    ================================================== */}
 
                     <div
                         className="
-                            relative
-                            w-20
-                            h-20
-                            flex
+                            nova-hero-item
+                            nova-delay-1
+                            inline-flex
                             items-center
+                            gap-2
+                            rounded-full
+                            border
+                            border-blue-400/15
+                            bg-blue-500/[0.06]
+                            px-4
+                            py-2
+                            text-sm
+                            font-medium
+                            text-blue-300
+                            shadow-lg
+                            shadow-blue-950/10
+                            backdrop-blur-xl
+                        "
+                    >
+
+                        <span
+                            className="
+                                relative
+                                flex
+                                h-2
+                                w-2
+                            "
+                        >
+
+                            <span
+                                className="
+                                    absolute
+                                    inline-flex
+                                    h-full
+                                    w-full
+                                    animate-ping
+                                    rounded-full
+                                    bg-blue-400
+                                    opacity-60
+                                "
+                            />
+
+                            <span
+                                className="
+                                    relative
+                                    inline-flex
+                                    h-2
+                                    w-2
+                                    rounded-full
+                                    bg-blue-400
+                                "
+                            />
+
+                        </span>
+
+
+                        <Sparkles
+                            size={15}
+                        />
+
+                        AI-powered learning
+
+                    </div>
+
+
+                    {/* ==================================================
+                        LOGO
+                    ================================================== */}
+
+                    <div
+                        className="
+                            nova-hero-item
+                            nova-delay-2
+                            mt-8
+                            flex
                             justify-center
                         "
                     >
 
                         <div
                             className="
-                                absolute
-                                inset-0
-                                rounded-3xl
-                                bg-blue-500/10
-                                blur-xl
-                                animate-pulse
+                                relative
+                                flex
+                                h-24
+                                w-24
+                                items-center
+                                justify-center
+                            "
+                        >
+
+                            <div
+                                className="
+                                    absolute
+                                    inset-0
+                                    rounded-[30px]
+                                    bg-blue-500/10
+                                    blur-2xl
+                                    nova-logo-glow
+                                "
+                            />
+
+                            <div
+                                className="
+                                    relative
+                                    flex
+                                    h-20
+                                    w-20
+                                    items-center
+                                    justify-center
+                                    rounded-[26px]
+                                    border
+                                    border-blue-400/10
+                                    bg-slate-900/70
+                                    shadow-2xl
+                                    shadow-blue-950/30
+                                    backdrop-blur-xl
+                                "
+                            >
+
+                                <Bot
+                                    size={52}
+                                    strokeWidth={1.35}
+                                    className="
+                                        text-blue-400
+                                    "
+                                />
+
+                            </div>
+
+                        </div>
+
+                    </div>
+
+
+                    {/* ==================================================
+                        TITLE
+                    ================================================== */}
+
+                    <h1
+                        id="nova-hero-title"
+                        className="
+                            nova-hero-item
+                            nova-delay-3
+                            mt-6
+                            text-5xl
+                            font-bold
+                            leading-[1.02]
+                            tracking-[-0.04em]
+                            text-slate-100
+                            sm:text-6xl
+                            md:text-7xl
+                            lg:text-8xl
+                        "
+                    >
+
+                        Learn smarter.
+
+                        <span
+                            className="
+                                mt-2
+                                block
+                                bg-gradient-to-r
+                                from-blue-300
+                                via-blue-500
+                                to-indigo-400
+                                bg-clip-text
+                                text-transparent
+                            "
+                        >
+                            With Nova AI.
+                        </span>
+
+                    </h1>
+
+
+                    {/* ==================================================
+                        DESCRIPTION
+                    ================================================== */}
+
+                    <p
+                        className="
+                            nova-hero-item
+                            nova-delay-4
+                            mx-auto
+                            mt-8
+                            max-w-2xl
+                            text-base
+                            leading-7
+                            text-slate-400
+                            sm:text-lg
+                            sm:leading-8
+                        "
+                    >
+
+                        Nova is an adaptive AI tutor designed
+                        to explain difficult concepts, guide
+                        your reasoning, and help you actually
+                        understand what you're studying.
+
+                    </p>
+
+
+                    {/* ==================================================
+                        ACTIONS
+                    ================================================== */}
+
+                    <div
+                        className="
+                            nova-hero-item
+                            nova-delay-5
+                            mt-10
+                            flex
+                            flex-col
+                            items-stretch
+                            justify-center
+                            gap-3
+                            sm:flex-row
+                            sm:items-center
+                        "
+                    >
+
+                        {!user ? (
+
+                            <>
+
+                                <ActionButton
+                                    action="start"
+                                    onClick={
+                                        startLearning
+                                    }
+                                    icon={BookOpen}
+                                    primary
+                                >
+                                    Start Learning
+                                </ActionButton>
+
+
+                                <ActionButton
+                                    action="demo"
+                                    onClick={
+                                        openDemo
+                                    }
+                                    icon={Play}
+                                >
+                                    Try Nova Demo
+                                </ActionButton>
+
+                            </>
+
+                        ) : (
+
+                            <>
+
+                                <ActionButton
+                                    action="continue"
+                                    onClick={
+                                        continueLearning
+                                    }
+                                    icon={Zap}
+                                    primary
+                                >
+                                    Continue Learning
+                                </ActionButton>
+
+
+                                <ActionButton
+                                    action="new"
+                                    onClick={
+                                        startFresh
+                                    }
+                                    icon={Sparkles}
+                                >
+                                    Start Something New
+                                </ActionButton>
+
+                            </>
+
+                        )}
+
+                    </div>
+
+
+                    {/* ==================================================
+                        ACCOUNT STATUS
+                    ================================================== */}
+
+                    {user && (
+
+                        <div
+                            className="
+                                nova-hero-item
+                                nova-delay-6
+                                mt-5
+                                flex
+                                flex-wrap
+                                items-center
+                                justify-center
+                                gap-x-3
+                                gap-y-2
+                                text-xs
+                                text-slate-500
+                            "
+                        >
+
+                            <span>
+                                Welcome back,{" "}
+                                <span
+                                    className="
+                                        text-slate-300
+                                    "
+                                >
+                                    {userLabel}
+                                </span>
+                            </span>
+
+
+                            <span
+                                className="
+                                    hidden
+                                    h-1
+                                    w-1
+                                    rounded-full
+                                    bg-slate-700
+                                    sm:block
+                                "
+                            />
+
+
+                            <button
+                                type="button"
+                                onClick={
+                                    openDashboard
+                                }
+                                className="
+                                    text-blue-400
+                                    transition
+                                    hover:text-blue-300
+                                "
+                            >
+                                Open dashboard
+                            </button>
+
+                        </div>
+
+                    )}
+
+
+                    {/* ==================================================
+                        TRUST SIGNALS
+                    ================================================== */}
+
+                    <div
+                        className="
+                            nova-hero-item
+                            nova-delay-7
+                            mt-12
+                            flex
+                            flex-wrap
+                            items-center
+                            justify-center
+                            gap-x-6
+                            gap-y-3
+                            text-xs
+                            text-slate-500
+                        "
+                    >
+
+                        <div
+                            className="
+                                flex
+                                items-center
+                                gap-2
+                            "
+                        >
+
+                            <Brain
+                                size={15}
+                                className="
+                                    text-slate-400
+                                "
+                            />
+
+                            Adaptive explanations
+
+                        </div>
+
+
+                        <div
+                            className="
+                                hidden
+                                h-3
+                                w-px
+                                bg-slate-800
+                                sm:block
                             "
                         />
 
-                        <Bot
-                            size={62}
-                            strokeWidth={1.4}
+
+                        <div
                             className="
-                                relative
-                                text-blue-400
+                                flex
+                                items-center
+                                gap-2
+                            "
+                        >
+
+                            <ShieldCheck
+                                size={15}
+                                className="
+                                    text-slate-400
+                                "
+                            />
+
+                            Personalized learning
+
+                        </div>
+
+
+                        <div
+                            className="
+                                hidden
+                                h-3
+                                w-px
+                                sm:block
                             "
                         />
+
+
+                        <div
+                            className="
+                                flex
+                                items-center
+                                gap-2
+                            "
+                        >
+
+                            <Zap
+                                size={15}
+                                className="
+                                    text-slate-400
+                                "
+                            />
+
+                            Built for students
+
+                        </div>
+
+                    </div>
+
+
+                    {/* ==================================================
+                        MORE INFO
+                    ================================================== */}
+
+                    <div
+                        className="
+                            nova-hero-item
+                            nova-delay-8
+                            mt-10
+                        "
+                    >
+
+                        <button
+                            type="button"
+                            onClick={() =>
+                                setShowMore(
+                                    previous =>
+                                        !previous
+                                )
+                            }
+                            aria-expanded={
+                                showMore
+                            }
+                            className="
+                                inline-flex
+                                items-center
+                                gap-2
+                                rounded-full
+                                px-4
+                                py-2
+                                text-xs
+                                text-slate-500
+                                transition
+                                hover:bg-slate-900
+                                hover:text-slate-300
+                                focus:outline-none
+                                focus-visible:ring-2
+                                focus-visible:ring-blue-400
+                            "
+                        >
+
+                            Learn more about Nova
+
+                            <ChevronDown
+                                size={14}
+                                className={`
+                                    transition-transform
+                                    duration-300
+                                    ${
+                                        showMore
+                                            ? "rotate-180"
+                                            : ""
+                                    }
+                                `}
+                            />
+
+                        </button>
+
+
+                        {showMore && (
+
+                            <div
+                                className="
+                                    mx-auto
+                                    mt-4
+                                    max-w-2xl
+                                    rounded-2xl
+                                    border
+                                    border-slate-800
+                                    bg-slate-900/60
+                                    p-5
+                                    text-left
+                                    text-sm
+                                    leading-6
+                                    text-slate-400
+                                    shadow-2xl
+                                    shadow-black/20
+                                    backdrop-blur-xl
+                                    nova-more-panel
+                                "
+                            >
+
+                                <div
+                                    className="
+                                        grid
+                                        gap-4
+                                        sm:grid-cols-3
+                                    "
+                                >
+
+                                    <div>
+
+                                        <Brain
+                                            size={18}
+                                            className="
+                                                mb-2
+                                                text-blue-400
+                                            "
+                                        />
+
+                                        <div
+                                            className="
+                                                font-medium
+                                                text-slate-200
+                                            "
+                                        >
+                                            Understand
+                                        </div>
+
+                                        <p
+                                            className="
+                                                mt-1
+                                                text-xs
+                                                text-slate-500
+                                            "
+                                        >
+                                            Explanations can
+                                            adapt to what you
+                                            already know.
+                                        </p>
+
+                                    </div>
+
+
+                                    <div>
+
+                                        <Zap
+                                            size={18}
+                                            className="
+                                                mb-2
+                                                text-blue-400
+                                            "
+                                        />
+
+                                        <div
+                                            className="
+                                                font-medium
+                                                text-slate-200
+                                            "
+                                        >
+                                            Practice
+                                        </div>
+
+                                        <p
+                                            className="
+                                                mt-1
+                                                text-xs
+                                                text-slate-500
+                                            "
+                                        >
+                                            Work through
+                                            problems instead of
+                                            only reading answers.
+                                        </p>
+
+                                    </div>
+
+
+                                    <div>
+
+                                        <ShieldCheck
+                                            size={18}
+                                            className="
+                                                mb-2
+                                                text-blue-400
+                                            "
+                                        />
+
+                                        <div
+                                            className="
+                                                font-medium
+                                                text-slate-200
+                                            "
+                                        >
+                                            Improve
+                                        </div>
+
+                                        <p
+                                            className="
+                                                mt-1
+                                                text-xs
+                                                text-slate-500
+                                            "
+                                        >
+                                            Keep your learning
+                                            experience organized
+                                            across sessions.
+                                        </p>
+
+                                    </div>
+
+                                </div>
+
+                            </div>
+
+                        )}
 
                     </div>
 
                 </div>
 
 
-                {/* TITLE */}
+                {/* ==================================================
+                    SCROLL INDICATOR
+                ================================================== */}
 
-                <h1
+                <button
+                    type="button"
+                    onClick={
+                        scrollToFeatures
+                    }
+                    aria-label="Explore Nova features"
                     className="
-                        nova-assemble
-                        nova-assemble-3
-                        text-5xl
-                        md:text-7xl
-                        font-bold
-                        leading-[1.05]
-                        tracking-tight
+                        nova-scroll-indicator
+                        absolute
+                        bottom-8
+                        left-1/2
+                        hidden
+                        -translate-x-1/2
+                        flex-col
+                        items-center
+                        gap-2
+                        text-slate-600
+                        transition
+                        hover:text-slate-400
+                        md:flex
                     "
                 >
-
-                    Learn Smarter with
 
                     <span
                         className="
-                            block
-                            mt-2
-                            text-blue-500
+                            text-[10px]
+                            uppercase
+                            tracking-[0.2em]
                         "
                     >
-                        Nova AI
+                        Explore
                     </span>
 
-                </h1>
+                    <span
+                        className="
+                            flex
+                            h-8
+                            w-5
+                            items-start
+                            justify-center
+                            rounded-full
+                            border
+                            border-slate-700
+                            p-1
+                        "
+                    >
 
+                        <span
+                            className="
+                                h-1.5
+                                w-1
+                                rounded-full
+                                bg-slate-500
+                                nova-scroll-dot
+                            "
+                        />
 
-                {/* DESCRIPTION */}
+                    </span>
 
-                <p
-                    className="
-                        nova-assemble
-                        nova-assemble-4
-                        text-slate-400
-                        text-lg
-                        md:text-xl
-                        mt-8
-                        max-w-2xl
-                        mx-auto
-                        leading-8
-                    "
-                >
-
-                    Your personal AI tutor that adapts
-                    to your level, remembers what you've
-                    learned, and helps you improve every day.
-
-                </p>
-
-
-                {/* =================================
-                    BUTTONS
-                ================================= */}
-
-                <div
-                    className="
-                        nova-assemble
-                        nova-assemble-5
-                        flex
-                        flex-col
-                        sm:flex-row
-                        justify-center
-                        gap-4
-                        mt-12
-                    "
-                >
-
-                    {!user ? (
-
-                        <>
-
-                            {/* START LEARNING */}
-
-                            <button
-                                onClick={
-                                    startLearning
-                                }
-                                className="
-                                    group
-                                    bg-blue-600
-                                    hover:bg-blue-500
-                                    px-8
-                                    py-4
-                                    rounded-2xl
-                                    flex
-                                    items-center
-                                    justify-center
-                                    gap-3
-                                    font-semibold
-                                    shadow-xl
-                                    shadow-blue-900/20
-                                    hover:shadow-blue-900/40
-                                    hover:-translate-y-1
-                                    transition-all
-                                    duration-300
-                                "
-                            >
-
-                                Start Learning
-
-                                <ArrowRight
-                                    size={20}
-                                    className="
-                                        transition-transform
-                                        duration-300
-                                        group-hover:translate-x-1
-                                    "
-                                />
-
-                            </button>
-
-
-                            {/* DEMO */}
-
-                            <button
-                                onClick={
-                                    viewDemo
-                                }
-                                className="
-                                    group
-                                    border
-                                    border-slate-700
-                                    bg-slate-900/40
-                                    hover:bg-slate-900
-                                    px-8
-                                    py-4
-                                    rounded-2xl
-                                    flex
-                                    items-center
-                                    justify-center
-                                    gap-3
-                                    text-slate-200
-                                    hover:text-white
-                                    hover:-translate-y-1
-                                    transition-all
-                                    duration-300
-                                "
-                            >
-
-                                View Demo
-
-                                <RotateCcw
-                                    size={18}
-                                    className="
-                                        transition-transform
-                                        duration-500
-                                        group-hover:rotate-180
-                                    "
-                                />
-
-                            </button>
-
-                        </>
-
-                    ) : (
-
-                        <>
-
-                            {/* CONTINUE */}
-
-                            <button
-                                onClick={
-                                    continueLearning
-                                }
-                                className="
-                                    group
-                                    bg-blue-600
-                                    hover:bg-blue-500
-                                    px-8
-                                    py-4
-                                    rounded-2xl
-                                    flex
-                                    items-center
-                                    justify-center
-                                    gap-3
-                                    font-semibold
-                                    shadow-xl
-                                    shadow-blue-900/20
-                                    hover:shadow-blue-900/40
-                                    hover:-translate-y-1
-                                    transition-all
-                                    duration-300
-                                "
-                            >
-
-                                Continue Learning
-
-                                <ArrowRight
-                                    size={20}
-                                    className="
-                                        transition-transform
-                                        duration-300
-                                        group-hover:translate-x-1
-                                    "
-                                />
-
-                            </button>
-
-
-                            {/* NEW */}
-
-                            <button
-                                onClick={
-                                    learnSomethingNew
-                                }
-                                className="
-                                    group
-                                    border
-                                    border-slate-700
-                                    bg-slate-900/40
-                                    hover:bg-slate-900
-                                    px-8
-                                    py-4
-                                    rounded-2xl
-                                    flex
-                                    items-center
-                                    justify-center
-                                    gap-3
-                                    text-slate-200
-                                    hover:text-white
-                                    hover:-translate-y-1
-                                    transition-all
-                                    duration-300
-                                "
-                            >
-
-                                Learn Something New
-
-                                <Sparkles
-                                    size={18}
-                                    className="
-                                        transition-transform
-                                        duration-500
-                                        group-hover:rotate-12
-                                        group-hover:scale-110
-                                    "
-                                />
-
-                            </button>
-
-                        </>
-
-                    )}
-
-                </div>
+                </button>
 
             </div>
 
 
-            {/* =================================
-                ANIMATIONS
-            ================================= */}
+            {/* ==================================================
+                BOTTOM FADE
+            ================================================== */}
+
+            <div
+                aria-hidden="true"
+                className="
+                    absolute
+                    bottom-0
+                    left-0
+                    right-0
+                    h-32
+                    bg-gradient-to-t
+                    from-slate-950
+                    to-transparent
+                    pointer-events-none
+                "
+            />
+
+
+            {/* ==================================================
+                STYLES
+            ================================================== */}
 
             <style>{`
 
-                /*
-                 * ELEMENTS ASSEMBLE INTO PLACE
-                 */
+                /* ================================================
+                   HERO ENTRY
+                ================================================= */
 
-                .nova-assemble {
+                .nova-hero-item {
 
                     opacity: 0;
 
-                    animation:
-                        novaAssemble
-                        0.9s
+                    transform:
+                        translateY(28px)
+                        scale(0.985);
+
+                    transition:
+                        opacity 0.85s
                         cubic-bezier(
                             0.22,
                             1,
                             0.36,
                             1
-                        )
-                        forwards;
+                        ),
+                        transform 0.85s
+                        cubic-bezier(
+                            0.22,
+                            1,
+                            0.36,
+                            1
+                        );
 
                 }
 
 
-                .nova-assemble-1 {
+                .nova-hero-visible
+                .nova-hero-item {
+
+                    opacity: 1;
 
                     transform:
-                        translateY(-80px)
-                        translateX(-40px)
-                        rotate(-8deg)
-                        scale(0.8);
-
-                    animation-delay: 0.05s;
+                        translateY(0)
+                        scale(1);
 
                 }
 
 
-                .nova-assemble-2 {
+                .nova-delay-1 {
+                    transition-delay: 0.05s;
+                }
 
-                    transform:
-                        translateY(70px)
-                        translateX(50px)
-                        rotate(10deg)
-                        scale(0.7);
 
-                    animation-delay: 0.12s;
+                .nova-delay-2 {
+                    transition-delay: 0.11s;
+                }
+
+
+                .nova-delay-3 {
+                    transition-delay: 0.17s;
+                }
+
+
+                .nova-delay-4 {
+                    transition-delay: 0.25s;
+                }
+
+
+                .nova-delay-5 {
+                    transition-delay: 0.33s;
+                }
+
+
+                .nova-delay-6 {
+                    transition-delay: 0.42s;
+                }
+
+
+                .nova-delay-7 {
+                    transition-delay: 0.5s;
+                }
+
+
+                .nova-delay-8 {
+                    transition-delay: 0.58s;
+                }
+
+
+                /* ================================================
+                   GRID
+                ================================================= */
+
+                .nova-grid {
+
+                    background-image:
+                        linear-gradient(
+                            rgba(
+                                148,
+                                163,
+                                184,
+                                0.4
+                            )
+                            1px,
+                            transparent 1px
+                        ),
+                        linear-gradient(
+                            90deg,
+                            rgba(
+                                148,
+                                163,
+                                184,
+                                0.4
+                            )
+                            1px,
+                            transparent 1px
+                        );
+
+                    background-size:
+                        64px 64px;
+
+                    mask-image:
+                        radial-gradient(
+                            ellipse at center,
+                            black 0%,
+                            transparent 72%
+                        );
 
                 }
 
 
-                .nova-assemble-3 {
+                /* ================================================
+                   BACKGROUND FLOAT
+                ================================================= */
 
-                    transform:
-                        translateX(-120px)
-                        translateY(30px)
-                        rotate(-3deg)
-                        scale(0.9);
+                .nova-float-left {
 
-                    animation-delay: 0.2s;
-
-                }
-
-
-                .nova-assemble-4 {
-
-                    transform:
-                        translateX(100px)
-                        translateY(40px)
-                        rotate(2deg)
-                        scale(0.92);
-
-                    animation-delay: 0.32s;
+                    animation:
+                        novaFloatLeft
+                        9s
+                        ease-in-out
+                        infinite;
 
                 }
 
 
-                .nova-assemble-5 {
+                @keyframes novaFloatLeft {
 
-                    transform:
-                        translateY(100px)
-                        scale(0.8);
+                    0%,
+                    100% {
 
-                    animation-delay: 0.44s;
+                        transform:
+                            translate3d(
+                                0,
+                                0,
+                                0
+                            );
+
+                    }
+
+                    50% {
+
+                        transform:
+                            translate3d(
+                                35px,
+                                -28px,
+                                0
+                            );
+
+                    }
 
                 }
 
 
-                @keyframes novaAssemble {
+                .nova-float-right {
 
-                    0% {
+                    animation:
+                        novaFloatRight
+                        11s
+                        ease-in-out
+                        infinite;
+
+                }
+
+
+                @keyframes novaFloatRight {
+
+                    0%,
+                    100% {
+
+                        transform:
+                            translate3d(
+                                0,
+                                0,
+                                0
+                            );
+
+                    }
+
+                    50% {
+
+                        transform:
+                            translate3d(
+                                -30px,
+                                32px,
+                                0
+                            );
+
+                    }
+
+                }
+
+
+                /* ================================================
+                   LOGO
+                ================================================= */
+
+                .nova-logo-glow {
+
+                    animation:
+                        novaLogoPulse
+                        4s
+                        ease-in-out
+                        infinite;
+
+                }
+
+
+                @keyframes novaLogoPulse {
+
+                    0%,
+                    100% {
+
+                        opacity: 0.45;
+
+                        transform:
+                            scale(0.9);
+
+                    }
+
+                    50% {
+
+                        opacity: 0.8;
+
+                        transform:
+                            scale(1.08);
+
+                    }
+
+                }
+
+
+                /* ================================================
+                   MORE PANEL
+                ================================================= */
+
+                .nova-more-panel {
+
+                    animation:
+                        novaMorePanel
+                        0.35s
+                        cubic-bezier(
+                            0.22,
+                            1,
+                            0.36,
+                            1
+                        );
+
+                    transform-origin:
+                        top center;
+
+                }
+
+
+                @keyframes novaMorePanel {
+
+                    from {
 
                         opacity: 0;
 
-                    }
-
-                    60% {
-
-                        opacity: 1;
+                        transform:
+                            translateY(-8px)
+                            scale(0.98);
 
                     }
 
-                    100% {
+                    to {
 
                         opacity: 1;
 
                         transform:
-                            translateX(0)
                             translateY(0)
-                            rotate(0)
                             scale(1);
 
                     }
@@ -666,68 +2002,100 @@ export default function Hero() {
                 }
 
 
-                /*
-                 * FLOATING BACKGROUND
-                 */
+                /* ================================================
+                   SCROLL DOT
+                ================================================= */
 
-                @keyframes floatingOne {
-
-                    0%,
-                    100% {
-
-                        transform:
-                            translate(0, 0);
-
-                    }
-
-                    50% {
-
-                        transform:
-                            translate(30px, -25px);
-
-                    }
-
-                }
-
-
-                @keyframes floatingTwo {
-
-                    0%,
-                    100% {
-
-                        transform:
-                            translate(0, 0);
-
-                    }
-
-                    50% {
-
-                        transform:
-                            translate(-25px, 30px);
-
-                    }
-
-                }
-
-
-                .animate-floating-one {
+                .nova-scroll-dot {
 
                     animation:
-                        floatingOne
-                        7s
+                        novaScrollDot
+                        1.8s
                         ease-in-out
                         infinite;
 
                 }
 
 
-                .animate-floating-two {
+                @keyframes novaScrollDot {
 
-                    animation:
-                        floatingTwo
-                        9s
-                        ease-in-out
-                        infinite;
+                    0% {
+
+                        opacity: 0.4;
+
+                        transform:
+                            translateY(0);
+
+                    }
+
+                    50% {
+
+                        opacity: 1;
+
+                        transform:
+                            translateY(10px);
+
+                    }
+
+                    100% {
+
+                        opacity: 0.4;
+
+                        transform:
+                            translateY(0);
+
+                    }
+
+                }
+
+
+                /* ================================================
+                   REDUCED MOTION
+                ================================================= */
+
+                @media (
+                    prefers-reduced-motion: reduce
+                ) {
+
+                    .nova-hero-item {
+
+                        opacity: 1;
+
+                        transform:
+                            none;
+
+                        transition:
+                            none;
+
+                    }
+
+
+                    .nova-float-left,
+                    .nova-float-right,
+                    .nova-logo-glow,
+                    .nova-scroll-dot {
+
+                        animation: none;
+
+                    }
+
+                }
+
+
+                /* ================================================
+                   MOBILE
+                ================================================= */
+
+                @media (
+                    max-width: 640px
+                ) {
+
+                    .nova-grid {
+
+                        background-size:
+                            44px 44px;
+
+                    }
 
                 }
 

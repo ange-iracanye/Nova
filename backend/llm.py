@@ -289,7 +289,7 @@ class LocalLLM:
 
         Example:
 
-            llm.set_model("qwen2.5:7b")
+            llm.set_model("Qwen2.5 1.5B")
         """
 
         if not isinstance(
