@@ -3,31 +3,6 @@ from __future__ import annotations
 # ============================================================
 # NOVA AI - API SERVER
 # ============================================================
-#
-# Main FastAPI application used by Nova's frontend.
-#
-# Responsibilities:
-#
-#   - Chat
-#   - Streaming chat
-#   - Demo mode
-#   - Authentication
-#   - Settings
-#   - Conversations
-#   - Dashboard
-#   - Health checks
-#   - API metadata
-#   - Runtime information
-#   - Statistics
-#   - Error handling
-#   - Request validation
-#   - Session management
-#
-# The API layer should remain relatively "thin".
-#
-# NovaCore remains responsible for the actual AI pipeline.
-#
-# ============================================================
 
 from typing import Any, Dict, List, Optional
 from datetime import datetime, timezone
@@ -42,11 +17,14 @@ from fastapi import (
     Request,
     Query,
 )
+
 from fastapi.middleware.cors import CORSMiddleware
+
 from fastapi.responses import (
     StreamingResponse,
     JSONResponse,
 )
+
 from fastapi.exceptions import RequestValidationError
 
 from pydantic import (
@@ -56,10 +34,12 @@ from pydantic import (
 )
 
 from backend.core.nova_core import NovaCore
+
 from backend.auth import (
     register_user,
     login_user,
 )
+
 from backend.settings import SettingsManager
 
 
@@ -68,20 +48,10 @@ from backend.settings import SettingsManager
 # ============================================================
 
 APP_NAME = "Nova AI"
-
 APP_VERSION = "1.0.0"
 
 APP_DESCRIPTION = """
 Nova AI educational assistant API.
-
-Provides:
-- adaptive tutoring
-- student analysis
-- conversations
-- dashboard data
-- settings
-- authentication
-- demo mode
 """
 
 
@@ -101,71 +71,112 @@ SERVER_STARTED_DATETIME = datetime.now(
 # ============================================================
 
 app = FastAPI(
-
     title=APP_NAME,
-
     version=APP_VERSION,
-
     description=APP_DESCRIPTION,
-
     docs_url="/docs",
-
     redoc_url="/redoc",
-
-    openapi_url="/openapi.json"
+    openapi_url="/openapi.json",
 )
 
 
 # ============================================================
 # CORS
 # ============================================================
-#
-# Development frontend ports are explicitly supported.
-#
-# If the frontend later moves to another origin, add it here.
-#
-# ============================================================
 
 ALLOWED_ORIGINS = [
-
     "http://localhost:3000",
-
     "http://127.0.0.1:3000",
 
     "http://localhost:5173",
-
     "http://127.0.0.1:5173",
 
     "http://localhost:5174",
-
     "http://127.0.0.1:5174",
 ]
 
 
 app.add_middleware(
-
     CORSMiddleware,
 
-    allow_origins=
-        ALLOWED_ORIGINS,
+    allow_origins=ALLOWED_ORIGINS,
 
     allow_credentials=True,
 
-    allow_methods=[
-        "*"
-    ],
+    allow_methods=["*"],
 
-    allow_headers=[
-        "*"
-    ],
+    allow_headers=["*"],
 )
 
 
 # ============================================================
 # NOVA CORE
 # ============================================================
+#
+# IMPORTANT:
+#
+# NovaCore is intentionally NOT created during module import.
+#
+# If NovaCore crashes during initialization, FastAPI itself
+# must still be able to start so that /health, /status and
+# /frontend/ping can tell us what is actually broken.
+#
+# ============================================================
 
-nova = NovaCore()
+nova: Optional[NovaCore] = None
+
+nova_init_error: Optional[str] = None
+
+
+def get_nova() -> NovaCore:
+    """
+    Lazily initialize NovaCore.
+
+    This prevents a NovaCore initialization error from killing
+    the entire FastAPI application during import.
+    """
+
+    global nova
+    global nova_init_error
+
+    if nova is not None:
+        return nova
+
+    try:
+
+        print()
+        print("==============================================")
+        print("Initializing NovaCore...")
+        print("==============================================")
+
+        nova = NovaCore()
+
+        nova_init_error = None
+
+        print("NovaCore initialized successfully.")
+        print("==============================================")
+        print()
+
+        return nova
+
+    except Exception as error:
+
+        nova = None
+
+        nova_init_error = (
+            f"{type(error).__name__}: {error}"
+        )
+
+        print()
+        print("========== NOVACORE INITIALIZATION ERROR ==========")
+        print(nova_init_error)
+        print(traceback.format_exc())
+        print("====================================================")
+        print()
+
+        raise RuntimeError(
+            "NovaCore could not be initialized."
+        ) from error
 
 
 # ============================================================
@@ -178,24 +189,11 @@ settings_manager = SettingsManager()
 # ============================================================
 # DEMO SESSIONS
 # ============================================================
-#
-# Temporary in-memory demo sessions.
-#
-# This is intentionally simple for v1.
-#
-# Later this can be replaced with:
-#
-#   Redis
-#   database sessions
-#   signed session tokens
-#
-# ============================================================
 
 demo_sessions: Dict[
     str,
     Dict[str, Any]
 ] = {}
-
 
 DEMO_SESSION_TIMEOUT = 60 * 60
 
@@ -203,7 +201,6 @@ DEMO_SESSION_TIMEOUT = 60 * 60
 # ============================================================
 # REQUEST MODELS
 # ============================================================
-
 
 class ChatRequest(BaseModel):
 
@@ -372,11 +369,7 @@ class RenameConversationRequest(BaseModel):
 # RESPONSE HELPERS
 # ============================================================
 
-
 def utc_now() -> str:
-    """
-    Return the current UTC timestamp.
-    """
 
     return datetime.now(
         timezone.utc
@@ -386,23 +379,14 @@ def utc_now() -> str:
 def success_response(
     data: Optional[Dict[str, Any]] = None
 ) -> Dict[str, Any]:
-    """
-    Standard successful API response.
-    """
 
     response = {
-
         "success": True,
-
-        "timestamp":
-            utc_now()
+        "timestamp": utc_now()
     }
 
     if data:
-
-        response.update(
-            data
-        )
+        response.update(data)
 
     return response
 
@@ -412,29 +396,20 @@ def error_response(
     code: str = "ERROR",
     status_code: int = 400
 ) -> JSONResponse:
-    """
-    Standard API error response.
-    """
 
     return JSONResponse(
 
         status_code=status_code,
 
         content={
-
             "success": False,
 
             "error": {
-
-                "code":
-                    code,
-
-                "message":
-                    message
+                "code": code,
+                "message": message,
             },
 
-            "timestamp":
-                utc_now()
+            "timestamp": utc_now(),
         }
     )
 
@@ -442,15 +417,8 @@ def error_response(
 def safe_dict(
     value: Any
 ) -> Dict[str, Any]:
-    """
-    Convert arbitrary values into a dictionary safely.
-    """
 
-    if isinstance(
-        value,
-        dict
-    ):
-
+    if isinstance(value, dict):
         return value
 
     return {}
@@ -459,15 +427,8 @@ def safe_dict(
 def safe_list(
     value: Any
 ) -> List[Any]:
-    """
-    Convert arbitrary values into a list safely.
-    """
 
-    if isinstance(
-        value,
-        list
-    ):
-
+    if isinstance(value, list):
         return value
 
     return []
@@ -477,35 +438,20 @@ def safe_number(
     value: Any,
     default: float = 0
 ) -> float:
-    """
-    Safely convert values to numbers.
-    """
 
-    if isinstance(
-        value,
-        bool
-    ):
-
+    if isinstance(value, bool):
         return default
 
-    if isinstance(
-        value,
-        (int, float)
-    ):
-
+    if isinstance(value, (int, float)):
         return value
 
     try:
-
-        return float(
-            value
-        )
+        return float(value)
 
     except (
         TypeError,
         ValueError
     ):
-
         return default
 
 
@@ -513,42 +459,24 @@ def clean_text(
     value: Any,
     default: str = ""
 ) -> str:
-    """
-    Safely normalize text.
-    """
 
     if value is None:
-
         return default
 
     try:
-
-        value = str(
-            value
-        ).strip()
+        value = str(value).strip()
 
     except Exception:
-
         return default
 
-    return (
-        value
-        if value
-        else default
-    )
+    return value if value else default
 
 
 # ============================================================
 # DEMO SESSION MANAGEMENT
 # ============================================================
 
-
 def cleanup_demo_sessions() -> None:
-    """
-    Remove expired demo sessions.
-
-    Demo sessions are intentionally kept in memory for v1.
-    """
 
     now = time.time()
 
@@ -558,14 +486,9 @@ def cleanup_demo_sessions() -> None:
         demo_sessions.items()
     ):
 
-        if not isinstance(
-            data,
-            dict
-        ):
+        if not isinstance(data, dict):
 
-            expired.append(
-                session_id
-            )
+            expired.append(session_id)
 
             continue
 
@@ -585,14 +508,11 @@ def cleanup_demo_sessions() -> None:
         )
 
         if (
-            now
-            - reference_time
+            now - reference_time
             > DEMO_SESSION_TIMEOUT
         ):
 
-            expired.append(
-                session_id
-            )
+            expired.append(session_id)
 
     for session_id in expired:
 
@@ -605,20 +525,25 @@ def cleanup_demo_sessions() -> None:
 def create_demo_instance(
     session_id: str
 ) -> NovaCore:
-    """
-    Create a demo NovaCore instance.
-    """
 
-    instance = NovaCore(
-        demo=True
-    )
+    try:
+
+        instance = NovaCore(
+            demo=True
+        )
+
+    except TypeError:
+
+        # Compatibility with NovaCore versions that do not yet
+        # accept the demo keyword.
+
+        instance = NovaCore()
 
     demo_sessions[
         session_id
     ] = {
 
-        "nova":
-            instance,
+        "nova": instance,
 
         "created_at":
             time.time(),
@@ -633,11 +558,6 @@ def create_demo_instance(
 def get_demo_instance(
     session_id: str
 ) -> NovaCore:
-    """
-    Retrieve a demo NovaCore instance.
-
-    Creates one automatically when necessary.
-    """
 
     cleanup_demo_sessions()
 
@@ -648,9 +568,7 @@ def get_demo_instance(
     if not session_id:
 
         raise HTTPException(
-
             status_code=400,
-
             detail="Invalid demo session."
         )
 
@@ -658,10 +576,7 @@ def get_demo_instance(
         session_id
     )
 
-    if not isinstance(
-        data,
-        dict
-    ):
+    if not isinstance(data, dict):
 
         return create_demo_instance(
             session_id
@@ -690,9 +605,6 @@ def get_demo_instance(
 def delete_demo_session(
     session_id: str
 ) -> bool:
-    """
-    Delete a demo session.
-    """
 
     if session_id in demo_sessions:
 
@@ -709,7 +621,6 @@ def delete_demo_session(
 # ERROR HANDLING
 # ============================================================
 
-
 @app.exception_handler(
     RequestValidationError
 )
@@ -717,9 +628,6 @@ async def validation_exception_handler(
     request: Request,
     exc: RequestValidationError
 ):
-    """
-    Return clean validation errors to the frontend.
-    """
 
     return error_response(
 
@@ -738,16 +646,9 @@ async def global_exception_handler(
     request: Request,
     exc: Exception
 ):
-    """
-    Final safety net.
 
-    Nova should return a structured API error rather than
-    crashing the entire server because one request misbehaved.
-    """
-
-    print(
-        "\n========== API ERROR =========="
-    )
+    print()
+    print("========== API ERROR ==========")
 
     print(
         f"Path: {request.url.path}"
@@ -762,26 +663,23 @@ async def global_exception_handler(
     )
 
     print(
-        "===============================\n"
+        "==============================="
     )
+    print()
 
     return error_response(
 
-        message=
-            "Nova encountered an internal error.",
+        message="Nova encountered an internal error.",
 
-        code=
-            "INTERNAL_ERROR",
+        code="INTERNAL_ERROR",
 
-        status_code=
-            500
+        status_code=500
     )
 
 
 # ============================================================
 # MIDDLEWARE
 # ============================================================
-
 
 @app.middleware(
     "http"
@@ -790,24 +688,12 @@ async def request_timing_middleware(
     request: Request,
     call_next
 ):
-    """
-    Measure API request duration.
-
-    The timing is returned in a response header so the frontend
-    and developer tools can inspect backend latency.
-    """
 
     start = time.perf_counter()
 
-    try:
-
-        response = await call_next(
-            request
-        )
-
-    except Exception:
-
-        raise
+    response = await call_next(
+        request
+    )
 
     duration = (
         time.perf_counter()
@@ -829,32 +715,18 @@ async def request_timing_middleware(
 # ROOT
 # ============================================================
 
-
 @app.get(
     "/",
     tags=["System"]
 )
 def root():
-    """
-    Basic API information.
-    """
 
     return {
-
-        "name":
-            APP_NAME,
-
-        "status":
-            "online",
-
-        "version":
-            APP_VERSION,
-
-        "api":
-            "/docs",
-
-        "timestamp":
-            utc_now()
+        "name": APP_NAME,
+        "status": "online",
+        "version": APP_VERSION,
+        "api": "/docs",
+        "timestamp": utc_now()
     }
 
 
@@ -862,69 +734,42 @@ def root():
 # API INFORMATION
 # ============================================================
 
-
 @app.get(
     "/api",
     tags=["System"]
 )
 def api_info():
-    """
-    Return information about the available API.
-    """
 
     return {
-
-        "name":
-            APP_NAME,
-
-        "version":
-            APP_VERSION,
-
-        "status":
-            "online",
+        "name": APP_NAME,
+        "version": APP_VERSION,
+        "status": "online",
 
         "features": [
-
             "chat",
-
             "streaming_chat",
-
             "demo_mode",
-
             "authentication",
-
             "settings",
-
             "conversations",
-
             "dashboard",
-
             "health",
-
-            "statistics"
+            "statistics",
         ],
 
-        "timestamp":
-            utc_now()
+        "timestamp": utc_now()
     }
 
 
 # ============================================================
-# HEALTH CHECK
+# HEALTH
 # ============================================================
-
 
 @app.get(
     "/health",
     tags=["System"]
 )
 def health():
-    """
-    Lightweight health check.
-
-    Used by the frontend or deployment system to determine
-    whether the API is alive.
-    """
 
     uptime = (
         time.time()
@@ -932,96 +777,74 @@ def health():
     )
 
     return {
+        "status": "healthy",
+        "service": APP_NAME,
+        "version": APP_VERSION,
 
-        "status":
-            "healthy",
+        "nova_core": (
+            "ready"
+            if nova is not None
+            else "not_initialized"
+        ),
 
-        "service":
-            APP_NAME,
+        "uptime_seconds": round(
+            uptime,
+            2
+        ),
 
-        "version":
-            APP_VERSION,
-
-        "uptime_seconds":
-            round(
-                uptime,
-                2
-            ),
-
-        "timestamp":
-            utc_now()
+        "timestamp": utc_now()
     }
 
 
 # ============================================================
-# READINESS CHECK
+# READINESS
 # ============================================================
-
 
 @app.get(
     "/ready",
     tags=["System"]
 )
 def readiness():
-    """
-    Determine whether Nova's core has been initialized.
-    """
 
-    try:
+    if nova is not None:
 
-        core_ready = (
-            nova is not None
-        )
+        return {
+            "ready": True,
+            "status": "ready",
+            "timestamp": utc_now()
+        }
 
-    except Exception:
+    return JSONResponse(
 
-        core_ready = False
+        status_code=503,
 
-    if not core_ready:
+        content={
+            "ready": False,
 
-        return error_response(
+            "status": "not_ready",
 
-            "NovaCore is not ready.",
+            "error": nova_init_error,
 
-            code="NOT_READY",
-
-            status_code=503
-        )
-
-    return {
-
-        "ready":
-            True,
-
-        "status":
-            "ready",
-
-        "timestamp":
-            utc_now()
-    }
+            "timestamp": utc_now(),
+        }
+    )
 
 
 # ============================================================
 # RUNTIME STATUS
 # ============================================================
 
-
 @app.get(
     "/status",
     tags=["System"]
 )
 def status():
-    """
-    Detailed runtime status for the frontend.
-    """
 
     return {
 
-        "status":
-            "online",
+        "status": "online",
 
-        "version":
-            APP_VERSION,
+        "version": APP_VERSION,
 
         "server_started_at":
             SERVER_STARTED_DATETIME,
@@ -1033,10 +856,17 @@ def status():
                 2
             ),
 
+        "nova_core": {
+
+            "initialized":
+                nova is not None,
+
+            "error":
+                nova_init_error,
+        },
+
         "demo_sessions":
-            len(
-                demo_sessions
-            ),
+            len(demo_sessions),
 
         "timestamp":
             utc_now()
@@ -1047,7 +877,6 @@ def status():
 # NORMAL CHAT
 # ============================================================
 
-
 @app.post(
     "/chat",
     tags=["Chat"]
@@ -1055,9 +884,6 @@ def status():
 def chat(
     request: ChatRequest
 ):
-    """
-    Send a normal tutoring message to NovaCore.
-    """
 
     message = clean_text(
         request.message
@@ -1066,39 +892,64 @@ def chat(
     if not message:
 
         raise HTTPException(
-
             status_code=400,
-
             detail="Message cannot be empty."
         )
 
     try:
 
-        result = nova.process(
+        core = get_nova()
+
+    except Exception as error:
+
+        print(
+            f"[CHAT CORE INIT ERROR] {error}"
+        )
+
+        return error_response(
+
+            message=(
+                "NovaCore could not be initialized. "
+                f"{nova_init_error or str(error)}"
+            ),
+
+            code="NOVACORE_UNAVAILABLE",
+
+            status_code=503
+        )
+
+    try:
+
+        result = core.process(
 
             message,
 
             request.conversation_id,
 
-            user_email=
-                request.email,
+            user_email=request.email,
 
-            forced_mode=
-                request.tutor_mode
+            forced_mode=request.tutor_mode
         )
 
     except Exception as error:
 
-        print(
-            f"[CHAT ERROR] {error}"
-        )
+        print()
+        print("========== CHAT ERROR ==========")
+        print(error)
+        print(traceback.format_exc())
+        print("================================")
+        print()
 
-        raise HTTPException(
+        return error_response(
 
-            status_code=500,
+            message=(
+                "NovaCore failed while processing "
+                "the message."
+            ),
 
-            detail=
-                "Nova could not process the message."
+            code="CHAT_PROCESSING_ERROR",
+
+            status_code=500
         )
 
     result = safe_dict(
@@ -1106,29 +957,30 @@ def chat(
     )
 
     answer = clean_text(
+
         result.get(
             "answer"
         ),
+
         "Nova could not generate an answer."
     )
 
     conversation_id = clean_text(
+
         result.get(
             "conversation_id"
         ),
+
         request.conversation_id or ""
     )
 
     return {
 
-        "success":
-            True,
+        "success": True,
 
-        "response":
-            answer,
+        "response": answer,
 
-        "answer":
-            answer,
+        "answer": answer,
 
         "conversation_id":
             conversation_id,
@@ -1142,39 +994,27 @@ def chat(
 # STREAMING CHAT
 # ============================================================
 
-
 async def stream_text(
     text: str,
     chunk_size: int = 40,
     delay: float = 0.015
 ):
-    """
-    Simulate token-like streaming from a completed response.
-
-    This keeps the frontend compatible with streaming before
-    the underlying LocalLLM exposes real token streaming.
-    """
 
     text = clean_text(
         text
     )
 
     if not text:
-
         return
 
     chunk_size = max(
         1,
-        int(
-            chunk_size
-        )
+        int(chunk_size)
     )
 
     delay = max(
         0,
-        float(
-            delay
-        )
+        float(delay)
     )
 
     for index in range(
@@ -1204,9 +1044,6 @@ async def stream_text(
 async def chat_stream(
     request: ChatRequest
 ):
-    """
-    Streaming version of the normal chat endpoint.
-    """
 
     message = clean_text(
         request.message
@@ -1215,39 +1052,64 @@ async def chat_stream(
     if not message:
 
         raise HTTPException(
-
             status_code=400,
-
             detail="Message cannot be empty."
         )
 
     try:
 
-        result = nova.process(
+        core = get_nova()
+
+    except Exception as error:
+
+        print(
+            f"[STREAM CORE INIT ERROR] {error}"
+        )
+
+        return error_response(
+
+            message=(
+                "NovaCore could not be initialized. "
+                f"{nova_init_error or str(error)}"
+            ),
+
+            code="NOVACORE_UNAVAILABLE",
+
+            status_code=503
+        )
+
+    try:
+
+        result = core.process(
 
             message,
 
             request.conversation_id,
 
-            user_email=
-                request.email,
+            user_email=request.email,
 
-            forced_mode=
-                request.tutor_mode
+            forced_mode=request.tutor_mode
         )
 
     except Exception as error:
 
-        print(
-            f"[STREAM CHAT ERROR] {error}"
-        )
+        print()
+        print("======= STREAM CHAT ERROR =======")
+        print(error)
+        print(traceback.format_exc())
+        print("=================================")
+        print()
 
-        raise HTTPException(
+        return error_response(
 
-            status_code=500,
+            message=(
+                "NovaCore failed while processing "
+                "the message."
+            ),
 
-            detail=
-                "Nova could not process the message."
+            code="CHAT_PROCESSING_ERROR",
+
+            status_code=500
         )
 
     result = safe_dict(
@@ -1261,9 +1123,11 @@ async def chat_stream(
     )
 
     conversation_id = clean_text(
+
         result.get(
             "conversation_id"
         ),
+
         request.conversation_id or ""
     )
 
@@ -1302,15 +1166,11 @@ async def chat_stream(
 # DEMO SESSION CREATION
 # ============================================================
 
-
 @app.post(
     "/demo/session",
     tags=["Demo"]
 )
 def create_demo_session():
-    """
-    Create an isolated Nova demo session.
-    """
 
     cleanup_demo_sessions()
 
@@ -1318,14 +1178,37 @@ def create_demo_session():
         uuid.uuid4()
     )
 
-    create_demo_instance(
-        session_id
-    )
+    try:
+
+        create_demo_instance(
+            session_id
+        )
+
+    except Exception as error:
+
+        demo_sessions.pop(
+            session_id,
+            None
+        )
+
+        print(
+            f"[DEMO INIT ERROR] {error}"
+        )
+
+        return error_response(
+
+            message=(
+                "Nova demo could not be initialized."
+            ),
+
+            code="DEMO_UNAVAILABLE",
+
+            status_code=503
+        )
 
     return {
 
-        "success":
-            True,
+        "success": True,
 
         "session_id":
             session_id,
@@ -1342,7 +1225,6 @@ def create_demo_session():
 # DEMO SESSION STATUS
 # ============================================================
 
-
 @app.get(
     "/demo/session/{session_id}",
     tags=["Demo"]
@@ -1350,9 +1232,6 @@ def create_demo_session():
 def demo_session_status(
     session_id: str
 ):
-    """
-    Check whether a demo session exists.
-    """
 
     cleanup_demo_sessions()
 
@@ -1365,11 +1244,9 @@ def demo_session_status(
 
         return {
 
-            "success":
-                False,
+            "success": False,
 
-            "active":
-                False,
+            "active": False,
 
             "session_id":
                 session_id
@@ -1391,11 +1268,9 @@ def demo_session_status(
 
     return {
 
-        "success":
-            True,
+        "success": True,
 
-        "active":
-            True,
+        "active": True,
 
         "session_id":
             session_id,
@@ -1420,7 +1295,6 @@ def demo_session_status(
 # DELETE DEMO SESSION
 # ============================================================
 
-
 @app.delete(
     "/demo/session/{session_id}",
     tags=["Demo"]
@@ -1428,9 +1302,6 @@ def demo_session_status(
 def remove_demo_session(
     session_id: str
 ):
-    """
-    Delete a demo session.
-    """
 
     deleted = delete_demo_session(
         session_id
@@ -1450,7 +1321,6 @@ def remove_demo_session(
 # DEMO CHAT
 # ============================================================
 
-
 @app.post(
     "/demo/chat/stream",
     tags=["Demo"]
@@ -1458,9 +1328,6 @@ def remove_demo_session(
 async def demo_chat_stream(
     request: DemoChatRequest
 ):
-    """
-    Streaming demo chat.
-    """
 
     message = clean_text(
         request.message
@@ -1469,15 +1336,32 @@ async def demo_chat_stream(
     if not message:
 
         raise HTTPException(
-
             status_code=400,
-
             detail="Message cannot be empty."
         )
 
-    demo_nova = get_demo_instance(
-        request.session_id
-    )
+    try:
+
+        demo_nova = get_demo_instance(
+            request.session_id
+        )
+
+    except Exception as error:
+
+        print(
+            f"[DEMO CORE ERROR] {error}"
+        )
+
+        return error_response(
+
+            message=(
+                "Nova demo could not be initialized."
+            ),
+
+            code="DEMO_UNAVAILABLE",
+
+            status_code=503
+        )
 
     try:
 
@@ -1485,8 +1369,9 @@ async def demo_chat_stream(
 
             message,
 
-            user_email=
-                f"demo-{request.session_id}",
+            user_email=(
+                f"demo-{request.session_id}"
+            ),
 
             forced_mode=
                 request.tutor_mode
@@ -1494,16 +1379,23 @@ async def demo_chat_stream(
 
     except Exception as error:
 
-        print(
-            f"[DEMO CHAT ERROR] {error}"
-        )
+        print()
+        print("========= DEMO CHAT ERROR =========")
+        print(error)
+        print(traceback.format_exc())
+        print("====================================")
+        print()
 
-        raise HTTPException(
+        return error_response(
 
-            status_code=500,
+            message=(
+                "Nova demo could not process "
+                "the message."
+            ),
 
-            detail=
-                "Nova demo could not process the message."
+            code="DEMO_CHAT_ERROR",
+
+            status_code=500
         )
 
     result = safe_dict(
@@ -1554,7 +1446,6 @@ async def demo_chat_stream(
 # AUTHENTICATION
 # ============================================================
 
-
 @app.post(
     "/register",
     tags=["Authentication"]
@@ -1562,9 +1453,6 @@ async def demo_chat_stream(
 def register(
     request: UserRequest
 ):
-    """
-    Register a user.
-    """
 
     email = clean_text(
         request.email
@@ -1575,18 +1463,14 @@ def register(
     if not email:
 
         raise HTTPException(
-
             status_code=400,
-
             detail="Email is required."
         )
 
     if not password:
 
         raise HTTPException(
-
             status_code=400,
-
             detail="Password is required."
         )
 
@@ -1607,20 +1491,12 @@ def register(
 
             status_code=500,
 
-            detail=
-                "Registration failed."
+            detail="Registration failed."
         )
 
     return {
-
-        "success":
-            bool(
-                success
-            )
+        "success": bool(success)
     }
-
-
-# ============================================================
 
 
 @app.post(
@@ -1630,12 +1506,6 @@ def register(
 def login(
     request: UserRequest
 ):
-    """
-    Authenticate a user.
-
-    Current v1 compatibility is maintained with the existing
-    auth module.
-    """
 
     email = clean_text(
         request.email
@@ -1660,16 +1530,13 @@ def login(
 
             status_code=500,
 
-            detail=
-                "Login failed."
+            detail="Login failed."
         )
 
     return {
 
         "success":
-            bool(
-                success
-            ),
+            bool(success),
 
         "email":
             email
@@ -1679,32 +1546,36 @@ def login(
 
 
 # ============================================================
-# DASHBOARD DATA HELPERS
+# CORE HELPER
 # ============================================================
-
 
 def get_safe_core_data(
     attribute: str,
     method: Optional[str] = None,
     default: Any = None
 ):
-    """
-    Safely read optional NovaCore components.
 
-    This prevents the dashboard from crashing because one
-    optional learning subsystem is unavailable.
-    """
+    try:
+
+        core = get_nova()
+
+    except Exception as error:
+
+        print(
+            f"[CORE DATA] Nova unavailable: {error}"
+        )
+
+        return default
 
     try:
 
         component = getattr(
-            nova,
+            core,
             attribute,
             None
         )
 
         if component is None:
-
             return default
 
         if method:
@@ -1715,18 +1586,12 @@ def get_safe_core_data(
                 None
             )
 
-            if not callable(
-                function
-            ):
-
+            if not callable(function):
                 return default
 
             return function()
 
-        if callable(
-            component
-        ):
-
+        if callable(component):
             return component()
 
         return component
@@ -1734,7 +1599,7 @@ def get_safe_core_data(
     except Exception as error:
 
         print(
-            f"[DASHBOARD] "
+            f"[CORE DATA] "
             f"{attribute}: "
             f"{error}"
         )
@@ -1742,13 +1607,13 @@ def get_safe_core_data(
         return default
 
 
+# ============================================================
+# DASHBOARD HELPERS
+# ============================================================
+
 def calculate_subject_statistics(
     learning_graph: Dict[str, Any]
 ) -> Dict[str, Any]:
-    """
-    Convert learning graph data into frontend-friendly
-    subject statistics.
-    """
 
     subjects = {}
 
@@ -1761,11 +1626,7 @@ def calculate_subject_statistics(
 
     for subject, data in graph_subjects.items():
 
-        if not isinstance(
-            data,
-            dict
-        ):
-
+        if not isinstance(data, dict):
             continue
 
         topics = safe_dict(
@@ -1776,9 +1637,7 @@ def calculate_subject_statistics(
         )
 
         total_correct = 0
-
         total_wrong = 0
-
         total_studied = 0
 
         topic_list = []
@@ -1789,7 +1648,6 @@ def calculate_subject_statistics(
                 topic_data,
                 dict
             ):
-
                 continue
 
             correct = safe_number(
@@ -1821,9 +1679,7 @@ def calculate_subject_statistics(
             )
 
             total_correct += correct
-
             total_wrong += wrong
-
             total_studied += studied
 
             topic_list.append({
@@ -1863,8 +1719,7 @@ def calculate_subject_statistics(
                 (
                     total_correct
                     / total_answers
-                )
-                * 100,
+                ) * 100,
 
                 1
             )
@@ -1889,9 +1744,7 @@ def calculate_subject_statistics(
                 topic_list,
 
             "topics_count":
-                len(
-                    topic_list
-                ),
+                len(topic_list),
 
             "times_studied":
                 total_studied,
@@ -1912,10 +1765,6 @@ def calculate_subject_statistics(
 def calculate_knowledge_subjects(
     knowledge_data: Dict[str, Any]
 ) -> List[Dict[str, Any]]:
-    """
-    Convert knowledge map information into a frontend-friendly
-    list.
-    """
 
     result = []
 
@@ -1925,13 +1774,10 @@ def calculate_knowledge_subjects(
             topics,
             dict
         ):
-
             continue
 
         confidence_total = 0
-
         confidence_count = 0
-
         attempts_total = 0
 
         for topic_data in topics.values():
@@ -1940,7 +1786,6 @@ def calculate_knowledge_subjects(
                 topic_data,
                 dict
             ):
-
                 continue
 
             confidence = topic_data.get(
@@ -1958,10 +1803,7 @@ def calculate_knowledge_subjects(
                 (int, float)
             ):
 
-                confidence_total += (
-                    confidence
-                )
-
+                confidence_total += confidence
                 confidence_count += 1
 
             if isinstance(
@@ -1969,9 +1811,7 @@ def calculate_knowledge_subjects(
                 (int, float)
             ):
 
-                attempts_total += (
-                    attempts
-                )
+                attempts_total += attempts
 
         average_confidence = (
 
@@ -1984,7 +1824,6 @@ def calculate_knowledge_subjects(
             )
 
             if confidence_count
-
             else 0
         )
 
@@ -1994,9 +1833,7 @@ def calculate_knowledge_subjects(
                 subject,
 
             "topics":
-                len(
-                    topics
-                ),
+                len(topics),
 
             "confidence":
                 average_confidence,
@@ -2022,20 +1859,12 @@ def calculate_knowledge_subjects(
 def calculate_difficulty_totals(
     difficulty_data: Dict[str, Any]
 ) -> Dict[str, float]:
-    """
-    Calculate difficulty totals.
-    """
 
     totals = {
 
-        "easy":
-            0,
-
-        "medium":
-            0,
-
-        "hard":
-            0
+        "easy": 0,
+        "medium": 0,
+        "hard": 0
     }
 
     for data in difficulty_data.values():
@@ -2044,7 +1873,6 @@ def calculate_difficulty_totals(
             data,
             dict
         ):
-
             continue
 
         for difficulty in totals:
@@ -2065,27 +1893,20 @@ def calculate_difficulty_totals(
 def calculate_memory_count(
     memory_data: Any
 ) -> int:
-    """
-    Count memory entries safely.
-    """
 
     if isinstance(
         memory_data,
         dict
     ):
 
-        return len(
-            memory_data
-        )
+        return len(memory_data)
 
     if isinstance(
         memory_data,
         list
     ):
 
-        return len(
-            memory_data
-        )
+        return len(memory_data)
 
     return 0
 
@@ -2093,7 +1914,6 @@ def calculate_memory_count(
 # ============================================================
 # DASHBOARD
 # ============================================================
-
 
 @app.get(
     "/dashboard",
@@ -2104,13 +1924,6 @@ def dashboard(
         default=None
     )
 ):
-    """
-    Return the complete student dashboard.
-
-    The endpoint intentionally gathers data from several
-    subsystems while protecting the frontend from failures in
-    optional components.
-    """
 
     student_data = safe_dict(
         get_safe_core_data(
@@ -2184,24 +1997,22 @@ def dashboard(
 
     if email:
 
-        conversation_data = get_safe_core_data(
-            "conversations",
-            "list",
-            []
-        )
-
-        # Some implementations require email as an argument,
-        # so the direct call is handled separately.
-
         try:
 
+            core = get_nova()
+
             conversation_data = (
-                nova.conversations.list(
+                core.conversations.list(
                     email
                 )
             )
 
-        except Exception:
+        except Exception as error:
+
+            print(
+                f"[DASHBOARD CONVERSATIONS] "
+                f"{error}"
+            )
 
             conversation_data = []
 
@@ -2213,9 +2024,7 @@ def dashboard(
             conversations = [
 
                 {
-
-                    "id":
-                        key,
+                    "id": key,
 
                     **(
                         value
@@ -2236,9 +2045,7 @@ def dashboard(
             list
         ):
 
-            conversations = (
-                conversation_data
-            )
+            conversations = conversation_data
 
     subjects = calculate_subject_statistics(
         learning_graph
@@ -2256,16 +2063,11 @@ def dashboard(
         )
     )
 
-    total_subjects = len(
-        subjects
-    )
+    total_subjects = len(subjects)
 
     total_topics = 0
-
     total_study_attempts = 0
-
     total_correct = 0
-
     total_wrong = 0
 
     for data in subjects.values():
@@ -2312,14 +2114,12 @@ def dashboard(
             (
                 total_correct
                 / total_answers
-            )
-            * 100,
+            ) * 100,
 
             1
         )
 
         if total_answers
-
         else 0
     )
 
@@ -2347,7 +2147,6 @@ def dashboard(
             data,
             dict
         ):
-
             continue
 
         confidence = data.get(
@@ -2372,26 +2171,19 @@ def dashboard(
             (int, float)
         ):
 
-            total_understanding_attempts += (
-                attempts
-            )
+            total_understanding_attempts += attempts
 
     average_confidence = (
 
         round(
 
-            sum(
-                confidence_values
-            )
-            / len(
-                confidence_values
-            ),
+            sum(confidence_values)
+            / len(confidence_values),
 
             1
         )
 
         if confidence_values
-
         else 0
     )
 
@@ -2403,7 +2195,6 @@ def dashboard(
             conversation,
             dict
         ):
-
             continue
 
         messages = safe_list(
@@ -2452,9 +2243,7 @@ def dashboard(
                 last_message,
 
             "message_count":
-                len(
-                    messages
-                )
+                len(messages)
         })
 
     return {
@@ -2503,9 +2292,7 @@ def dashboard(
                 memory_count,
 
             "conversation_count":
-                len(
-                    conversations
-                ),
+                len(conversations),
 
             "understanding_attempts":
                 total_understanding_attempts
@@ -2550,21 +2337,14 @@ def dashboard(
 
 
 # ============================================================
-# QUICK STATISTICS
+# STATISTICS
 # ============================================================
-
 
 @app.get(
     "/statistics",
     tags=["Dashboard"]
 )
 def statistics():
-    """
-    Lightweight statistics endpoint.
-
-    Useful for frontend widgets that do not need the entire
-    dashboard payload.
-    """
 
     try:
 
@@ -2595,8 +2375,7 @@ def statistics():
 
             status_code=500,
 
-            detail=
-                "Statistics unavailable."
+            detail="Statistics unavailable."
         )
 
 
@@ -2604,15 +2383,11 @@ def statistics():
 # SETTINGS
 # ============================================================
 
-
 @app.get(
     "/settings",
     tags=["Settings"]
 )
 def get_settings():
-    """
-    Retrieve current Nova settings.
-    """
 
     try:
 
@@ -2628,8 +2403,7 @@ def get_settings():
 
             status_code=500,
 
-            detail=
-                "Could not load settings."
+            detail="Could not load settings."
         )
 
     if not isinstance(
@@ -2652,9 +2426,6 @@ def get_settings():
     }
 
 
-# ============================================================
-
-
 @app.post(
     "/settings",
     tags=["Settings"]
@@ -2662,9 +2433,6 @@ def get_settings():
 def update_settings(
     request: SettingsRequest
 ):
-    """
-    Update Nova settings.
-    """
 
     try:
 
@@ -2732,8 +2500,7 @@ def update_settings(
 
             status_code=500,
 
-            detail=
-                "Could not update settings."
+            detail="Could not update settings."
         )
 
     return {
@@ -2757,25 +2524,12 @@ def update_settings(
 # ============================================================
 # SETTINGS RESET
 # ============================================================
-#
-# This endpoint is deliberately defensive because the current
-# SettingsManager may not yet expose a reset() method.
-#
-# ============================================================
-
 
 @app.post(
     "/settings/reset",
     tags=["Settings"]
 )
 def reset_settings():
-    """
-    Reset settings when the underlying SettingsManager supports
-    it.
-
-    Otherwise returns a clear unsupported response instead of
-    pretending the reset happened.
-    """
 
     reset_function = getattr(
         settings_manager,
@@ -2791,11 +2545,9 @@ def reset_settings():
 
             "Settings reset is not available yet.",
 
-            code=
-                "RESET_NOT_SUPPORTED",
+            code="RESET_NOT_SUPPORTED",
 
-            status_code=
-                501
+            status_code=501
         )
 
     try:
@@ -2812,8 +2564,7 @@ def reset_settings():
 
             status_code=500,
 
-            detail=
-                "Could not reset settings."
+            detail="Could not reset settings."
         )
 
     return {
@@ -2835,22 +2586,20 @@ def reset_settings():
 
 
 # ============================================================
-# LEGACY MEMORY HISTORY
+# LEGACY MEMORY
 # ============================================================
-
 
 @app.get(
     "/history",
     tags=["Memory"]
 )
 def history():
-    """
-    Return legacy memory history.
-    """
 
     try:
 
-        result = nova.memory.recall()
+        core = get_nova()
+
+        result = core.memory.recall()
 
     except Exception as error:
 
@@ -2862,8 +2611,7 @@ def history():
 
             status_code=500,
 
-            detail=
-                "Memory history unavailable."
+            detail="Memory history unavailable."
         )
 
     return {
@@ -2883,7 +2631,6 @@ def history():
 # CONVERSATIONS
 # ============================================================
 
-
 @app.get(
     "/conversations/{email}",
     tags=["Conversations"]
@@ -2891,9 +2638,6 @@ def history():
 def conversations(
     email: str
 ):
-    """
-    List conversations belonging to a user.
-    """
 
     email = clean_text(
         email
@@ -2910,7 +2654,9 @@ def conversations(
 
     try:
 
-        result = nova.conversations.list(
+        core = get_nova()
+
+        result = core.conversations.list(
             email
         )
 
@@ -2924,8 +2670,7 @@ def conversations(
 
             status_code=500,
 
-            detail=
-                "Could not load conversations."
+            detail="Could not load conversations."
         )
 
     return {
@@ -2941,11 +2686,6 @@ def conversations(
     }
 
 
-# ============================================================
-# NEW CONVERSATION
-# ============================================================
-
-
 @app.post(
     "/conversation/new",
     tags=["Conversations"]
@@ -2953,14 +2693,13 @@ def conversations(
 def new_chat(
     request: ConversationRequest
 ):
-    """
-    Create a new conversation.
-    """
 
     try:
 
+        core = get_nova()
+
         conversation_id = (
-            nova.conversations.create(
+            core.conversations.create(
                 request.email
             )
         )
@@ -2975,8 +2714,7 @@ def new_chat(
 
             status_code=500,
 
-            detail=
-                "Could not create conversation."
+            detail="Could not create conversation."
         )
 
     return {
@@ -2995,11 +2733,6 @@ def new_chat(
     }
 
 
-# ============================================================
-# GET CONVERSATION
-# ============================================================
-
-
 @app.get(
     "/conversation/{email}/{cid}",
     tags=["Conversations"]
@@ -3008,13 +2741,12 @@ def conversation(
     email: str,
     cid: str
 ):
-    """
-    Retrieve a conversation.
-    """
 
     try:
 
-        result = nova.conversations.get(
+        core = get_nova()
+
+        result = core.conversations.get(
             email,
             cid
         )
@@ -3029,8 +2761,7 @@ def conversation(
 
             status_code=500,
 
-            detail=
-                "Could not load conversation."
+            detail="Could not load conversation."
         )
 
     if result is None:
@@ -3039,8 +2770,7 @@ def conversation(
 
             status_code=404,
 
-            detail=
-                "Conversation not found."
+            detail="Conversation not found."
         )
 
     return {
@@ -3056,11 +2786,6 @@ def conversation(
     }
 
 
-# ============================================================
-# ADD CONVERSATION MESSAGE
-# ============================================================
-
-
 @app.post(
     "/conversation/{email}/{cid}/message",
     tags=["Conversations"]
@@ -3070,9 +2795,6 @@ def add_conversation_message(
     cid: str,
     request: ConversationMessageRequest
 ):
-    """
-    Add a message to a conversation.
-    """
 
     role = clean_text(
         request.role
@@ -3102,15 +2824,14 @@ def add_conversation_message(
 
     try:
 
+        core = get_nova()
+
         success = (
-            nova.conversations.add_message(
+            core.conversations.add_message(
 
                 email,
-
                 cid,
-
                 role,
-
                 text
             )
         )
@@ -3125,25 +2846,17 @@ def add_conversation_message(
 
             status_code=500,
 
-            detail=
-                "Could not add conversation message."
+            detail="Could not add conversation message."
         )
 
     return {
 
         "success":
-            bool(
-                success
-            ),
+            bool(success),
 
         "timestamp":
             utc_now()
     }
-
-
-# ============================================================
-# RENAME CONVERSATION
-# ============================================================
 
 
 @app.put(
@@ -3155,9 +2868,6 @@ def rename_conversation(
     cid: str,
     request: RenameConversationRequest
 ):
-    """
-    Rename a conversation.
-    """
 
     title = clean_text(
         request.title
@@ -3174,13 +2884,13 @@ def rename_conversation(
 
     try:
 
+        core = get_nova()
+
         success = (
-            nova.conversations.rename(
+            core.conversations.rename(
 
                 email,
-
                 cid,
-
                 title
             )
         )
@@ -3195,16 +2905,13 @@ def rename_conversation(
 
             status_code=500,
 
-            detail=
-                "Could not rename conversation."
+            detail="Could not rename conversation."
         )
 
     return {
 
         "success":
-            bool(
-                success
-            ),
+            bool(success),
 
         "title":
             title,
@@ -3212,11 +2919,6 @@ def rename_conversation(
         "timestamp":
             utc_now()
     }
-
-
-# ============================================================
-# DELETE CONVERSATION
-# ============================================================
 
 
 @app.delete(
@@ -3227,17 +2929,15 @@ def delete_chat(
     email: str,
     cid: str
 ):
-    """
-    Delete a conversation.
-    """
 
     try:
 
+        core = get_nova()
+
         success = (
-            nova.conversations.delete(
+            core.conversations.delete(
 
                 email,
-
                 cid
             )
         )
@@ -3252,16 +2952,13 @@ def delete_chat(
 
             status_code=500,
 
-            detail=
-                "Could not delete conversation."
+            detail="Could not delete conversation."
         )
 
     return {
 
         "success":
-            bool(
-                success
-            ),
+            bool(success),
 
         "timestamp":
             utc_now()
@@ -3271,13 +2968,6 @@ def delete_chat(
 # ============================================================
 # CONVERSATION SEARCH
 # ============================================================
-#
-# This endpoint is intentionally implemented using the existing
-# conversation list API instead of assuming that a search()
-# method exists.
-#
-# ============================================================
-
 
 @app.get(
     "/conversations/{email}/search",
@@ -3290,9 +2980,6 @@ def search_conversations(
         max_length=200
     )
 ):
-    """
-    Search conversations locally using their existing data.
-    """
 
     query = clean_text(
         q
@@ -3300,8 +2987,10 @@ def search_conversations(
 
     try:
 
+        core = get_nova()
+
         conversation_data = (
-            nova.conversations.list(
+            core.conversations.list(
                 email
             )
         )
@@ -3316,8 +3005,7 @@ def search_conversations(
 
             status_code=500,
 
-            detail=
-                "Could not search conversations."
+            detail="Could not search conversations."
         )
 
     if isinstance(
@@ -3373,7 +3061,6 @@ def search_conversations(
                 conversation_data,
                 dict
             ):
-
                 continue
 
             title = clean_text(
@@ -3425,9 +3112,7 @@ def search_conversations(
             matches,
 
         "count":
-            len(
-                matches
-            ),
+            len(matches),
 
         "timestamp":
             utc_now()
@@ -3438,17 +3123,11 @@ def search_conversations(
 # FRONTEND CONFIGURATION
 # ============================================================
 
-
 @app.get(
     "/frontend/config",
     tags=["Frontend"]
 )
 def frontend_config():
-    """
-    Return frontend-safe configuration.
-
-    No secrets should ever be returned here.
-    """
 
     return {
 
@@ -3509,15 +3188,11 @@ def frontend_config():
 # FRONTEND PING
 # ============================================================
 
-
 @app.get(
     "/frontend/ping",
     tags=["Frontend"]
 )
 def frontend_ping():
-    """
-    Tiny endpoint used by the frontend to test connectivity.
-    """
 
     return {
 
@@ -3536,14 +3211,10 @@ def frontend_ping():
 # STARTUP
 # ============================================================
 
-
 @app.on_event(
     "startup"
 )
 async def startup_event():
-    """
-    API startup hook.
-    """
 
     cleanup_demo_sessions()
 
@@ -3574,19 +3245,20 @@ async def startup_event():
     )
     print()
 
+    # Do NOT initialize NovaCore here.
+    #
+    # It will initialize on the first request that actually
+    # needs the AI core.
+
 
 # ============================================================
 # SHUTDOWN
 # ============================================================
 
-
 @app.on_event(
     "shutdown"
 )
 async def shutdown_event():
-    """
-    API shutdown hook.
-    """
 
     demo_sessions.clear()
 

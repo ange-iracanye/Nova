@@ -3,6 +3,7 @@ import React, {
     lazy,
     useCallback,
     useEffect,
+    useMemo,
     useRef,
     useState
 } from "react";
@@ -18,19 +19,94 @@ import {
 
 import {
     AlertTriangle,
+    CheckCircle2,
+    CircleDot,
     LoaderCircle,
     RefreshCw,
+    Server,
     Wifi,
-    WifiOff
+    WifiOff,
+    X
 } from "lucide-react";
 
 
 // ============================================================
-// LAZY PAGE LOADING
+// NOVA FRONTEND CONFIGURATION
 // ============================================================
-//
-// Loading pages lazily keeps the initial frontend bundle smaller.
-//
+
+const NOVA_CONFIG = {
+
+    name:
+        "Nova AI",
+
+    version:
+        "1.0.0",
+
+    apiUrl:
+        (
+            import.meta.env.VITE_API_URL ||
+            "http://127.0.0.1:8000"
+        ).replace(/\/+$/, ""),
+
+    requestTimeout:
+        3500,
+
+    transitionDuration:
+        620,
+
+    storage: {
+
+        lastRoute:
+            "nova_last_route",
+
+        theme:
+            "nova_theme",
+
+        sidebar:
+            "nova_sidebar_state",
+
+        session:
+            "nova_session",
+
+        user:
+            "nova_user",
+
+        backendStatus:
+            "nova_backend_status",
+
+        initialized:
+            "nova_initialized",
+
+        lastError:
+            "nova_last_error"
+    },
+
+    routes: {
+
+        home:
+            "/",
+
+        chat:
+            "/chat",
+
+        dashboard:
+            "/dashboard",
+
+        settings:
+            "/settings",
+
+        login:
+            "/login",
+
+        register:
+            "/register"
+    }
+
+};
+
+
+// ============================================================
+// LAZY PAGE LOADING
 // ============================================================
 
 const Home = lazy(
@@ -63,97 +139,310 @@ const NotFound = lazy(
 
 
 // ============================================================
-// CONSTANTS
+// PAGE METADATA
 // ============================================================
 
-const APP_NAME = "Nova AI";
+const PAGE_METADATA = {
 
-const STORAGE_KEYS = {
-    LAST_ROUTE: "nova_last_route",
-    THEME: "nova_theme",
-    SIDEBAR: "nova_sidebar_state"
+    "/": {
+        title:
+            "Nova AI",
+        description:
+            "Nova AI, an adaptive educational tutor."
+    },
+
+    "/chat": {
+        title:
+            "Chat",
+        description:
+            "Learn with Nova AI through adaptive tutoring."
+    },
+
+    "/dashboard": {
+        title:
+            "Dashboard",
+        description:
+            "Track your learning progress with Nova AI."
+    },
+
+    "/settings": {
+        title:
+            "Settings",
+        description:
+            "Customize your Nova AI learning experience."
+    },
+
+    "/login": {
+        title:
+            "Login",
+        description:
+            "Sign in to your Nova AI account."
+    },
+
+    "/register": {
+        title:
+            "Create Account",
+        description:
+            "Create your Nova AI learning account."
+    }
+
 };
+
+
+// ============================================================
+// LEARNING ROUTES
+// ============================================================
 
 const LEARNING_ROUTES = [
-    "/chat",
-    "/dashboard"
-];
 
-const PAGE_TITLES = {
-    "/": "Nova AI",
-    "/chat": "Chat",
-    "/dashboard": "Dashboard",
-    "/settings": "Settings",
-    "/login": "Login",
-    "/register": "Create Account"
-};
+    "/chat",
+
+    "/dashboard"
+
+];
 
 
 // ============================================================
 // SAFE STORAGE
 // ============================================================
 
-function safeStorageGet(key) {
+function storageGet(key) {
+
     try {
-        return localStorage.getItem(key);
-    } catch {
+
+        return localStorage.getItem(
+            key
+        );
+
+    } catch (error) {
+
+        console.warn(
+            "[Nova] Unable to read localStorage:",
+            error
+        );
+
         return null;
     }
 }
 
 
-function safeStorageSet(key, value) {
+function storageSet(
+    key,
+    value
+) {
+
     try {
+
         localStorage.setItem(
             key,
             value
         );
 
         return true;
+
+    } catch (error) {
+
+        console.warn(
+            "[Nova] Unable to write localStorage:",
+            error
+        );
+
+        return false;
+    }
+}
+
+
+function storageRemove(key) {
+
+    try {
+
+        localStorage.removeItem(
+            key
+        );
+
+        return true;
+
     } catch {
+
         return false;
     }
 }
 
 
 // ============================================================
-// ERROR BOUNDARY
+// API HELPERS
 // ============================================================
 
-class NovaErrorBoundary extends React.Component {
+function buildApiUrl(path) {
+
+    if (!path) {
+
+        return NOVA_CONFIG.apiUrl;
+    }
+
+
+    if (
+        path.startsWith("http://") ||
+        path.startsWith("https://")
+    ) {
+
+        return path;
+    }
+
+
+    return (
+        `${NOVA_CONFIG.apiUrl}/` +
+        path.replace(/^\/+/, "")
+    );
+}
+
+
+async function fetchWithTimeout(
+    url,
+    options = {},
+    timeout = NOVA_CONFIG.requestTimeout
+) {
+
+    const controller =
+        new AbortController();
+
+
+    const timeoutId =
+        setTimeout(
+            () => controller.abort(),
+            timeout
+        );
+
+
+    try {
+
+        return await fetch(
+            url,
+            {
+                ...options,
+                signal:
+                    controller.signal
+            }
+        );
+
+    } finally {
+
+        clearTimeout(
+            timeoutId
+        );
+    }
+}
+
+
+// ============================================================
+// GLOBAL ERROR BOUNDARY
+// ============================================================
+
+class NovaErrorBoundary
+    extends React.Component {
 
     constructor(props) {
 
         super(props);
 
         this.state = {
-            hasError: false,
-            error: null
+
+            hasError:
+                false,
+
+            error:
+                null,
+
+            errorInfo:
+                null
         };
     }
 
 
-    static getDerivedStateFromError(error) {
+    static getDerivedStateFromError(
+        error
+    ) {
 
         return {
-            hasError: true,
+
+            hasError:
+                true,
+
             error
         };
     }
 
 
-    componentDidCatch(error, errorInfo) {
+    componentDidCatch(
+        error,
+        errorInfo
+    ) {
 
         console.error(
-            "Nova frontend error:",
+            "[Nova] React rendering error:",
             error
         );
 
+
         console.error(
-            "Nova component stack:",
+            "[Nova] Component information:",
             errorInfo
         );
+
+
+        try {
+
+            storageSet(
+
+                NOVA_CONFIG.storage.lastError,
+
+                JSON.stringify({
+
+                    message:
+                        error?.message ||
+                        "Unknown error",
+
+                    stack:
+                        error?.stack ||
+                        "",
+
+                    timestamp:
+                        new Date().toISOString(),
+
+                    pathname:
+                        window.location.pathname
+                })
+
+            );
+
+        } catch {
+
+            // Nothing else to do.
+        }
+
+
+        this.setState({
+
+            errorInfo
+
+        });
     }
+
+
+    handleRetry = () => {
+
+        this.setState({
+
+            hasError:
+                false,
+
+            error:
+                null,
+
+            errorInfo:
+                null
+        });
+    };
 
 
     handleReload = () => {
@@ -164,19 +453,28 @@ class NovaErrorBoundary extends React.Component {
 
     handleReset = () => {
 
-        this.setState({
-            hasError: false,
-            error: null
-        });
+        storageRemove(
+            NOVA_CONFIG.storage.lastRoute
+        );
+
+        window.location.href =
+            "/";
     };
 
 
     render() {
 
-        if (!this.state.hasError) {
+        if (
+            !this.state.hasError
+        ) {
 
             return this.props.children;
         }
+
+
+        const message =
+            this.state.error?.message ||
+            "Unknown frontend error.";
 
 
         return (
@@ -190,19 +488,22 @@ class NovaErrorBoundary extends React.Component {
                     items-center
                     justify-center
                     px-6
+                    py-12
                 "
+                role="alert"
             >
 
                 <div
                     className="
                         w-full
-                        max-w-lg
+                        max-w-xl
                         rounded-3xl
                         border
                         border-white/10
                         bg-white/[0.04]
                         p-8
                         shadow-2xl
+                        backdrop-blur-xl
                     "
                 >
 
@@ -220,7 +521,7 @@ class NovaErrorBoundary extends React.Component {
                     >
 
                         <AlertTriangle
-                            size={26}
+                            size={27}
                         />
 
                     </div>
@@ -231,11 +532,10 @@ class NovaErrorBoundary extends React.Component {
                             mt-6
                             text-2xl
                             font-semibold
+                            tracking-tight
                         "
                     >
-
-                        Nova encountered an error.
-
+                        Nova encountered a problem.
                     </h1>
 
 
@@ -247,25 +547,66 @@ class NovaErrorBoundary extends React.Component {
                             text-slate-400
                         "
                     >
-
-                        Something went wrong while rendering
-                        this part of the application.
-
+                        Something went wrong while Nova
+                        was rendering the application.
                     </p>
+
+
+                    <details
+                        className="
+                            mt-6
+                            rounded-2xl
+                            border
+                            border-white/10
+                            bg-black/20
+                            p-4
+                        "
+                    >
+
+                        <summary
+                            className="
+                                cursor-pointer
+                                text-sm
+                                font-medium
+                                text-slate-300
+                            "
+                        >
+                            Technical details
+                        </summary>
+
+
+                        <pre
+                            className="
+                                mt-4
+                                max-h-48
+                                overflow-auto
+                                whitespace-pre-wrap
+                                break-words
+                                text-xs
+                                leading-5
+                                text-red-300
+                            "
+                        >
+                            {message}
+                        </pre>
+
+                    </details>
 
 
                     <div
                         className="
                             mt-6
                             flex
-                            gap-3
                             flex-wrap
+                            gap-3
                         "
                     >
 
                         <button
                             type="button"
-                            onClick={this.handleReset}
+                            onClick={
+                                this.handleRetry
+                            }
                             className="
                                 inline-flex
                                 items-center
@@ -275,10 +616,11 @@ class NovaErrorBoundary extends React.Component {
                                 px-4
                                 py-2.5
                                 text-sm
-                                font-medium
+                                font-semibold
                                 text-slate-950
                                 transition
                                 hover:bg-slate-200
+                                active:scale-[0.98]
                             "
                         >
 
@@ -293,7 +635,9 @@ class NovaErrorBoundary extends React.Component {
 
                         <button
                             type="button"
-                            onClick={this.handleReload}
+                            onClick={
+                                this.handleReload
+                            }
                             className="
                                 inline-flex
                                 items-center
@@ -316,6 +660,33 @@ class NovaErrorBoundary extends React.Component {
 
                         </button>
 
+
+                        <button
+                            type="button"
+                            onClick={
+                                this.handleReset
+                            }
+                            className="
+                                inline-flex
+                                items-center
+                                gap-2
+                                rounded-xl
+                                border
+                                border-white/10
+                                px-4
+                                py-2.5
+                                text-sm
+                                text-slate-400
+                                transition
+                                hover:bg-white/5
+                                hover:text-white
+                            "
+                        >
+
+                            Return home
+
+                        </button>
+
                     </div>
 
                 </div>
@@ -323,6 +694,7 @@ class NovaErrorBoundary extends React.Component {
             </div>
         );
     }
+
 }
 
 
@@ -343,6 +715,9 @@ function PageLoader() {
                 items-center
                 justify-center
             "
+            role="status"
+            aria-live="polite"
+            aria-label="Loading Nova"
         >
 
             <div
@@ -350,27 +725,42 @@ function PageLoader() {
                     flex
                     flex-col
                     items-center
-                    gap-4
+                    gap-5
                 "
             >
 
                 <div
                     className="
+                        relative
                         flex
-                        h-14
-                        w-14
+                        h-16
+                        w-16
                         items-center
                         justify-center
                         rounded-2xl
-                        bg-white/5
                         border
                         border-white/10
+                        bg-white/[0.04]
+                        shadow-xl
                     "
                 >
 
+                    <div
+                        className="
+                            absolute
+                            inset-0
+                            rounded-2xl
+                            border
+                            border-white/5
+                        "
+                    />
+
                     <LoaderCircle
-                        size={25}
-                        className="animate-spin"
+                        size={26}
+                        className="
+                            animate-spin
+                            text-slate-300
+                        "
                     />
 
                 </div>
@@ -379,12 +769,21 @@ function PageLoader() {
                 <div
                     className="
                         text-sm
-                        text-slate-400
+                        font-medium
+                        text-slate-300
                     "
                 >
-
                     Loading Nova...
+                </div>
 
+
+                <div
+                    className="
+                        text-xs
+                        text-slate-500
+                    "
+                >
+                    Preparing your learning environment.
                 </div>
 
             </div>
@@ -395,7 +794,160 @@ function PageLoader() {
 
 
 // ============================================================
-// OFFLINE INDICATOR
+// CHUNK LOAD ERROR RECOVERY
+// ============================================================
+
+function ChunkRecoveryBoundary({
+    children
+}) {
+
+    const [
+        failed,
+        setFailed
+    ] = useState(false);
+
+
+    useEffect(() => {
+
+        const handleError =
+            event => {
+
+                const message =
+                    event?.message ||
+                    event?.error?.message ||
+                    "";
+
+
+                const chunkFailure =
+                    message.includes(
+                        "Failed to fetch dynamically imported module"
+                    ) ||
+                    message.includes(
+                        "Importing a module script failed"
+                    );
+
+
+                if (
+                    chunkFailure
+                ) {
+
+                    setFailed(
+                        true
+                    );
+                }
+            };
+
+
+        window.addEventListener(
+            "error",
+            handleError
+        );
+
+
+        return () => {
+
+            window.removeEventListener(
+                "error",
+                handleError
+            );
+        };
+
+    }, []);
+
+
+    if (!failed) {
+
+        return children;
+    }
+
+
+    return (
+
+        <div
+            className="
+                min-h-screen
+                bg-slate-950
+                text-white
+                flex
+                items-center
+                justify-center
+                px-6
+            "
+        >
+
+            <div
+                className="
+                    max-w-md
+                    rounded-3xl
+                    border
+                    border-white/10
+                    bg-white/[0.04]
+                    p-8
+                    text-center
+                "
+            >
+
+                <AlertTriangle
+                    className="
+                        mx-auto
+                        text-amber-400
+                    "
+                    size={30}
+                />
+
+
+                <h1
+                    className="
+                        mt-5
+                        text-xl
+                        font-semibold
+                    "
+                >
+                    Nova needs to refresh.
+                </h1>
+
+
+                <p
+                    className="
+                        mt-3
+                        text-sm
+                        leading-6
+                        text-slate-400
+                    "
+                >
+                    The browser loaded an outdated
+                    frontend bundle.
+                </p>
+
+
+                <button
+                    type="button"
+                    onClick={() =>
+                        window.location.reload()
+                    }
+                    className="
+                        mt-6
+                        rounded-xl
+                        bg-white
+                        px-5
+                        py-2.5
+                        text-sm
+                        font-semibold
+                        text-slate-950
+                    "
+                >
+                    Refresh Nova
+                </button>
+
+            </div>
+
+        </div>
+    );
+}
+
+
+// ============================================================
+// NETWORK STATUS
 // ============================================================
 
 function NetworkStatus() {
@@ -404,8 +956,11 @@ function NetworkStatus() {
         online,
         setOnline
     ] = useState(
-        navigator.onLine
+        typeof navigator !== "undefined"
+            ? navigator.onLine
+            : true
     );
+
 
     const [
         visible,
@@ -413,30 +968,60 @@ function NetworkStatus() {
     ] = useState(false);
 
 
+    const timerRef =
+        useRef(null);
+
+
     useEffect(() => {
 
-        let timer = null;
+        const showTemporarily =
+            () => {
+
+                setVisible(true);
 
 
-        const handleOnline = () => {
+                if (
+                    timerRef.current
+                ) {
 
-            setOnline(true);
-
-            setVisible(true);
-
-            timer = setTimeout(
-                () => setVisible(false),
-                2500
-            );
-        };
+                    clearTimeout(
+                        timerRef.current
+                    );
+                }
 
 
-        const handleOffline = () => {
+                timerRef.current =
+                    setTimeout(
+                        () => {
+                            setVisible(false);
+                        },
+                        2800
+                    );
+            };
 
-            setOnline(false);
 
-            setVisible(true);
-        };
+        const handleOnline =
+            () => {
+
+                setOnline(
+                    true
+                );
+
+                showTemporarily();
+            };
+
+
+        const handleOffline =
+            () => {
+
+                setOnline(
+                    false
+                );
+
+                setVisible(
+                    true
+                );
+            };
 
 
         window.addEventListener(
@@ -462,15 +1047,23 @@ function NetworkStatus() {
                 handleOffline
             );
 
-            if (timer) {
-                clearTimeout(timer);
+
+            if (
+                timerRef.current
+            ) {
+
+                clearTimeout(
+                    timerRef.current
+                );
             }
         };
 
     }, []);
 
 
-    if (!visible) {
+    if (
+        !visible
+    ) {
 
         return null;
     }
@@ -483,13 +1076,16 @@ function NetworkStatus() {
                 fixed
                 bottom-5
                 left-1/2
-                z-[9999]
+                z-[10000]
                 -translate-x-1/2
             "
+            role="status"
+            aria-live="polite"
         >
 
             <div
                 className={`
+
                     flex
                     items-center
                     gap-2
@@ -498,28 +1094,340 @@ function NetworkStatus() {
                     px-4
                     py-2.5
                     text-sm
-                    shadow-xl
+                    shadow-2xl
                     backdrop-blur-xl
 
                     ${
                         online
-                            ? "border-emerald-400/20 bg-emerald-500/10 text-emerald-300"
-                            : "border-red-400/20 bg-red-500/10 text-red-300"
+                            ? `
+                                border-emerald-400/20
+                                bg-emerald-500/10
+                                text-emerald-300
+                              `
+                            : `
+                                border-red-400/20
+                                bg-red-500/10
+                                text-red-300
+                              `
                     }
+
                 `}
             >
 
                 {
                     online
-                        ? <Wifi size={15} />
-                        : <WifiOff size={15} />
+
+                        ? (
+                            <Wifi
+                                size={15}
+                            />
+                        )
+
+                        : (
+                            <WifiOff
+                                size={15}
+                            />
+                        )
                 }
+
 
                 {
                     online
                         ? "Connection restored"
                         : "You're offline"
                 }
+
+            </div>
+
+        </div>
+    );
+}
+
+
+// ============================================================
+// BACKEND STATUS
+// ============================================================
+
+function BackendStatus() {
+
+    const [
+        status,
+        setStatus
+    ] = useState(
+        "checking"
+    );
+
+
+    const [
+        visible,
+        setVisible
+    ] = useState(false);
+
+
+    const [
+        lastChecked,
+        setLastChecked
+    ] = useState(null);
+
+
+    const checkBackend =
+        useCallback(
+            async () => {
+
+                setStatus(
+                    "checking"
+                );
+
+
+                try {
+
+                    const response =
+                        await fetchWithTimeout(
+                            buildApiUrl("/"),
+                            {
+                                method:
+                                    "GET",
+
+                                headers: {
+                                    Accept:
+                                        "application/json"
+                                }
+                            }
+                        );
+
+
+                    if (
+                        response.ok
+                    ) {
+
+                        setStatus(
+                            "online"
+                        );
+
+                    } else {
+
+                        setStatus(
+                            "degraded"
+                        );
+                    }
+
+
+                    setLastChecked(
+                        Date.now()
+                    );
+
+
+                    storageSet(
+                        NOVA_CONFIG.storage.backendStatus,
+                        response.ok
+                            ? "online"
+                            : "degraded"
+                    );
+
+
+                } catch {
+
+                    setStatus(
+                        "offline"
+                    );
+
+                    setLastChecked(
+                        Date.now()
+                    );
+
+
+                    storageSet(
+                        NOVA_CONFIG.storage.backendStatus,
+                        "offline"
+                    );
+                }
+
+            },
+            []
+        );
+
+
+    useEffect(() => {
+
+        checkBackend();
+
+
+        const interval =
+            setInterval(
+                checkBackend,
+                30000
+            );
+
+
+        return () => {
+
+            clearInterval(
+                interval
+            );
+        };
+
+    }, [
+        checkBackend
+    ]);
+
+
+    useEffect(() => {
+
+        if (
+            status === "online"
+        ) {
+
+            setVisible(false);
+
+            return;
+        }
+
+
+        setVisible(true);
+
+    }, [
+        status
+    ]);
+
+
+    if (
+        !visible
+    ) {
+
+        return null;
+    }
+
+
+    const statusText = {
+
+        checking:
+            "Connecting to Nova...",
+
+        online:
+            "Nova backend online",
+
+        degraded:
+            "Nova backend is responding slowly",
+
+        offline:
+            "Nova backend unavailable"
+
+    }[status];
+
+
+    const statusIcon = {
+
+        checking:
+            <LoaderCircle
+                size={14}
+                className="animate-spin"
+            />,
+
+        online:
+            <CheckCircle2
+                size={14}
+            />,
+
+        degraded:
+            <CircleDot
+                size={14}
+            />,
+
+        offline:
+            <Server
+                size={14}
+            />
+
+    }[status];
+
+
+    return (
+
+        <div
+            className="
+                fixed
+                right-4
+                top-4
+                z-[9999]
+            "
+        >
+
+            <div
+                className="
+                    flex
+                    max-w-[calc(100vw-2rem)]
+                    items-center
+                    gap-2
+                    rounded-xl
+                    border
+                    border-white/10
+                    bg-slate-900/90
+                    px-3
+                    py-2
+                    text-xs
+                    text-slate-300
+                    shadow-2xl
+                    backdrop-blur-xl
+                "
+            >
+
+                {statusIcon}
+
+                <span>
+                    {statusText}
+                </span>
+
+
+                {
+                    lastChecked &&
+
+                    <button
+                        type="button"
+                        onClick={
+                            checkBackend
+                        }
+                        className="
+                            ml-1
+                            rounded-md
+                            p-1
+                            text-slate-500
+                            transition
+                            hover:bg-white/10
+                            hover:text-white
+                        "
+                        aria-label="Check Nova backend again"
+                        title="Check backend"
+                    >
+
+                        <RefreshCw
+                            size={13}
+                        />
+
+                    </button>
+                }
+
+
+                <button
+                    type="button"
+                    onClick={() =>
+                        setVisible(false)
+                    }
+                    className="
+                        rounded-md
+                        p-1
+                        text-slate-500
+                        transition
+                        hover:bg-white/10
+                        hover:text-white
+                    "
+                    aria-label="Dismiss backend status"
+                >
+
+                    <X
+                        size={13}
+                    />
+
+                </button>
 
             </div>
 
@@ -543,23 +1451,29 @@ function RouteMemory() {
         const pathname =
             location.pathname;
 
-        const currentRoute =
+
+        const route =
             pathname +
             location.search;
 
 
         const shouldRemember =
             LEARNING_ROUTES.some(
-                route =>
-                    pathname === route
+                routeName =>
+                    pathname === routeName ||
+                    pathname.startsWith(
+                        `${routeName}/`
+                    )
             );
 
 
-        if (shouldRemember) {
+        if (
+            shouldRemember
+        ) {
 
-            safeStorageSet(
-                STORAGE_KEYS.LAST_ROUTE,
-                currentRoute
+            storageSet(
+                NOVA_CONFIG.storage.lastRoute,
+                route
             );
         }
 
@@ -577,7 +1491,7 @@ function RouteMemory() {
 // SCROLL RESTORATION
 // ============================================================
 
-function ScrollRestoration() {
+function ScrollRestorationManager() {
 
     const location =
         useLocation();
@@ -585,11 +1499,31 @@ function ScrollRestoration() {
 
     useEffect(() => {
 
-        window.scrollTo({
-            top: 0,
-            left: 0,
-            behavior: "instant"
-        });
+        const timer =
+            requestAnimationFrame(
+                () => {
+
+                    window.scrollTo({
+
+                        top:
+                            0,
+
+                        left:
+                            0,
+
+                        behavior:
+                            "auto"
+                    });
+                }
+            );
+
+
+        return () => {
+
+            cancelAnimationFrame(
+                timer
+            );
+        };
 
     }, [
         location.pathname
@@ -601,7 +1535,7 @@ function ScrollRestoration() {
 
 
 // ============================================================
-// DOCUMENT TITLE
+// DOCUMENT MANAGER
 // ============================================================
 
 function DocumentManager() {
@@ -616,30 +1550,83 @@ function DocumentManager() {
             location.pathname;
 
 
-        const title =
-            PAGE_TITLES[pathname] ||
-            "Nova AI";
+        const metadata =
+            PAGE_METADATA[pathname] ||
+            {
+                title:
+                    "Nova AI",
+
+                description:
+                    "Nova AI, an adaptive educational tutor."
+            };
 
 
         document.title =
-            title === "Nova AI"
-                ? APP_NAME
-                : `${title} | ${APP_NAME}`;
+            metadata.title === "Nova AI"
+
+                ? "Nova AI"
+
+                : `${metadata.title} | Nova AI`;
 
 
-        const description =
+        let description =
             document.querySelector(
                 'meta[name="description"]'
             );
 
 
-        if (description) {
+        if (
+            !description
+        ) {
 
-            description.setAttribute(
-                "content",
-                "Nova AI, an adaptive educational tutor."
+            description =
+                document.createElement(
+                    "meta"
+                );
+
+            description.name =
+                "description";
+
+            document.head.appendChild(
+                description
             );
         }
+
+
+        description.setAttribute(
+            "content",
+            metadata.description
+        );
+
+
+        let themeColor =
+            document.querySelector(
+                'meta[name="theme-color"]'
+            );
+
+
+        if (
+            !themeColor
+        ) {
+
+            themeColor =
+                document.createElement(
+                    "meta"
+                );
+
+            themeColor.name =
+                "theme-color";
+
+            document.head.appendChild(
+                themeColor
+            );
+        }
+
+
+        themeColor.setAttribute(
+            "content",
+            "#020617"
+        );
 
     }, [
         location.pathname
@@ -651,7 +1638,7 @@ function DocumentManager() {
 
 
 // ============================================================
-// PAGE TRANSITION
+// PAGE TRANSITIONS
 // ============================================================
 
 function PageTransition({
@@ -661,6 +1648,7 @@ function PageTransition({
     const location =
         useLocation();
 
+
     const navigationType =
         useNavigationType();
 
@@ -669,6 +1657,10 @@ function PageTransition({
         useRef(
             location.pathname
         );
+
+
+    const firstRender =
+        useRef(true);
 
 
     const [
@@ -685,13 +1677,11 @@ function PageTransition({
     );
 
 
-    const firstRender =
-        useRef(true);
-
-
     useEffect(() => {
 
-        if (firstRender.current) {
+        if (
+            firstRender.current
+        ) {
 
             firstRender.current =
                 false;
@@ -711,39 +1701,40 @@ function PageTransition({
             location.pathname;
 
 
-        if (
+        const goingBack =
             navigationType === "POP" ||
             (
                 newPath === "/" &&
                 oldPath !== "/"
-            )
-        ) {
-
-            setDirection(
-                "back"
             );
 
-        } else {
 
-            setDirection(
-                "forward"
-            );
-        }
+        setDirection(
+            goingBack
+                ? "back"
+                : "forward"
+        );
 
 
         previousPath.current =
             newPath;
 
 
-        setAnimate(true);
+        setAnimate(
+            true
+        );
 
 
         const timer =
             setTimeout(
                 () => {
-                    setAnimate(false);
+
+                    setAnimate(
+                        false
+                    );
+
                 },
-                620
+                NOVA_CONFIG.transitionDuration
             );
 
 
@@ -765,15 +1756,21 @@ function PageTransition({
 
         <div
             className={`
+
                 nova-page
 
                 ${
                     animate
+
                         ? direction === "back"
+
                             ? "nova-transition-back"
+
                             : "nova-transition-forward"
+
                         : ""
                 }
+
             `}
         >
 
@@ -785,7 +1782,7 @@ function PageTransition({
 
 
 // ============================================================
-// GLOBAL KEYBOARD SHORTCUTS
+// KEYBOARD SHORTCUTS
 // ============================================================
 
 function KeyboardShortcuts() {
@@ -798,8 +1795,9 @@ function KeyboardShortcuts() {
         useLocation();
 
 
-    const handleKeyDown =
-        useCallback(
+    useEffect(() => {
+
+        const handleKeyDown =
             event => {
 
                 const target =
@@ -816,19 +1814,14 @@ function KeyboardShortcuts() {
                     target?.isContentEditable;
 
 
-                if (isTyping) {
-
-                    return;
-                }
-
-
                 const modifier =
                     event.ctrlKey ||
                     event.metaKey;
 
 
+                // ------------------------------------------------
                 // Ctrl/Cmd + K
-                // Focus chat.
+                // ------------------------------------------------
 
                 if (
                     modifier &&
@@ -837,15 +1830,52 @@ function KeyboardShortcuts() {
 
                     event.preventDefault();
 
-                    navigate(
-                        "/chat"
-                    );
+
+                    if (
+                        location.pathname !==
+                        NOVA_CONFIG.routes.chat
+                    ) {
+
+                        navigate(
+                            NOVA_CONFIG.routes.chat
+                        );
+                    }
+
 
                     return;
                 }
 
 
+                // ------------------------------------------------
+                // Escape
+                // ------------------------------------------------
+
+                if (
+                    event.key === "Escape"
+                ) {
+
+                    window.dispatchEvent(
+                        new CustomEvent(
+                            "nova:escape"
+                        )
+                    );
+
+
+                    return;
+                }
+
+
+                if (
+                    isTyping
+                ) {
+
+                    return;
+                }
+
+
+                // ------------------------------------------------
                 // Alt + Left
+                // ------------------------------------------------
 
                 if (
                     event.altKey &&
@@ -860,7 +1890,9 @@ function KeyboardShortcuts() {
                 }
 
 
+                // ------------------------------------------------
                 // Alt + Right
+                // ------------------------------------------------
 
                 if (
                     event.altKey &&
@@ -870,36 +1902,10 @@ function KeyboardShortcuts() {
                     event.preventDefault();
 
                     window.history.forward();
-
-                    return;
                 }
 
+            };
 
-                // Escape
-
-                if (
-                    event.key === "Escape"
-                ) {
-
-                    if (
-                        location.pathname !== "/"
-                    ) {
-
-                        // Deliberately do not navigate.
-                        // Escape is reserved for page-level
-                        // overlays and modals.
-                    }
-                }
-
-            },
-            [
-                navigate,
-                location.pathname
-            ]
-        );
-
-
-    useEffect(() => {
 
         window.addEventListener(
             "keydown",
@@ -916,7 +1922,8 @@ function KeyboardShortcuts() {
         };
 
     }, [
-        handleKeyDown
+        navigate,
+        location.pathname
     ]);
 
 
@@ -925,95 +1932,287 @@ function KeyboardShortcuts() {
 
 
 // ============================================================
-// APP STATUS
+// VISIBILITY / FOCUS TRACKING
 // ============================================================
 
-function AppStatus() {
-
-    const [
-        status,
-        setStatus
-    ] = useState(
-        "ready"
-    );
-
+function BrowserLifecycle() {
 
     useEffect(() => {
 
-        let mounted = true;
+        const handleVisibility =
+            () => {
 
-
-        const checkBackend =
-            async () => {
-
-                try {
-
-                    const response =
-                        await fetch(
-                            "http://127.0.0.1:8000/",
-                            {
-                                method: "GET",
-                                signal:
-                                    AbortSignal.timeout(
-                                        2500
-                                    )
+                window.dispatchEvent(
+                    new CustomEvent(
+                        "nova:visibility",
+                        {
+                            detail: {
+                                visible:
+                                    !document.hidden
                             }
-                        );
-
-
-                    if (!mounted) {
-
-                        return;
-                    }
-
-
-                    if (response.ok) {
-
-                        setStatus(
-                            "online"
-                        );
-
-                    } else {
-
-                        setStatus(
-                            "degraded"
-                        );
-                    }
-
-                } catch {
-
-                    if (mounted) {
-
-                        setStatus(
-                            "offline"
-                        );
-                    }
-                }
+                        }
+                    )
+                );
             };
 
 
-        checkBackend();
+        document.addEventListener(
+            "visibilitychange",
+            handleVisibility
+        );
+
+
+        const handleFocus =
+            () => {
+
+                window.dispatchEvent(
+                    new CustomEvent(
+                        "nova:focus",
+                        {
+                            detail: {
+                                focused:
+                                    true
+                            }
+                        }
+                    )
+                );
+            };
+
+
+        const handleBlur =
+            () => {
+
+                window.dispatchEvent(
+                    new CustomEvent(
+                        "nova:focus",
+                        {
+                            detail: {
+                                focused:
+                                    false
+                            }
+                        }
+                    )
+                );
+            };
+
+
+        window.addEventListener(
+            "focus",
+            handleFocus
+        );
+
+        window.addEventListener(
+            "blur",
+            handleBlur
+        );
 
 
         return () => {
 
-            mounted = false;
+            document.removeEventListener(
+                "visibilitychange",
+                handleVisibility
+            );
+
+            window.removeEventListener(
+                "focus",
+                handleFocus
+            );
+
+            window.removeEventListener(
+                "blur",
+                handleBlur
+            );
         };
 
     }, []);
 
-
-    // Status is currently used only to track
-    // backend availability internally.
-
-    void status;
 
     return null;
 }
 
 
 // ============================================================
-// ROUTE HELPERS
+// FRONTEND INITIALIZATION
+// ============================================================
+
+function FrontendInitialization() {
+
+    useEffect(() => {
+
+        document.documentElement.dataset.novaVersion =
+            NOVA_CONFIG.version;
+
+
+        document.documentElement.dataset.novaReady =
+            "true";
+
+
+        document.body.classList.add(
+            "nova-app"
+        );
+
+
+        storageSet(
+            NOVA_CONFIG.storage.initialized,
+            "true"
+        );
+
+
+        // ----------------------------------------------------
+        // Viewport
+        // ----------------------------------------------------
+
+        let viewport =
+            document.querySelector(
+                'meta[name="viewport"]'
+            );
+
+
+        if (
+            !viewport
+        ) {
+
+            viewport =
+                document.createElement(
+                    "meta"
+                );
+
+            viewport.name =
+                "viewport";
+
+            document.head.appendChild(
+                viewport
+            );
+        }
+
+
+        viewport.content =
+            "width=device-width, initial-scale=1.0, viewport-fit=cover";
+
+
+        // ----------------------------------------------------
+        // Color scheme
+        // ----------------------------------------------------
+
+        let colorScheme =
+            document.querySelector(
+                'meta[name="color-scheme"]'
+            );
+
+
+        if (
+            !colorScheme
+        ) {
+
+            colorScheme =
+                document.createElement(
+                    "meta"
+                );
+
+            colorScheme.name =
+                "color-scheme";
+
+            document.head.appendChild(
+                colorScheme
+            );
+        }
+
+
+        colorScheme.content =
+            "dark";
+
+
+        // ----------------------------------------------------
+        // Development diagnostics
+        // ----------------------------------------------------
+
+        if (
+            import.meta.env.DEV
+        ) {
+
+            console.info(
+                `[Nova] ${NOVA_CONFIG.name} v${NOVA_CONFIG.version}`
+            );
+
+            console.info(
+                `[Nova] API: ${NOVA_CONFIG.apiUrl}`
+            );
+
+            console.info(
+                "[Nova] Development mode enabled."
+            );
+        }
+
+    }, []);
+
+
+    return null;
+}
+
+
+// ============================================================
+// GLOBAL BROWSER ERROR HANDLERS
+// ============================================================
+
+function GlobalErrorHandlers() {
+
+    useEffect(() => {
+
+        const handleError =
+            event => {
+
+                console.error(
+                    "[Nova] Browser error:",
+                    event.error ||
+                    event.message
+                );
+            };
+
+
+        const handleRejection =
+            event => {
+
+                console.error(
+                    "[Nova] Unhandled promise rejection:",
+                    event.reason
+                );
+            };
+
+
+        window.addEventListener(
+            "error",
+            handleError
+        );
+
+        window.addEventListener(
+            "unhandledrejection",
+            handleRejection
+        );
+
+
+        return () => {
+
+            window.removeEventListener(
+                "error",
+                handleError
+            );
+
+            window.removeEventListener(
+                "unhandledrejection",
+                handleRejection
+            );
+        };
+
+    }, []);
+
+
+    return null;
+}
+
+
+// ============================================================
+// ROUTE LOADING FALLBACK
 // ============================================================
 
 function RouteLoadingFallback() {
@@ -1025,139 +2224,235 @@ function RouteLoadingFallback() {
 
 
 // ============================================================
+// APPLICATION ROUTES
+// ============================================================
+
+function ApplicationRoutes() {
+
+    return (
+
+        <Suspense
+            fallback={
+                <RouteLoadingFallback />
+            }
+        >
+
+            <Routes>
+
+                <Route
+                    path="/"
+                    element={
+                        <Home />
+                    }
+                />
+
+
+                <Route
+                    path="/chat"
+                    element={
+                        <Chat />
+                    }
+                />
+
+
+                <Route
+                    path="/dashboard"
+                    element={
+                        <Dashboard />
+                    }
+                />
+
+
+                <Route
+                    path="/settings"
+                    element={
+                        <Settings />
+                    }
+                />
+
+
+                <Route
+                    path="/login"
+                    element={
+                        <Login />
+                    }
+                />
+
+
+                <Route
+                    path="/register"
+                    element={
+                        <Register />
+                    }
+                />
+
+
+                <Route
+                    path="*"
+                    element={
+                        <NotFound />
+                    }
+                />
+
+            </Routes>
+
+        </Suspense>
+    );
+}
+
+
+// ============================================================
 // APP CONTENT
 // ============================================================
 
 function AppContent() {
 
+    const apiConfiguration =
+        useMemo(
+            () => ({
+
+                baseUrl:
+                    NOVA_CONFIG.apiUrl,
+
+                version:
+                    NOVA_CONFIG.version
+
+            }),
+            []
+        );
+
+
+    useEffect(() => {
+
+        /*
+         * Do not mutate window.Nova here.
+         *
+         * home.jsx may expose window.Nova as a frozen
+         * runtime object. Mutating it would therefore
+         * cause a runtime error.
+         *
+         * Instead, expose App's configuration separately.
+         */
+
+        window.NovaAppConfig =
+            apiConfiguration;
+
+
+        return () => {
+
+            try {
+
+                delete window.NovaAppConfig;
+
+            } catch {
+
+                // Ignore cleanup failures.
+            }
+
+        };
+
+    }, [
+        apiConfiguration
+    ]);
+
+
     return (
 
         <>
 
+            <FrontendInitialization />
+
+            <GlobalErrorHandlers />
+
+            <BrowserLifecycle />
+
             <RouteMemory />
 
-            <ScrollRestoration />
+            <ScrollRestorationManager />
 
             <DocumentManager />
 
             <KeyboardShortcuts />
 
-            <AppStatus />
+            <BackendStatus />
 
             <NetworkStatus />
 
 
             <PageTransition>
 
-                <Suspense
-                    fallback={
-                        <RouteLoadingFallback />
-                    }
-                >
+                <ChunkRecoveryBoundary>
 
-                    <Routes>
+                    <ApplicationRoutes />
 
-                        {/* ================================== */}
-                        {/* HOME */}
-                        {/* ================================== */}
-
-                        <Route
-                            path="/"
-                            element={
-                                <Home />
-                            }
-                        />
-
-
-                        {/* ================================== */}
-                        {/* CHAT */}
-                        {/* ================================== */}
-
-                        <Route
-                            path="/chat"
-                            element={
-                                <Chat />
-                            }
-                        />
-
-
-                        {/* ================================== */}
-                        {/* DASHBOARD */}
-                        {/* ================================== */}
-
-                        <Route
-                            path="/dashboard"
-                            element={
-                                <Dashboard />
-                            }
-                        />
-
-
-                        {/* ================================== */}
-                        {/* SETTINGS */}
-                        {/* ================================== */}
-
-                        <Route
-                            path="/settings"
-                            element={
-                                <Settings />
-                            }
-                        />
-
-
-                        {/* ================================== */}
-                        {/* AUTH */}
-                        {/* ================================== */}
-
-                        <Route
-                            path="/login"
-                            element={
-                                <Login />
-                            }
-                        />
-
-                        <Route
-                            path="/register"
-                            element={
-                                <Register />
-                            }
-                        />
-
-
-                        {/* ================================== */}
-                        {/* 404 */}
-                        {/* ================================== */}
-
-                        <Route
-                            path="*"
-                            element={
-                                <NotFound />
-                            }
-                        />
-
-                    </Routes>
-
-                </Suspense>
+                </ChunkRecoveryBoundary>
 
             </PageTransition>
 
 
             <style>{`
 
-                html {
+                /* =================================================
+                   NOVA GLOBAL FOUNDATION
+                   ================================================= */
+
+                :root {
+
+                    color-scheme:
+                        dark;
+
                     background:
                         #020617;
+
+                    --nova-background:
+                        #020617;
+
+                    --nova-surface:
+                        rgba(
+                            255,
+                            255,
+                            255,
+                            0.04
+                        );
+
+                    --nova-border:
+                        rgba(
+                            255,
+                            255,
+                            255,
+                            0.10
+                        );
+
+                    --nova-text:
+                        #ffffff;
+
+                    --nova-muted:
+                        #94a3b8;
+                }
+
+
+                html {
+
+                    background:
+                        var(
+                            --nova-background
+                        );
 
                     color-scheme:
                         dark;
 
                     scroll-behavior:
                         smooth;
+
+                    min-width:
+                        320px;
                 }
 
 
                 body {
-                    margin: 0;
+
+                    margin:
+                        0;
 
                     min-width:
                         320px;
@@ -1166,10 +2461,14 @@ function AppContent() {
                         100vh;
 
                     background:
-                        #020617;
+                        var(
+                            --nova-background
+                        );
 
                     color:
-                        white;
+                        var(
+                            --nova-text
+                        );
 
                     overflow-x:
                         hidden;
@@ -1179,10 +2478,21 @@ function AppContent() {
 
                     -webkit-font-smoothing:
                         antialiased;
+
+                    -moz-osx-font-smoothing:
+                        grayscale;
+                }
+
+
+                body.nova-app {
+
+                    overscroll-behavior-x:
+                        none;
                 }
 
 
                 #root {
+
                     min-height:
                         100vh;
 
@@ -1190,10 +2500,21 @@ function AppContent() {
                         100%;
 
                     background:
-                        #020617;
+                        var(
+                            --nova-background
+                        );
 
                     overflow-x:
                         hidden;
+                }
+
+
+                *,
+                *::before,
+                *::after {
+
+                    box-sizing:
+                        border-box;
                 }
 
 
@@ -1201,18 +2522,36 @@ function AppContent() {
                 input,
                 textarea,
                 select {
+
                     font:
                         inherit;
                 }
 
 
                 button {
+
                     -webkit-tap-highlight-color:
                         transparent;
                 }
 
 
+                img,
+                svg {
+
+                    max-width:
+                        100%;
+                }
+
+
+                a {
+
+                    color:
+                        inherit;
+                }
+
+
                 ::selection {
+
                     background:
                         rgba(
                             255,
@@ -1220,10 +2559,18 @@ function AppContent() {
                             255,
                             0.16
                         );
+
+                    color:
+                        white;
                 }
 
 
+                /* =================================================
+                   SCROLLBAR
+                   ================================================= */
+
                 ::-webkit-scrollbar {
+
                     width:
                         8px;
 
@@ -1233,12 +2580,14 @@ function AppContent() {
 
 
                 ::-webkit-scrollbar-track {
+
                     background:
                         #020617;
                 }
 
 
                 ::-webkit-scrollbar-thumb {
+
                     background:
                         rgba(
                             148,
@@ -1249,21 +2598,37 @@ function AppContent() {
 
                     border-radius:
                         999px;
+
+                    border:
+                        2px solid
+                        transparent;
+
+                    background-clip:
+                        padding-box;
                 }
 
 
                 ::-webkit-scrollbar-thumb:hover {
+
                     background:
                         rgba(
                             148,
                             163,
                             184,
-                            0.4
+                            0.40
                         );
+
+                    background-clip:
+                        padding-box;
                 }
 
 
+                /* =================================================
+                   PAGE SYSTEM
+                   ================================================= */
+
                 .nova-page {
+
                     position:
                         relative;
 
@@ -1281,7 +2646,12 @@ function AppContent() {
                 }
 
 
+                /* =================================================
+                   FORWARD TRANSITION
+                   ================================================= */
+
                 .nova-transition-forward {
+
                     animation:
                         novaRevealRight
                         0.62s
@@ -1366,8 +2736,13 @@ function AppContent() {
                         filter:
                             blur(0);
                     }
+
                 }
 
+
+                /* =================================================
+                   BACK TRANSITION
+                   ================================================= */
 
                 .nova-transition-back {
 
@@ -1455,16 +2830,63 @@ function AppContent() {
                         filter:
                             blur(0);
                     }
+
                 }
 
+
+                /* =================================================
+                   MOBILE
+                   ================================================= */
+
+                @media (
+                    max-width: 640px
+                ) {
+
+                    html {
+
+                        scroll-behavior:
+                            auto;
+                    }
+
+
+                    .nova-page {
+
+                        min-height:
+                            100svh;
+                    }
+                }
+
+
+                /* =================================================
+                   REDUCED MOTION
+                   ================================================= */
 
                 @media (
                     prefers-reduced-motion: reduce
                 ) {
 
                     html {
+
                         scroll-behavior:
                             auto;
+                    }
+
+
+                    *,
+                    *::before,
+                    *::after {
+
+                        animation-duration:
+                            0.01ms !important;
+
+                        animation-iteration-count:
+                            1 !important;
+
+                        transition-duration:
+                            0.01ms !important;
+
+                        scroll-behavior:
+                            auto !important;
                     }
 
 
@@ -1477,14 +2899,46 @@ function AppContent() {
                 }
 
 
-                @media (
-                    max-width: 640px
+                /* =================================================
+                   SAFE AREA SUPPORT
+                   ================================================= */
+
+                @supports (
+                    padding: env(safe-area-inset-top)
                 ) {
 
-                    .nova-page {
-                        min-height:
-                            100svh;
+                    body {
+
+                        padding-top:
+                            env(
+                                safe-area-inset-top
+                            );
+
+                        padding-bottom:
+                            env(
+                                safe-area-inset-bottom
+                            );
                     }
+                }
+
+
+                /* =================================================
+                   FOCUS ACCESSIBILITY
+                   ================================================= */
+
+                :focus-visible {
+
+                    outline:
+                        2px solid
+                        rgba(
+                            255,
+                            255,
+                            255,
+                            0.70
+                        );
+
+                    outline-offset:
+                        3px;
                 }
 
             `}</style>
@@ -1495,7 +2949,7 @@ function AppContent() {
 
 
 // ============================================================
-// APP
+// ROOT APP
 // ============================================================
 
 function App() {

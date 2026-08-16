@@ -6,10 +6,6 @@ import React, {
 
 import ReactDOM from "react-dom/client";
 
-import {
-    BrowserRouter
-} from "react-router-dom";
-
 import "./index.css";
 
 import App from "./App.jsx";
@@ -20,11 +16,15 @@ import App from "./App.jsx";
 // ============================================================
 
 const NOVA_CONFIG = {
-    appName: "Nova AI",
 
-    version: "1.0.0",
+    appName:
+        "Nova AI",
 
-    rootId: "root",
+    version:
+        "1.0.0",
+
+    rootId:
+        "root",
 
     loadingMessage:
         "Loading Nova...",
@@ -36,6 +36,7 @@ const NOVA_CONFIG = {
         "Nova could not start correctly.",
 
     storageKeys: {
+
         theme:
             "nova_theme",
 
@@ -80,8 +81,8 @@ function initializeNova() {
 
 
         if (
-            savedTheme === "light"
-            || savedTheme === "dark"
+            savedTheme === "light" ||
+            savedTheme === "dark"
         ) {
 
             document.documentElement.dataset.theme =
@@ -91,7 +92,6 @@ function initializeNova() {
 
             document.documentElement.dataset.theme =
                 "dark";
-
         }
 
 
@@ -101,7 +101,6 @@ function initializeNova() {
 
         document.documentElement.dataset.novaVersion =
             NOVA_CONFIG.version;
-
 
         document.documentElement.dataset.novaReady =
             "false";
@@ -139,7 +138,6 @@ function initializeNova() {
             document.head.appendChild(
                 viewport
             );
-
         }
 
 
@@ -170,7 +168,6 @@ function initializeNova() {
             document.head.appendChild(
                 colorScheme
             );
-
         }
 
 
@@ -201,7 +198,6 @@ function initializeNova() {
             document.head.appendChild(
                 themeColor
             );
-
         }
 
 
@@ -219,9 +215,7 @@ function initializeNova() {
         );
 
         return false;
-
     }
-
 }
 
 
@@ -237,13 +231,13 @@ class NovaErrorBoundary
         super(props);
 
         this.state = {
+
             hasError:
                 false,
 
             error:
                 null
         };
-
     }
 
 
@@ -252,12 +246,12 @@ class NovaErrorBoundary
     ) {
 
         return {
+
             hasError:
                 true,
 
             error
         };
-
     }
 
 
@@ -285,12 +279,11 @@ class NovaErrorBoundary
                 JSON.stringify({
 
                     message:
-                        error?.message
-                        || "Unknown error",
+                        error?.message ||
+                        "Unknown error",
 
                     timestamp:
                         new Date().toISOString()
-
                 })
             );
 
@@ -298,16 +291,13 @@ class NovaErrorBoundary
 
             // Storage failure should never
             // prevent the fallback screen.
-
         }
-
     }
 
 
     handleReload = () => {
 
         window.location.reload();
-
     };
 
 
@@ -322,13 +312,11 @@ class NovaErrorBoundary
         } catch {
 
             // Ignore storage errors.
-
         }
 
 
         window.location.href =
             "/";
-
     };
 
 
@@ -339,13 +327,12 @@ class NovaErrorBoundary
         ) {
 
             return this.props.children;
-
         }
 
 
         const errorMessage =
-            this.state.error?.message
-            || NOVA_CONFIG.errorMessage;
+            this.state.error?.message ||
+            NOVA_CONFIG.errorMessage;
 
 
         return (
@@ -419,11 +406,8 @@ class NovaErrorBoundary
                 </div>
 
             </div>
-
         );
-
     }
-
 }
 
 
@@ -484,9 +468,7 @@ function NovaLoadingScreen() {
             </div>
 
         </div>
-
     );
-
 }
 
 
@@ -534,7 +516,6 @@ function useNovaReady() {
                     ) {
 
                         return;
-
                     }
 
 
@@ -561,11 +542,8 @@ function useNovaReady() {
                         setReady(
                             true
                         );
-
                     }
-
                 }
-
             };
 
 
@@ -576,14 +554,12 @@ function useNovaReady() {
 
             cancelled =
                 true;
-
         };
 
     }, []);
 
 
     return ready;
-
 }
 
 
@@ -602,20 +578,10 @@ function NovaApplication() {
         return (
             <NovaLoadingScreen />
         );
-
     }
 
 
-    return (
-
-        <BrowserRouter>
-
-            <App />
-
-        </BrowserRouter>
-
-    );
-
+    return <App />;
 }
 
 
@@ -643,9 +609,7 @@ function enableDevelopmentDiagnostics() {
         console.info(
             "[Nova] Frontend initialized."
         );
-
     }
-
 }
 
 
@@ -661,10 +625,9 @@ function installGlobalErrorHandlers() {
 
             console.error(
                 "[Nova] Unhandled browser error:",
-                event.error
-                || event.message
+                event.error ||
+                event.message
             );
-
         }
     );
 
@@ -677,10 +640,8 @@ function installGlobalErrorHandlers() {
                 "[Nova] Unhandled promise rejection:",
                 event.reason
             );
-
         }
     );
-
 }
 
 
@@ -701,12 +662,10 @@ function getApplicationRoot() {
         throw new Error(
             `Nova root element "#${NOVA_CONFIG.rootId}" was not found.`
         );
-
     }
 
 
     return root;
-
 }
 
 
@@ -750,12 +709,10 @@ function bootstrapNova() {
             </NovaErrorBoundary>
 
         </React.StrictMode>
-
     );
 
 
     return root;
-
 }
 
 
@@ -800,13 +757,16 @@ try {
                         N
                     </div>
 
+
                     <h1>
                         Nova could not start.
                     </h1>
 
+
                     <p>
                         The frontend failed during startup.
                     </p>
+
 
                     <button
                         type="button"
@@ -820,7 +780,5 @@ try {
             </div>
 
         `;
-
     }
-
 }

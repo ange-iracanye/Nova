@@ -381,7 +381,13 @@ class LocalLLM:
                         "repeat_penalty"
                     ]
 
-            }
+            },
+
+            # Explicitly request a complete response object.
+            # This prevents Nova from accidentally receiving
+            # streaming chunks when Ollama/client defaults change.
+            stream=False
+
         )
 
     # =========================================
@@ -395,7 +401,12 @@ class LocalLLM:
         """
         Extract the assistant message from an Ollama response.
 
-        Handles both dictionary-like and object-like responses.
+        Handles:
+
+        - Dictionary responses
+        - Ollama ChatResponse objects
+        - Message objects
+        - Dictionary-like message objects
         """
 
         if response is None:
@@ -403,6 +414,8 @@ class LocalLLM:
             raise RuntimeError(
                 "Ollama returned an empty response."
             )
+
+        content = None
 
         # -------------------------------------
         # Dictionary-style response
@@ -426,9 +439,13 @@ class LocalLLM:
                     "content"
                 )
 
-            else:
+            elif message is not None:
 
-                content = None
+                content = getattr(
+                    message,
+                    "content",
+                    None
+                )
 
         # -------------------------------------
         # Object-style response
@@ -442,26 +459,40 @@ class LocalLLM:
                 None
             )
 
-            if message is None:
+            if message is not None:
 
-                content = None
+                if isinstance(
+                    message,
+                    dict
+                ):
 
-            elif isinstance(
-                message,
-                dict
-            ):
+                    content = message.get(
+                        "content"
+                    )
 
-                content = message.get(
-                    "content"
-                )
+                else:
 
-            else:
+                    content = getattr(
+                        message,
+                        "content",
+                        None
+                    )
+
+            # ---------------------------------
+            # Extra compatibility fallback
+            # ---------------------------------
+
+            if content is None:
 
                 content = getattr(
-                    message,
+                    response,
                     "content",
                     None
                 )
+
+        # -------------------------------------
+        # Validate extracted content
+        # -------------------------------------
 
         if content is None:
 
@@ -488,6 +519,76 @@ class LocalLLM:
             )
 
         return content
+
+    # =========================================
+    # RETRY DECISION
+    # =========================================
+
+    def _should_retry(
+        self,
+        error: Exception
+    ) -> bool:
+        """
+        Determine whether an Ollama error is worth retrying.
+
+        Permanent failures such as model loading errors and
+        out-of-memory errors should not be retried repeatedly.
+        """
+
+        error_text = str(
+            error
+        ).lower()
+
+        # -------------------------------------
+        # Memory / model loading failures
+        # -------------------------------------
+
+        permanent_patterns = [
+
+            "out-of-memory",
+
+            "out of memory",
+
+            "unable to allocate",
+
+            "failed to allocate",
+
+            "alloc_tensor_range",
+
+            "cpu_repack",
+
+            "error loading model",
+
+            "model not found",
+
+            "pull model"
+
+        ]
+
+        for pattern in permanent_patterns:
+
+            if pattern in error_text:
+
+                return False
+
+        # -------------------------------------
+        # Empty / malformed responses
+        # -------------------------------------
+
+        if (
+            "empty response"
+            in error_text
+            or "did not contain"
+            in error_text
+        ):
+
+            return False
+
+        # -------------------------------------
+        # Other errors can be transient
+        # -------------------------------------
+
+        return True
 
     # =========================================
     # ANSWER
@@ -585,6 +686,14 @@ class LocalLLM:
                     str(error)
                 )
 
+                # Do not waste time retrying permanent
+                # model-loading or memory errors.
+                if not self._should_retry(
+                    error
+                ):
+
+                    break
+
                 if attempt >= self.max_retries:
 
                     break
@@ -628,14 +737,42 @@ class LocalLLM:
         )
 
         # -------------------------------------
+        # Out of memory
+        # -------------------------------------
+
+        if (
+            "out-of-memory"
+            in lower_error
+            or "out of memory"
+            in lower_error
+            or "unable to allocate"
+            in lower_error
+            or "failed to allocate"
+            in lower_error
+            or "cpu_repack"
+            in lower_error
+            or "alloc_tensor_range"
+            in lower_error
+        ):
+
+            return (
+                f"Nova could not load the Ollama model "
+                f"'{self.model}' because there is not enough "
+                f"available system memory. Close other programs "
+                f"and try again."
+            )
+
+        # -------------------------------------
         # Connection problems
         # -------------------------------------
 
         if (
             "connection"
             in lower_error
-            or "connect" in lower_error
-            or "refused" in lower_error
+            or "connect"
+            in lower_error
+            or "refused"
+            in lower_error
         ):
 
             return (
@@ -655,6 +792,8 @@ class LocalLLM:
                 "not found"
                 in lower_error
                 or "pull"
+                in lower_error
+                or "loading"
                 in lower_error
             )
         ):
@@ -742,7 +881,9 @@ class LocalLLM:
                     None,
 
                 "error":
-                    str(error)
+                    self._format_generation_error(
+                        error
+                    )
             }
 
     # =========================================
