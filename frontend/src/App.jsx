@@ -49,7 +49,7 @@ const NOVA_CONFIG = {
         ).replace(/\/+$/, ""),
 
     requestTimeout:
-        10000,
+        60000,
 
     transitionDuration:
         620,
@@ -1182,20 +1182,16 @@ function BackendStatus() {
                 try {
 
                     const response =
-                        await fetchWithTimeout(
-                            buildApiUrl("/health"),
-                            {
-                                method:
-                                    "GET",
-
-                                headers: {
-                                    Accept:
-                                        "application/json"
-                                }
-                            },
-                            10000
-                        );
-
+    await fetch(
+        buildApiUrl("/health"),
+        {
+            method: "GET",
+            headers: {
+                Accept: "application/json"
+            },
+            cache: "no-store"
+        }
+    );
 
                     if (
                         response.ok

@@ -2218,34 +2218,11 @@ export default function CodeBlock({
             <style>{`
 
                 .nova-code-block {
-                    animation:
-                        novaCodeAppear
-                        ${NOVA_CODE_CONFIG.animationDuration}ms
-                        cubic-bezier(
-                            0.22,
-                            1,
-                            0.36,
-                            1
-                        )
-                        both;
-                }
+    animation: none;
+}
 
 
-                @keyframes novaCodeAppear {
-
-                    from {
-                        opacity: 0;
-                        transform:
-                            translateY(4px);
-                    }
-
-                    to {
-                        opacity: 1;
-                        transform:
-                            translateY(0);
-                    }
-
-                }
+                
 
 
                 .nova-code-content pre {

@@ -679,6 +679,7 @@ export default function Chat() {
   const [sidebar, setSidebar] = useState(true);
   const [search, setSearch] = useState("");
   const [messageSearch, setMessageSearch] = useState("");
+  const [searchOpen, setSearchOpen] = useState(false);
   const [account, setAccount] = useState(false);
   const [modeOpen, setModeOpen] = useState(false);
   const [mode, setMode] = useState(initialMode);
@@ -987,39 +988,20 @@ export default function Chat() {
      ======================================================= */
 
   const checkBackend = useCallback(async () => {
-    if (!navigator.onLine) {
-      if (mountedRef.current) {
-        setBackend(false);
-      }
+  try {
+    const r = await fetch(`${API_URL}/`, {
+      cache: "no-store"
+    });
 
-      return;
+    if (mountedRef.current) {
+      setBackend(r.ok);
     }
-
-    const controller = new AbortController();
-
-    const timeout = setTimeout(() => {
-      controller.abort();
-    }, BACKEND_TIMEOUT);
-
-    try {
-      const response = await fetch(
-        `${API_URL}/`,
-        {
-          signal: controller.signal,
-        }
-      );
-
-      if (mountedRef.current) {
-        setBackend(response.ok);
-      }
-    } catch {
-      if (mountedRef.current) {
-        setBackend(false);
-      }
-    } finally {
-      clearTimeout(timeout);
+  } catch {
+    if (mountedRef.current) {
+      setBackend(false);
     }
-  }, []);
+  }
+}, []);
 
   useEffect(() => {
     checkBackend();
@@ -1109,12 +1091,15 @@ export default function Chat() {
 
       const data = await response.json();
 
-      const items = Object.entries(
-        data || {}
-      ).map(([id, conversation]) => ({
-        id,
-        ...conversation,
-      }));
+      const conversations =
+  data?.conversations || {};
+
+const items = Object.entries(
+  conversations
+).map(([id, conversation]) => ({
+  id,
+  ...conversation,
+}));
 
       if (mountedRef.current) {
         setHistory(sortHistory(items));
@@ -1135,14 +1120,13 @@ export default function Chat() {
      ======================================================= */
 
   const openConversation = useCallback(
-    async (id) => {
-      if (
-        loading ||
-        demo ||
-        !id
-      ) {
-        return;
-      }
+  async (id) => {
+    if (
+      demo ||
+      !id
+    ) {
+      return;
+    }
 
       const user = getUser();
 
@@ -1167,8 +1151,11 @@ export default function Chat() {
           );
         }
 
-        const conversation =
-          await response.json();
+        const data =
+  await response.json();
+
+const conversation =
+  data?.conversation;
 
         if (!mountedRef.current) {
           return;
@@ -1212,11 +1199,12 @@ export default function Chat() {
       }
     },
     [
-      loading,
-      demo,
-      navigate,
-      scrollBottom,
-      mode,
+      [
+  demo,
+  navigate,
+  scrollBottom,
+  mode,
+]
     ]
   );
 
@@ -1683,7 +1671,7 @@ export default function Chat() {
         }
 
         if (!demo) {
-          await loadHistory();
+          loadHistory().catch(() => {});
         }
       } catch (error) {
         if (
@@ -2879,48 +2867,56 @@ export default function Chat() {
           </div>
         )}
 
-        {/* CURRENT SEARCH */}
-        {messages.length > 0 && (
-          <div className="border-b border-white/[.05] bg-[#05070c]/70 px-4 py-2">
-            <div className="mx-auto flex max-w-5xl items-center gap-2">
-              <Search
-                size={13}
-                className="text-slate-700"
-              />
+        {/* CONVERSATION SEARCH */}
+{messages.length > 0 && (
+  <div className="absolute right-4 top-[82px] z-30 sm:right-5">
+    {!searchOpen ? (
+      <button
+        type="button"
+        onClick={() => setSearchOpen(true)}
+        className="flex h-9 w-9 items-center justify-center rounded-xl border border-white/[.07] bg-white/[.025] text-slate-600 backdrop-blur-xl transition hover:bg-white/[.06] hover:text-slate-300"
+        title="Search conversation"
+      >
+        <Search size={15} />
+      </button>
+    ) : (
+      <div className="flex w-[260px] items-center gap-2 rounded-xl border border-white/[.08] bg-[#090c13]/80 px-3 py-2 shadow-xl backdrop-blur-xl">
+        <Search
+          size={14}
+          className="shrink-0 text-slate-600"
+        />
 
-              <input
-                value={
-                  messageSearch
-                }
-                onChange={(event) =>
-                  setMessageSearch(
-                    event.target.value
-                  )
-                }
-                placeholder="Search in this conversation..."
-                className="min-w-0 flex-1 bg-transparent text-xs text-slate-400 outline-none placeholder:text-slate-700"
-              />
+        <input
+          autoFocus
+          value={messageSearch}
+          onChange={(event) =>
+            setMessageSearch(
+              event.target.value
+            )
+          }
+          placeholder="Search..."
+          className="min-w-0 flex-1 bg-transparent text-xs text-slate-300 outline-none placeholder:text-slate-600"
+        />
 
-              {messageSearch && (
-                <button
-                  onClick={() =>
-                    setMessageSearch(
-                      ""
-                    )
-                  }
-                  className="text-slate-600 hover:text-white"
-                >
-                  <X size={13} />
-                </button>
-              )}
+        <span className="shrink-0 text-[9px] text-slate-600">
+          {visibleMessages.length}/{messages.length}
+        </span>
 
-              <span className="hidden text-[9px] text-slate-700 sm:block">
-                {visibleMessages.length}{" "}
-                / {messages.length}
-              </span>
-            </div>
-          </div>
-        )}
+        <button
+          type="button"
+          onClick={() => {
+            setMessageSearch("");
+            setSearchOpen(false);
+          }}
+          className="shrink-0 text-slate-600 hover:text-slate-300"
+          title="Close search"
+        >
+          <X size={14} />
+        </button>
+      </div>
+    )}
+  </div>
+)}
 
         {/* =================================================
             CHAT CONTENT
@@ -3054,7 +3050,9 @@ export default function Chat() {
             COMPOSER
             ================================================= */}
 
-        <div className="relative z-20 shrink-0 bg-gradient-to-t from-[#04060b] via-[#04060b]/98 to-transparent px-3 pb-3 pt-4 sm:px-5 sm:pb-5">
+        <div
+  className="relative z-20 shrink-0 bg-transparent px-3 pb-3 pt-4 sm:px-5 sm:pb-5"
+>
           <div className="mx-auto w-full max-w-4xl">
             {/* QUICK ACTIONS */}
             <div className="mb-2 flex gap-1.5 overflow-x-auto pb-1">
@@ -3065,7 +3063,7 @@ export default function Chat() {
                     onClick={() =>
                       usePrompt(text)
                     }
-                    className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-white/[.06] bg-white/[.02] px-3 py-1.5 text-[10px] text-slate-600 hover:text-slate-300"
+                    className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-white/[.04] bg-transparent px-3 py-1.5 text-[10px] text-slate-600 transition hover:bg-white/[.04] hover:text-slate-300"
                   >
                     <Icon size={11} />
                     {label}
@@ -3076,7 +3074,7 @@ export default function Chat() {
 
             {/* COMPOSER */}
             <div
-              className={`rounded-[22px] border bg-[#090c13]/95 p-2 shadow-2xl ${
+              className={`rounded-[22px] border bg-transparent p-2 shadow-2xl backdrop-blur-xl ${
                 loading
                   ? "border-sky-400/15"
                   : "border-white/[.09]"

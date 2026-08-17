@@ -5,11 +5,14 @@ from __future__ import annotations
 # ============================================================
 
 from typing import Any, Dict, List, Optional
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 import asyncio
 import time
 import uuid
 import traceback
+import re
+import secrets
+import threading
 
 from fastapi import (
     FastAPI,
@@ -196,6 +199,162 @@ demo_sessions: Dict[
 ] = {}
 
 DEMO_SESSION_TIMEOUT = 60 * 60
+
+
+# ============================================================
+# AUTHENTICATION SESSION LAYER
+# ============================================================
+
+AUTH_SESSION_TTL = timedelta(days=7)
+auth_sessions: Dict[str, Dict[str, Any]] = {}
+auth_sessions_lock = threading.RLock()
+
+# NovaCore switches user-specific runtime components while processing.
+# A lock prevents concurrent requests from different users from racing
+# over those shared runtime references. Persistent data remains keyed by
+# the user email inside NovaCore.
+nova_process_lock = threading.RLock()
+
+EMAIL_PATTERN = re.compile(
+    r"^[^\s@]+@[^\s@]+\.[^\s@]+$"
+)
+
+
+def normalize_email(value: Any) -> str:
+    return clean_text(value).lower()
+
+
+def validate_email(value: Any) -> str:
+    email = normalize_email(value)
+
+    if not email:
+        raise HTTPException(
+            status_code=400,
+            detail="Email is required."
+        )
+
+    if len(email) > 320 or not EMAIL_PATTERN.match(email):
+        raise HTTPException(
+            status_code=400,
+            detail="Please provide a valid email address."
+        )
+
+    return email
+
+
+def create_auth_session(email: str) -> Dict[str, Any]:
+    email = validate_email(email)
+    now = datetime.now(timezone.utc)
+    session = {
+        "token": secrets.token_urlsafe(48),
+        "email": email,
+        "created_at": now.isoformat(),
+        "last_seen": now.isoformat(),
+        "expires_at": (now + AUTH_SESSION_TTL).isoformat(),
+    }
+
+    with auth_sessions_lock:
+        auth_sessions[session["token"]] = session
+
+    return session
+
+
+def cleanup_auth_sessions() -> None:
+    now = datetime.now(timezone.utc)
+
+    with auth_sessions_lock:
+        for token, session in list(auth_sessions.items()):
+            try:
+                expires_at = datetime.fromisoformat(
+                    str(session.get("expires_at"))
+                )
+            except Exception:
+                auth_sessions.pop(token, None)
+                continue
+
+            if expires_at <= now:
+                auth_sessions.pop(token, None)
+
+
+def get_session_token(request: Request) -> Optional[str]:
+    authorization = clean_text(
+        request.headers.get("Authorization")
+    )
+
+    if authorization.lower().startswith("bearer "):
+        token = authorization[7:].strip()
+        if token:
+            return token
+
+    token = clean_text(
+        request.headers.get("X-Nova-Session")
+    )
+
+    return token or None
+
+
+def get_auth_session(request: Request) -> Optional[Dict[str, Any]]:
+    cleanup_auth_sessions()
+    token = get_session_token(request)
+
+    if not token:
+        return None
+
+    with auth_sessions_lock:
+        session = auth_sessions.get(token)
+
+        if not session:
+            return None
+
+        session["last_seen"] = datetime.now(
+            timezone.utc
+        ).isoformat()
+
+        return dict(session)
+
+
+def resolve_user_email(
+    request: Request,
+    supplied_email: Optional[str] = None
+) -> str:
+    session = get_auth_session(request)
+
+    if session:
+        session_email = validate_email(
+            session["email"]
+        )
+
+        if supplied_email and normalize_email(supplied_email) != session_email:
+            raise HTTPException(
+                status_code=403,
+                detail="The supplied email does not match the active Nova session."
+            )
+
+        return session_email
+
+    # Compatibility path for the existing frontend, which currently
+    # identifies the account by the email stored in localStorage.
+    return validate_email(supplied_email)
+
+
+def public_session(session: Dict[str, Any]) -> Dict[str, Any]:
+    expires_at = datetime.fromisoformat(
+        str(session["expires_at"])
+    )
+
+    return {
+        "token": session["token"],
+        "email": session["email"],
+        "created_at": session["created_at"],
+        "last_seen": session["last_seen"],
+        "expires_at": session["expires_at"],
+        "expires_in_seconds": max(
+            0,
+            int(
+                (expires_at - datetime.now(timezone.utc)).total_seconds()
+            )
+        )
+    }
 
 
 # ============================================================
@@ -868,6 +1027,9 @@ def status():
         "demo_sessions":
             len(demo_sessions),
 
+        "auth_sessions":
+            len(auth_sessions),
+
         "timestamp":
             utc_now()
     }
@@ -882,8 +1044,14 @@ def status():
     tags=["Chat"]
 )
 def chat(
-    request: ChatRequest
+    request: ChatRequest,
+    http_request: Request
 ):
+
+    user_email = resolve_user_email(
+        http_request,
+        request.email
+    )
 
     message = clean_text(
         request.message
@@ -920,16 +1088,17 @@ def chat(
 
     try:
 
-        result = core.process(
+        with nova_process_lock:
+            result = core.process(
 
-            message,
+                message,
 
-            request.conversation_id,
+                request.conversation_id,
 
-            user_email=request.email,
+                user_email=user_email,
 
-            forced_mode=request.tutor_mode
-        )
+                forced_mode=request.tutor_mode
+            )
 
     except Exception as error:
 
@@ -1042,8 +1211,14 @@ async def stream_text(
     tags=["Chat"]
 )
 async def chat_stream(
-    request: ChatRequest
+    request: ChatRequest,
+    http_request: Request
 ):
+
+    user_email = resolve_user_email(
+        http_request,
+        request.email
+    )
 
     message = clean_text(
         request.message
@@ -1080,16 +1255,17 @@ async def chat_stream(
 
     try:
 
-        result = core.process(
+        with nova_process_lock:
+            result = core.process(
 
-            message,
+                message,
 
-            request.conversation_id,
+                request.conversation_id,
 
-            user_email=request.email,
+                user_email=user_email,
 
-            forced_mode=request.tutor_mode
-        )
+                forced_mode=request.tutor_mode
+            )
 
     except Exception as error:
 
@@ -1454,49 +1630,51 @@ def register(
     request: UserRequest
 ):
 
-    email = clean_text(
-        request.email
-    )
-
-    password = request.password
-
-    if not email:
-
-        raise HTTPException(
-            status_code=400,
-            detail="Email is required."
-        )
+    email = validate_email(request.email)
+    password = clean_text(request.password)
 
     if not password:
-
         raise HTTPException(
             status_code=400,
             detail="Password is required."
         )
 
-    try:
+    if len(password) < 6:
+        raise HTTPException(
+            status_code=400,
+            detail="Password must be at least 6 characters."
+        )
 
+    try:
         success = register_user(
             email,
             password
         )
-
     except Exception as error:
-
-        print(
-            f"[REGISTER ERROR] {error}"
+        print(f"[REGISTER ERROR] {error}")
+        return error_response(
+            "Registration failed.",
+            code="REGISTRATION_ERROR",
+            status_code=500
         )
 
-        raise HTTPException(
+    if not success:
+        return {
+            "success": False,
+            "message": "An account with this email may already exist.",
+            "email": email,
+            "timestamp": utc_now()
+        }
 
-            status_code=500,
+    session = create_auth_session(email)
 
-            detail="Registration failed."
-        )
-
-    return {
-        "success": bool(success)
-    }
+    return success_response({
+        "email": email,
+        "user": {
+            "email": email
+        },
+        "session": public_session(session)
+    })
 
 
 @app.post(
@@ -1507,42 +1685,118 @@ def login(
     request: UserRequest
 ):
 
-    email = clean_text(
-        request.email
-    )
+    email = validate_email(request.email)
+    password = clean_text(request.password)
 
-    password = request.password
+    if not password:
+        raise HTTPException(
+            status_code=400,
+            detail="Password is required."
+        )
 
     try:
-
         success = login_user(
             email,
             password
         )
-
     except Exception as error:
-
-        print(
-            f"[LOGIN ERROR] {error}"
+        print(f"[LOGIN ERROR] {error}")
+        return error_response(
+            "Login failed.",
+            code="LOGIN_ERROR",
+            status_code=500
         )
 
-        raise HTTPException(
+    if not success:
+        return {
+            "success": False,
+            "message": "Incorrect email or password.",
+            "email": None,
+            "timestamp": utc_now()
+        }
 
-            status_code=500,
+    session = create_auth_session(email)
 
-            detail="Login failed."
+    return success_response({
+        "email": email,
+        "user": {
+            "email": email
+        },
+        "session": public_session(session)
+    })
+
+
+# ============================================================
+# AUTH SESSION ENDPOINTS
+# ============================================================
+
+@app.get(
+    "/auth/me",
+    tags=["Authentication"]
+)
+def auth_me(request: Request):
+
+    session = get_auth_session(request)
+
+    if not session:
+        return error_response(
+            "No active Nova session.",
+            code="NOT_AUTHENTICATED",
+            status_code=401
         )
 
-    return {
+    return success_response({
+        "authenticated": True,
+        "user": {
+            "email": session["email"]
+        },
+        "session": public_session(session)
+    })
 
-        "success":
-            bool(success),
 
-        "email":
-            email
-            if success
+@app.get(
+    "/auth/session",
+    tags=["Authentication"]
+)
+def auth_session_status(request: Request):
+
+    session = get_auth_session(request)
+
+    return success_response({
+        "authenticated": bool(session),
+        "user": (
+            {"email": session["email"]}
+            if session
             else None
-    }
+        ),
+        "session": (
+            public_session(session)
+            if session
+            else None
+        )
+    })
+
+
+@app.post(
+    "/auth/logout",
+    tags=["Authentication"]
+)
+def auth_logout(request: Request):
+
+    token = get_session_token(request)
+    removed = False
+
+    if token:
+        with auth_sessions_lock:
+            removed = auth_sessions.pop(
+                token,
+                None
+            ) is not None
+
+    return success_response({
+        "logged_out": True,
+        "session_removed": removed
+    })
 
 
 # ============================================================
@@ -1924,6 +2178,25 @@ def dashboard(
         default=None
     )
 ):
+
+    if email:
+        email = validate_email(email)
+
+        try:
+            core = get_nova()
+            prepare_user_systems = getattr(
+                core,
+                "_prepare_user_systems",
+                None
+            )
+
+            if callable(prepare_user_systems):
+                with nova_process_lock:
+                    prepare_user_systems(email)
+        except Exception as error:
+            print(
+                f"[DASHBOARD USER CONTEXT] {error}"
+            )
 
     student_data = safe_dict(
         get_safe_core_data(
@@ -2334,6 +2607,23 @@ def dashboard(
         "timestamp":
             utc_now()
     }
+
+
+# ============================================================
+# DASHBOARD URL COMPATIBILITY
+# ============================================================
+# The current Dashboard.jsx requests /dashboard/<email>, while the
+# original API exposes /dashboard?email=<email>. Both are supported.
+# ============================================================
+
+@app.get(
+    "/dashboard/{email}",
+    tags=["Dashboard"]
+)
+def dashboard_for_user(email: str):
+    return dashboard(
+        email=validate_email(email)
+    )
 
 
 # ============================================================
@@ -3155,6 +3445,9 @@ def frontend_config():
                 True,
 
             "authentication":
+                True,
+
+            "server_sessions":
                 True,
 
             "dashboard":
