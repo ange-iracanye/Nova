@@ -1,8 +1,16 @@
 # Nova V1 Public Launch Plan
 
-## Release target
+## Current status
 
-Nova V1 should be treated as a public release only when every blocker below is verified in the deployed environment, not merely present in source control.
+Nova has been moved from a local-development-only posture toward a deployable V1 release:
+
+- Frontend lint blockers no longer prevent the production CI job.
+- Render deployment configuration is committed in `render.yaml`.
+- Local/runtime artifacts are excluded from Render builds.
+- Production environment variables are documented in `.env.example`.
+- A deployment/release guide exists in `docs/DEPLOYMENT.md`.
+
+The remaining gates below are deployment and architecture gates. They cannot be honestly marked complete until they are verified against the real production environment.
 
 ## P0 security gates
 
@@ -27,6 +35,16 @@ Nova V1 should be treated as a public release only when every blocker below is v
 - [ ] Single-process/single-worker deployment is used until NovaCore becomes request-isolated.
 - [ ] CI passes backend tests, frontend lint, and frontend production build.
 - [ ] A two-user isolation test proves one account cannot access another account's data.
+
+## Deployment gates
+
+- [x] Render blueprint exists for the FastAPI backend and Vite frontend.
+- [x] Production CORS and API URL variables are documented.
+- [x] Ollama endpoint configuration is documented.
+- [ ] A reachable production Ollama endpoint is configured.
+- [ ] Persistent storage for the user database is configured and backed up.
+- [ ] The deployed backend is verified healthy.
+- [ ] The deployed frontend successfully reaches the backend.
 
 ## Performance gates
 
@@ -55,9 +73,9 @@ Nova V1 should be treated as a public release only when every blocker below is v
 
 ## Release procedure
 
-1. Run the complete test suite locally.
+1. Run the complete test suite.
 2. Run `npm run lint` and `npm run build` in `frontend`.
-3. Deploy to a staging environment with production configuration.
+3. Deploy to staging with production configuration.
 4. Run smoke tests with two separate accounts.
 5. Verify logs contain no secrets or passwords.
 6. Verify health/readiness and rollback behavior.
