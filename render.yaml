@@ -23,9 +23,11 @@ services:
       - key: NOVA_ALLOWED_ORIGINS
         sync: false
       - key: OLLAMA_HOST
+        value: https://ollama.com
+      - key: OLLAMA_API_KEY
         sync: false
       - key: OLLAMA_MODEL
-        value: qwen2.5:1.5b
+        value: gpt-oss:20b
       - key: PYTHON_VERSION
         value: 3.11.9
 
