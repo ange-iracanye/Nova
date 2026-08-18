@@ -3,19 +3,31 @@ services:
     name: nova-api
     runtime: python
     plan: starter
+    region: frankfurt
     buildCommand: pip install --upgrade pip && pip install -r requirements.txt
-    startCommand: uvicorn backend.api:app --host 0.0.0.0 --port $PORT
+    startCommand: uvicorn backend.production:app --host 0.0.0.0 --port $PORT
     healthCheckPath: /health
     autoDeploy: true
+    numInstances: 1
+    disk:
+      name: nova-data
+      mountPath: /opt/render/project/src/data
+      sizeGB: 10
     envVars:
       - key: NOVA_ENV
         value: production
+      - key: NOVA_DATA_DIR
+        value: /opt/render/project/src/data
+      - key: NOVA_SESSION_DB
+        value: /opt/render/project/src/data/sessions.sqlite3
       - key: NOVA_ALLOWED_ORIGINS
         sync: false
       - key: OLLAMA_HOST
         sync: false
       - key: OLLAMA_MODEL
         value: qwen2.5:1.5b
+      - key: PYTHON_VERSION
+        value: 3.11.9
 
   - type: web
     name: nova-frontend
