@@ -1,6 +1,6 @@
 # Nova V1 Production Security Checklist
 
-## Implemented
+## Implemented for the single-instance V1 deployment
 
 - Salted scrypt password hashes
 - Legacy SHA-256 password migration after successful login
@@ -10,54 +10,63 @@
 - Password complexity policy for new registrations
 - Process-local login throttling after repeated failures
 - Session expiration and explicit logout endpoints
+- SQLite-backed persistent authentication sessions for the production deployment
 - Request validation models for API payload sizes
-- GitHub Actions CI
-- CodeQL scanning
-- Dependabot dependency monitoring
-- Reusable security boundary helpers for HttpOnly session cookies, exact CORS origins, request IDs, security headers, and authenticated identity checks
-- `.env.example` documenting production environment configuration
+- Exact deployment CORS configuration via `NOVA_ALLOWED_ORIGINS`
+- Production authentication boundary requiring a real session for account/data endpoints
+- Public health/readiness/status endpoints for deployment monitoring
+- Security headers including `X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy`, Permissions Policy, and HSTS in production
+- No internal exception text returned by the API's global error response
+- GitHub Actions CI for backend compilation/tests and frontend install/lint/build
+- Production Render Blueprint with a single backend instance and persistent data disk
+- Secrets kept in deployment environment variables rather than Git
 
-## Security boundary integration gate
+## V1 architecture boundary
 
-The reusable helpers in `backend/security.py` are intentionally isolated so the API authentication migration can be wired without duplicating security logic. Before public deployment, the API must call these helpers from its middleware/authentication path.
+Nova's API still contains a legacy compatibility path where local development can
+identify an account by an email field. **This path is disabled as an access
+mechanism in production by `backend/production.py`.** Public account/data routes
+require a valid Nova session before the request reaches the endpoint.
 
-### API boundary
+The production entrypoint also replaces the API's in-memory authentication
+session mapping with `PersistentSessionStore`, backed by SQLite on the Render
+persistent disk. V1 therefore remains intentionally single-instance because
+NovaCore has shared runtime state protected by `nova_process_lock`.
 
-- Remove the unauthenticated email compatibility path in `resolve_user_email()`.
-- Require an authenticated session for every account-owned endpoint.
-- Verify that the authenticated session user owns every requested conversation/resource.
-- Replace wildcard HTTP methods/headers in CORS with the exact methods and headers used by the frontend.
-- Set production CORS origins from `NOVA_ALLOWED_ORIGINS`. Do not ship localhost origins as the production allowlist.
-- Apply security headers such as `X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy`, Permissions Policy, and HSTS when HTTPS is guaranteed.
-- Disable `/docs`, `/redoc`, and `/openapi.json` in production unless they are intentionally exposed.
-- Add a request ID and structured server logging.
-- Never return internal exception text to clients.
+## Intentionally deferred hardening
 
-### Authentication
+These items are not prerequisites for the first controlled public V1 release,
+but should be addressed before scaling Nova substantially:
 
-- Wire `set_session_cookie()` into successful login/registration responses.
-- Wire `clear_session_cookie()` into logout.
-- Resolve browser authentication from the HttpOnly cookie before considering an Authorization bearer token.
-- Stop storing bearer tokens in persistent JavaScript-readable storage once cookie authentication is active.
-- Move session state from the process into a shared store before using multiple backend workers/instances.
-- Add CSRF protection if cookie authentication is introduced across origins. SameSite=Lax reduces risk but does not replace a deliberate CSRF policy for every deployment topology.
-- Add account-level and IP-aware login throttling at the reverse-proxy/API layer.
-- Consider password-reset and account-recovery flows before accepting real users.
+- HttpOnly cookie-based authentication instead of browser-readable bearer/session storage
+- CSRF protection if cookie authentication is introduced across origins
+- Account recovery and password-reset flows
+- IP-aware rate limiting at the reverse-proxy/API layer
+- Multi-worker/shared-session architecture
+- Request IDs and structured centralized logging
+- Upload CPU/memory/time limits and stricter file-type quotas
+- Monitoring/alerting and automated backup/restore procedures
+- Automated end-to-end tests against the deployed production URLs
 
-### NovaCore
+## Deployment rules
 
-NovaCore currently has shared runtime state protected by `nova_process_lock`. Keep this lock until processing is made request-isolated. Removing it prematurely can allow one user's runtime context to race with another user's request.
+- Run Nova behind HTTPS.
+- Store `OLLAMA_API_KEY`, `NOVA_ALLOWED_ORIGINS`, and `VITE_API_URL` in deployment secrets/configuration.
+- Never commit `.env` files or model/API credentials.
+- Keep user data and memory stores on the persistent application disk, not in frontend build artifacts.
+- Keep the backend at one instance until NovaCore request state is fully isolated.
 
-### Deployment
+## Release gate
 
-- Run behind HTTPS and a reverse proxy.
-- Bind the application to the private/container interface rather than exposing a development server directly to the internet.
-- Store secrets in deployment secret management, never in Git.
-- Keep `data/users.json` and user memory outside the repository and outside public build artifacts.
-- Back up user data securely and test restoration.
-- Add CPU/memory/time limits around model inference and uploads.
-- Add monitoring for repeated 4xx/5xx responses and inference failures.
+Nova V1 is considered **code/deployment ready** when:
 
-## Current architecture limitation
-
-Nova's authentication session dictionary and demo-session dictionary live in process memory. This is acceptable for a single-process V1 deployment, but sessions disappear on restart and are not shared between workers. Treat multi-worker deployment as a separate hardening milestone.
+1. GitHub Actions passes backend tests and frontend build/lint.
+2. Render successfully deploys both services.
+3. `/health` returns healthy and `/ready` becomes ready.
+4. A new user can register and log in.
+5. The browser receives and uses the returned Nova session.
+6. Chat works through Ollama Cloud.
+7. Conversations, settings, dashboard, memory, upload, and logout work for the authenticated user.
+8. A second account cannot access the first account's data.
+9. Restarting the backend does not erase registered users or active persistent sessions.
+10. The deployed frontend can reach the deployed backend over HTTPS.
