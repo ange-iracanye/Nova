@@ -29,6 +29,9 @@ jobs:
       - name: Run authentication security tests
         run: python -m unittest test.test_auth_security -v
 
+      - name: Run security boundary tests
+        run: python -m unittest test.test_security_boundary -v
+
   frontend:
     name: Frontend checks
     runs-on: ubuntu-latest
