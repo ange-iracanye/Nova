@@ -16,21 +16,15 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
           cache: pip
-
-      - name: Compile critical Python modules
+      - name: Compile Python
         run: python -m compileall -q backend test
-
-      - name: Run authentication security tests
-        run: python -m unittest test.test_auth_security -v
-
-      - name: Run security boundary tests
-        run: python -m unittest test.test_security_boundary -v
+      - name: Run backend tests
+        run: python -m unittest discover -s test -p 'test_*.py' -v
 
   frontend:
     name: Frontend checks
@@ -41,19 +35,15 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-
       - name: Set up Node
         uses: actions/setup-node@v4
         with:
           node-version: "22"
           cache: npm
           cache-dependency-path: frontend/package-lock.json
-
       - name: Install dependencies
         run: npm ci
-
       - name: Lint
         run: npm run lint
-
       - name: Production build
         run: npm run build
