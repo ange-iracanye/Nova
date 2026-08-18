@@ -27,7 +27,7 @@ services:
       - key: OLLAMA_API_KEY
         sync: false
       - key: OLLAMA_MODEL
-        value: gpt-oss:20b
+        value: glm-4.7:cloud
       - key: PYTHON_VERSION
         value: 3.11.9
 
