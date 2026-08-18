@@ -1,0 +1,25 @@
+# Local/runtime state
+.venv/
+venv/
+__pycache__/
+*.pyc
+.env
+.env.*
+
+# User/runtime data
+/data/
+/memory/
+*.log
+
+# Local model artifacts
+*.gguf
+*.bin
+*.safetensors
+
+# Frontend generated files
+/frontend/dist/
+/frontend/node_modules/
+
+# Local tooling
+.vscode/
+.idea/
