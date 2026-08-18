@@ -20,7 +20,7 @@ class AuthSecurityTests(unittest.TestCase):
         self.temp_dir.cleanup()
 
     def test_password_hash_is_salted_and_not_plaintext(self):
-        password = "Nova-test-password-123!"
+        password = "Nova-Test-Password-123!"
         first = auth.hash_password(password)
         second = auth.hash_password(password)
 
@@ -30,16 +30,32 @@ class AuthSecurityTests(unittest.TestCase):
         self.assertTrue(auth.verify_password(password, first))
         self.assertFalse(auth.verify_password("wrong-password", first))
 
+    def test_password_policy_rejects_weak_passwords(self):
+        for password in ("short", "alllowercase123", "ALLUPPERCASE123"):
+            with self.assertRaises(ValueError):
+                auth.validate_password(password)
+
     def test_register_and_login_store_scrypt_hash(self):
-        self.assertTrue(auth.register_user("Student@Example.com", "Strong-password-1"))
-        self.assertFalse(auth.register_user("student@example.com", "Another-password"))
+        strong = "Strong-Nova-Password-1"
+        self.assertTrue(auth.register_user("Student@Example.com", strong))
+        self.assertFalse(auth.register_user("student@example.com", "Another-Password-2"))
 
         data = json.loads(self.users_file.read_text(encoding="utf-8"))
         stored = data["users"]["student@example.com"]["password"]
 
         self.assertTrue(stored.startswith("scrypt$"))
-        self.assertTrue(auth.login_user("STUDENT@example.com", "Strong-password-1"))
-        self.assertFalse(auth.login_user("student@example.com", "wrong"))
+        self.assertTrue(auth.login_user("STUDENT@example.com", strong))
+        self.assertFalse(auth.login_user("student@example.com", "wrong-password"))
+
+    def test_login_failures_are_throttled(self):
+        strong = "Strong-Nova-Password-1"
+        auth.register_user("throttle@example.com", strong)
+
+        for _ in range(auth.LOGIN_MAX_FAILURES):
+            self.assertFalse(auth.login_user("throttle@example.com", "Wrong-Password-1"))
+
+        self.assertTrue(auth.is_login_throttled("throttle@example.com"))
+        self.assertFalse(auth.login_user("throttle@example.com", strong))
 
     def test_legacy_sha256_hash_is_migrated_after_login(self):
         password = "legacy-password"
