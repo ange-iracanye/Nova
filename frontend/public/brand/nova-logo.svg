@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-labelledby="title desc">
+  <title id="title">Nova AI</title>
+  <desc id="desc">Nova AI logo placeholder</desc>
+  <rect width="256" height="256" rx="64" fill="#020617"/>
+  <path d="M128 34 148 104 218 128 148 152 128 222 108 152 38 128 108 104Z" fill="none" stroke="#fff" stroke-width="10" stroke-linejoin="round"/>
+  <circle cx="128" cy="128" r="12" fill="#fff"/>
+</svg>
