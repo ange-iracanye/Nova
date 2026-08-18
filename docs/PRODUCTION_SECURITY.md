@@ -14,8 +14,12 @@
 - GitHub Actions CI
 - CodeQL scanning
 - Dependabot dependency monitoring
+- Reusable security boundary helpers for HttpOnly session cookies, exact CORS origins, request IDs, security headers, and authenticated identity checks
+- `.env.example` documenting production environment configuration
 
-## Before public deployment
+## Security boundary integration gate
+
+The reusable helpers in `backend/security.py` are intentionally isolated so the API authentication migration can be wired without duplicating security logic. Before public deployment, the API must call these helpers from its middleware/authentication path.
 
 ### API boundary
 
@@ -23,18 +27,21 @@
 - Require an authenticated session for every account-owned endpoint.
 - Verify that the authenticated session user owns every requested conversation/resource.
 - Replace wildcard HTTP methods/headers in CORS with the exact methods and headers used by the frontend.
-- Set production CORS origins from environment configuration. Do not ship localhost origins as the production allowlist.
-- Add security headers such as `X-Content-Type-Options`, `Content-Security-Policy`, `Referrer-Policy`, and an HSTS policy when HTTPS is guaranteed.
+- Set production CORS origins from `NOVA_ALLOWED_ORIGINS`. Do not ship localhost origins as the production allowlist.
+- Apply security headers such as `X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy`, Permissions Policy, and HSTS when HTTPS is guaranteed.
 - Disable `/docs`, `/redoc`, and `/openapi.json` in production unless they are intentionally exposed.
 - Add a request ID and structured server logging.
 - Never return internal exception text to clients.
 
 ### Authentication
 
+- Wire `set_session_cookie()` into successful login/registration responses.
+- Wire `clear_session_cookie()` into logout.
+- Resolve browser authentication from the HttpOnly cookie before considering an Authorization bearer token.
+- Stop storing bearer tokens in persistent JavaScript-readable storage once cookie authentication is active.
 - Move session state from the process into a shared store before using multiple backend workers/instances.
-- Prefer an HttpOnly, Secure, SameSite session cookie for browser authentication instead of persistent JavaScript-readable session storage.
+- Add CSRF protection if cookie authentication is introduced across origins. SameSite=Lax reduces risk but does not replace a deliberate CSRF policy for every deployment topology.
 - Add account-level and IP-aware login throttling at the reverse-proxy/API layer.
-- Add CSRF protection if cookie authentication is introduced.
 - Consider password-reset and account-recovery flows before accepting real users.
 
 ### NovaCore
