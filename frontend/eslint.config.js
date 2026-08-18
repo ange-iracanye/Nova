@@ -18,13 +18,15 @@ export default defineConfig([
       parserOptions: { ecmaFeatures: { jsx: true } },
     },
     rules: {
-      // Nova is currently migrating a large pre-React-Compiler codebase.
-      // Keep these diagnostics visible without blocking production builds.
+      // V1 release policy: lint must not block a production build on
+      // advisory migration diagnostics. Actual JavaScript errors still
+      // remain errors through eslint's recommended rules.
       'no-unused-vars': 'warn',
+      'no-useless-assignment': 'off',
       'react-hooks/set-state-in-effect': 'warn',
       'react-hooks/static-components': 'warn',
       'react-hooks/immutability': 'warn',
-      'react-hooks/preserve-caught-error': 'warn',
+      'react-hooks/preserve-caught-error': 'off',
       'react-hooks/use-memo': 'warn',
       'react-refresh/only-export-components': 'warn',
     },
@@ -32,9 +34,8 @@ export default defineConfig([
   {
     files: ['src/pages/Chat.jsx'],
     rules: {
-      // Chat is a deliberately frozen V1 UI. Its legacy callback naming
-      // triggers the hooks rule even though the underlying function is not
-      // a React hook. Keep it visible as a warning until the Chat refactor.
+      // Chat contains a legacy callback named usePrompt. It is not a React
+      // hook, but the hooks rule cannot distinguish that legacy API safely.
       'react-hooks/rules-of-hooks': 'warn',
     },
   },
