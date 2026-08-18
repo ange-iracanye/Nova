@@ -17,6 +17,7 @@
 - GitHub Actions backend/frontend CI
 - Authentication and persistent-session regression tests
 - Production security/release checklist
+- ESLint V1 policy that keeps advisory React migration diagnostics from blocking the production build while preserving real JavaScript errors
 
 ## External launch actions
 
