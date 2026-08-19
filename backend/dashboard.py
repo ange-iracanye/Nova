@@ -6,7 +6,7 @@ from fastapi import APIRouter, HTTPException, Request
 
 from backend.user_context import set_active_user
 from backend.learning_graph import LearningGraph
-from backend.learning.progress_tracker import ProgressTracker
+from backend.learning.progress_tracker import ProgressTracker, canonical_subject
 from backend.student.knowledge_map import KnowledgeMap
 from backend.memory_system.memory_manager import MemoryManager
 from student_profile import StudentProfile
@@ -35,7 +35,6 @@ def _authorized_email(request: Request, requested_email: str | None = None) -> s
         if requested and requested != session_email:
             raise HTTPException(status_code=403, detail="Dashboard access is limited to the authenticated student.")
         return session_email
-
     from os import getenv
     if getenv("NOVA_ENV", "development").lower() != "production" and requested:
         return requested
@@ -57,19 +56,69 @@ def _int(value: Any) -> int:
         return 0
 
 
+def _canonical_progress(progress: dict) -> dict:
+    result: dict = {}
+    for raw_subject, topics in (progress or {}).items():
+        subject = canonical_subject(raw_subject)
+        bucket = result.setdefault(subject, {})
+        if not isinstance(topics, dict):
+            continue
+        for topic, data in topics.items():
+            if topic not in bucket:
+                bucket[topic] = data
+                continue
+            old = bucket[topic] if isinstance(bucket[topic], dict) else {}
+            incoming = data if isinstance(data, dict) else {}
+            old_attempts = _int(old.get("attempts"))
+            incoming_attempts = _int(incoming.get("attempts"))
+            total = old_attempts + incoming_attempts
+            if total:
+                old_conf = _clamp(old.get("confidence", 0))
+                incoming_conf = _clamp(incoming.get("confidence", 0))
+                old["confidence"] = round((old_conf * old_attempts + incoming_conf * incoming_attempts) / total, 1)
+            old["attempts"] = total
+            old["last_seen"] = max(str(old.get("last_seen") or ""), str(incoming.get("last_seen") or ""))
+            old["mastered"] = bool(old.get("mastered")) or bool(incoming.get("mastered"))
+            bucket[topic] = old
+    return result
+
+
+def _canonical_graph(graph: dict) -> dict:
+    source = graph.get("subjects", {}) if isinstance(graph, dict) else {}
+    result = {"subjects": {}}
+    if not isinstance(source, dict):
+        return result
+    for raw_subject, node in source.items():
+        subject = canonical_subject(raw_subject)
+        target = result["subjects"].setdefault(subject, {"mastery": 0.0, "topics": {}})
+        if not isinstance(node, dict):
+            continue
+        for topic, data in (node.get("topics", {}) or {}).items():
+            if topic not in target["topics"]:
+                target["topics"][topic] = dict(data) if isinstance(data, dict) else {}
+                continue
+            old = target["topics"][topic]
+            incoming = data if isinstance(data, dict) else {}
+            old["times_studied"] = _int(old.get("times_studied")) + _int(incoming.get("times_studied"))
+            old["correct_answers"] = _int(old.get("correct_answers")) + _int(incoming.get("correct_answers"))
+            old["wrong_answers"] = _int(old.get("wrong_answers")) + _int(incoming.get("wrong_answers"))
+            old["mastery"] = _clamp(incoming.get("mastery", old.get("mastery", 0)))
+            old["last_review"] = max(str(old.get("last_review") or ""), str(incoming.get("last_review") or ""))
+    return result
+
+
 def _merge_topic_stats(progress: dict, graph: dict) -> tuple[dict, int, int, int, int]:
+    progress = _canonical_progress(progress)
+    graph = _canonical_graph(graph)
     subjects: dict[str, dict] = {}
     total_attempts = total_correct = total_wrong = total_topics = 0
-    graph_subjects = graph.get("subjects", {}) if isinstance(graph, dict) else {}
-    graph_subjects = graph_subjects if isinstance(graph_subjects, dict) else {}
+    graph_subjects = graph.get("subjects", {})
     all_subjects = set(progress.keys()) | set(graph_subjects.keys())
 
     for subject in sorted(all_subjects, key=str.casefold):
-        progress_topics = progress.get(subject, {})
-        graph_node = graph_subjects.get(subject, {})
-        graph_topics = graph_node.get("topics", {}) if isinstance(graph_node, dict) else {}
-        progress_topics = progress_topics if isinstance(progress_topics, dict) else {}
-        graph_topics = graph_topics if isinstance(graph_topics, dict) else {}
+        progress_topics = progress.get(subject, {}) if isinstance(progress.get(subject, {}), dict) else {}
+        graph_node = graph_subjects.get(subject, {}) if isinstance(graph_subjects.get(subject, {}), dict) else {}
+        graph_topics = graph_node.get("topics", {}) if isinstance(graph_node.get("topics", {}), dict) else {}
         topic_names = set(progress_topics.keys()) | set(graph_topics.keys())
         topic_rows = {}
         subject_attempts = subject_correct = subject_wrong = 0
@@ -86,21 +135,15 @@ def _merge_topic_stats(progress: dict, graph: dict) -> tuple[dict, int, int, int
             confidence = _clamp(p.get("confidence", g.get("mastery", 0)))
             mastery = confidence if attempts else _clamp(g.get("mastery", confidence))
             if answers >= 2:
-                accuracy = correct / answers * 100.0
-                mastery = round(0.7 * mastery + 0.3 * accuracy, 1)
+                mastery = round(0.7 * mastery + 0.3 * (correct / answers * 100.0), 1)
             seen = p.get("last_seen") or g.get("last_review") or ""
             if seen and (last_seen is None or str(seen) > str(last_seen)):
                 last_seen = str(seen)
             topic_rows[topic] = {
-                "name": topic,
-                "mastery": mastery,
-                "confidence": confidence,
-                "attempts": attempts,
-                "questions": answers,
-                "correct_answers": correct,
-                "wrong_answers": wrong,
-                "last_review": seen,
-                "mastered": bool(p.get("mastered")) and attempts >= 5,
+                "name": topic, "mastery": mastery, "confidence": confidence,
+                "attempts": attempts, "questions": answers,
+                "correct_answers": correct, "wrong_answers": wrong,
+                "last_review": seen, "mastered": bool(p.get("mastered")) and attempts >= 5,
             }
             subject_attempts += attempts
             subject_correct += correct
@@ -116,22 +159,12 @@ def _merge_topic_stats(progress: dict, graph: dict) -> tuple[dict, int, int, int
         subject_questions = subject_correct + subject_wrong
         subject_accuracy = round(subject_correct / subject_questions * 100, 1) if subject_questions else None
         denominator = sum(max(1, row["attempts"]) for row in topic_rows.values())
-        subject_confidence = round(
-            sum(row["confidence"] * max(1, row["attempts"]) for row in topic_rows.values()) / denominator,
-            1,
-        ) if denominator else 0.0
+        subject_confidence = round(sum(row["confidence"] * max(1, row["attempts"]) for row in topic_rows.values()) / denominator, 1) if denominator else 0.0
         subjects[subject] = {
-            "name": subject,
-            "mastery": subject_mastery,
-            "confidence": subject_confidence,
-            "accuracy": subject_accuracy,
-            "topics_count": len(topic_rows),
-            "attempts": subject_attempts,
-            "questions": subject_questions,
-            "correct_answers": subject_correct,
-            "wrong_answers": subject_wrong,
-            "last_activity": last_seen,
-            "topics": list(topic_rows.values()),
+            "name": subject, "mastery": subject_mastery, "confidence": subject_confidence,
+            "accuracy": subject_accuracy, "topics_count": len(topic_rows), "attempts": subject_attempts,
+            "questions": subject_questions, "correct_answers": subject_correct, "wrong_answers": subject_wrong,
+            "last_activity": last_seen, "topics": list(topic_rows.values()),
         }
         total_attempts += subject_attempts
         total_correct += subject_correct
@@ -148,14 +181,9 @@ def _build_dashboard(email: str) -> dict:
     profile = StudentProfile(email).get()
     subjects, total_attempts, total_correct, total_wrong, total_topics = _merge_topic_stats(progress, graph)
     total_answers = total_correct + total_wrong
-
-    if subjects:
-        denominator = sum(max(1, item["attempts"]) for item in subjects.values())
-        overall_mastery = round(sum(item["mastery"] * max(1, item["attempts"]) for item in subjects.values()) / denominator, 1)
-        average_confidence = round(sum(item["confidence"] * max(1, item["attempts"]) for item in subjects.values()) / denominator, 1)
-    else:
-        overall_mastery = 0.0
-        average_confidence = 0.0
+    denominator = sum(max(1, item["attempts"]) for item in subjects.values())
+    overall_mastery = round(sum(item["mastery"] * max(1, item["attempts"]) for item in subjects.values()) / denominator, 1) if denominator else 0.0
+    average_confidence = round(sum(item["confidence"] * max(1, item["attempts"]) for item in subjects.values()) / denominator, 1) if denominator else 0.0
     accuracy = round(total_correct / total_answers * 100, 1) if total_answers else 0.0
 
     strengths = []
@@ -172,8 +200,8 @@ def _build_dashboard(email: str) -> dict:
             weaknesses.append(f"{name} ({subject['mastery']:.0f}%)")
         for topic in subject["topics"]:
             recent.append({"subject": name, "topic": topic["name"], "mastery": topic["mastery"], "attempts": topic["attempts"], "last_review": topic["last_review"]})
-
     recent.sort(key=lambda item: item.get("last_review", ""), reverse=True)
+
     try:
         memory = MemoryManager().get_all(email)
     except Exception:
@@ -184,42 +212,15 @@ def _build_dashboard(email: str) -> dict:
     recent_conversations = []
     for item in sorted(episodes, key=lambda m: m.get("created_at", ""), reverse=True)[:50]:
         text = str(item.get("text", ""))
-        recent_conversations.append({
-            "id": item.get("conversation_id") or item.get("id"),
-            "title": text.splitlines()[0][:80] or "Conversation",
-            "last_message": text[-160:],
-            "message_count": 1,
-            "updated_at": item.get("created_at"),
-        })
+        recent_conversations.append({"id": item.get("conversation_id") or item.get("id"), "title": text.splitlines()[0][:80] or "Conversation", "last_message": text[-160:], "message_count": 1, "updated_at": item.get("created_at")})
 
     questions = _int(profile.get("questions_asked", profile.get("questions")))
     return {
-        "stats": {
-            "questions": questions,
-            "total_subjects": len(subjects),
-            "total_topics": total_topics,
-            "overall_mastery": overall_mastery,
-            "correct_answers": total_correct,
-            "wrong_answers": total_wrong,
-            "study_attempts": total_attempts,
-            "average_confidence": average_confidence,
-            "understanding_attempts": total_attempts,
-            "memory_count": memory_count,
-            "conversation_count": conversation_count,
-            "accuracy": accuracy,
-        },
-        "subjects": subjects,
-        "knowledge_subjects": knowledge_subjects,
-        "strengths": strengths[:10],
-        "weaknesses": weaknesses[:10],
-        "strength_details": strengths[:10],
-        "weakness_details": weaknesses[:10],
-        "difficulty": {"easy": 0, "medium": 0, "hard": 0},
-        "confidence": confidence,
-        "progress": progress,
-        "knowledge_map": knowledge,
-        "recent_activity": recent[:20],
-        "recent_conversations": recent_conversations,
+        "stats": {"questions": questions, "total_subjects": len(subjects), "total_topics": total_topics, "overall_mastery": overall_mastery, "correct_answers": total_correct, "wrong_answers": total_wrong, "study_attempts": total_attempts, "average_confidence": average_confidence, "understanding_attempts": total_attempts, "memory_count": memory_count, "conversation_count": conversation_count, "accuracy": accuracy},
+        "subjects": subjects, "knowledge_subjects": knowledge_subjects,
+        "strengths": strengths[:10], "weaknesses": weaknesses[:10], "strength_details": strengths[:10], "weakness_details": weaknesses[:10],
+        "difficulty": {"easy": 0, "medium": 0, "hard": 0}, "confidence": confidence, "progress": progress, "knowledge_map": knowledge,
+        "recent_activity": recent[:20], "recent_conversations": recent_conversations,
         "session": {"subject": "None", "topic": "None", "mode": "None", "score": 0},
         "overall": {"mastery": overall_mastery, "attempts": total_attempts, "correct": total_correct, "wrong": total_wrong, "topics": total_topics},
     }
