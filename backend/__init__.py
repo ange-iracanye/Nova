@@ -8,7 +8,6 @@ import threading
 import time
 from pathlib import Path
 
-# Local development baseline. Public V1 overrides the provider explicitly.
 os.environ.setdefault("OLLAMA_MODEL", "qwen2.5:3b")
 
 try:
@@ -16,14 +15,10 @@ try:
     _nova_ollama_host = os.getenv("OLLAMA_HOST", "").strip()
     _nova_ollama_api_key = os.getenv("OLLAMA_API_KEY", "").strip()
     if _nova_ollama_host:
-        _nova_headers = {}
-        if _nova_ollama_api_key:
-            _nova_headers["Authorization"] = f"Bearer {_nova_ollama_api_key}"
-        _nova_ollama_client = ollama.Client(host=_nova_ollama_host, headers=_nova_headers or None)
-
+        _nova_headers = {"Authorization": f"Bearer {_nova_ollama_api_key}"} if _nova_ollama_api_key else None
+        _nova_ollama_client = ollama.Client(host=_nova_ollama_host, headers=_nova_headers)
         def _nova_remote_chat(*args, **kwargs):
             return _nova_ollama_client.chat(*args, **kwargs)
-
         ollama.chat = _nova_remote_chat
 except Exception:
     pass
@@ -50,24 +45,17 @@ try:
 except Exception:
     pass
 
-# ---------------------------------------------------------------------------
-# Free public deployment support
-# ---------------------------------------------------------------------------
 # Render Free has an ephemeral filesystem. When NOVA_DATABASE_URL is present,
-# mirror runtime files to free PostgreSQL and restore them at process startup.
-# This lets the existing JSON-based Nova architecture survive free-host
-# restarts without a paid persistent disk.
-
+# restore runtime files from PostgreSQL and keep syncing generated user data.
 try:
     if os.getenv("NOVA_DATABASE_URL", "").strip():
         from backend.free_persistence import DatabaseSessionStore, FreePostgresStore
         import backend.persistent_sessions as _persistent_sessions
+        from backend import auth as _auth
 
         _nova_free_store = FreePostgresStore()
         _nova_data_root = Path(os.getenv("NOVA_DATA_DIR", "data"))
         _nova_free_store.restore(_nova_data_root)
-
-        # Production imports this symbol after backend package initialization.
         _persistent_sessions.PersistentSessionStore = DatabaseSessionStore
 
         def _nova_sync_runtime_data() -> None:
@@ -76,21 +64,26 @@ try:
             except Exception as _error:
                 print(f"Nova free persistence sync warning: {_error}")
 
+        # Account creation/password migration is synchronized immediately.
+        _nova_original_save_users = _auth.save_users
+        def _nova_save_users_and_sync(data):
+            result = _nova_original_save_users(data)
+            _nova_sync_runtime_data()
+            return result
+        _auth.save_users = _nova_save_users_and_sync
+
         def _nova_sync_loop() -> None:
             while True:
                 time.sleep(10)
                 _nova_sync_runtime_data()
 
-        _nova_sync_thread = threading.Thread(target=_nova_sync_loop, name="nova-free-persistence", daemon=True)
-        _nova_sync_thread.start()
+        threading.Thread(target=_nova_sync_loop, name="nova-free-persistence", daemon=True).start()
         atexit.register(_nova_sync_runtime_data)
-
         print("Nova free persistence enabled.")
 except Exception as _error:
     print(f"Nova free persistence unavailable: {_error}")
 
-# Public V1 uses the free Gemini provider. Patch the existing TutorEngine
-# dependency without changing its public API or the large tutoring pipeline.
+# Public V1 uses the free Gemini provider without changing TutorEngine's API.
 try:
     if os.getenv("NOVA_LLM_PROVIDER", "").strip().lower() == "gemini":
         from backend.free_llm import FreeLLM
