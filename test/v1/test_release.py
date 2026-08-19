@@ -1,6 +1,7 @@
 import json
 import tempfile
 import unittest
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from unittest.mock import patch
 
@@ -24,10 +25,19 @@ class NovaV1ReleaseTests(unittest.TestCase):
     def test_session_store_persists_and_expires(self):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "sessions.sqlite3"
+            future = (datetime.now(timezone.utc) + timedelta(days=1)).isoformat()
             store = PersistentSessionStore(str(path))
-            store["token"] = {"email": "student@example.com", "expires_at": "2999-01-01T00:00:00+00:00"}
+            store["token"] = {"email": "student@example.com", "expires_at": future}
             reopened = PersistentSessionStore(str(path))
             self.assertEqual(reopened["token"]["email"], "student@example.com")
+
+            expired = (datetime.now(timezone.utc) - timedelta(seconds=1)).isoformat()
+            reopened["expired"] = {"email": "student@example.com", "expires_at": expired}
+            self.assertIsNone(reopened.get("expired"))
+            self.assertNotIn("expired", list(reopened))
+
+            del reopened
+            del store
 
     def test_dynamic_subjects(self):
         self.assertEqual(canonical_subject("python"), "Technology")
