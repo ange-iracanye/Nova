@@ -13,10 +13,18 @@ const NOVA_CONFIG = {
     storageKeys: { theme: "nova_theme", lastRoute: "nova_last_route", session: "nova_session", initialized: "nova_initialized" }
 };
 
+function getApiBase() {
+    const configured = (import.meta.env.VITE_API_URL || "").trim().replace(/\/+$/, "");
+    if (import.meta.env.PROD && !configured) {
+        throw new Error("Nova production API is not configured. Set VITE_API_URL before building the frontend.");
+    }
+    return configured || "http://127.0.0.1:8000";
+}
+
 function installApiCredentialPolicy() {
     if (window.__novaCredentialFetchInstalled) return;
     const originalFetch = window.fetch.bind(window);
-    const apiBase = (import.meta.env.VITE_API_URL || "http://127.0.0.1:8000").replace(/\/+$/, "");
+    const apiBase = getApiBase();
     window.fetch = (input, init = {}) => {
         const url = typeof input === "string" ? input : input?.url || "";
         if (url !== apiBase && !url.startsWith(`${apiBase}/`)) return originalFetch(input, init);
