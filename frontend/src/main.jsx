@@ -21,13 +21,14 @@ function getApiBase() {
     return configured || "http://127.0.0.1:8000";
 }
 
+const API_BASE = getApiBase();
+
 function installApiCredentialPolicy() {
     if (window.__novaCredentialFetchInstalled) return;
     const originalFetch = window.fetch.bind(window);
-    const apiBase = getApiBase();
     window.fetch = (input, init = {}) => {
         const url = typeof input === "string" ? input : input?.url || "";
-        if (url !== apiBase && !url.startsWith(`${apiBase}/`)) return originalFetch(input, init);
+        if (url !== API_BASE && !url.startsWith(`${API_BASE}/`)) return originalFetch(input, init);
         return originalFetch(input, { ...init, credentials: "include" });
     };
     window.__novaCredentialFetchInstalled = true;
