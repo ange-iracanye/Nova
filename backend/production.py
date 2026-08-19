@@ -20,23 +20,21 @@ from backend.persistent_sessions import PersistentSessionStore
 
 install_fast_runtime()
 
+# API streaming currently wraps a completed model response. Increase chunk
+# size and remove the artificial sleep so the frontend displays it promptly.
+async def _fast_stream_text(text: str, chunk_size: int = 120, delay: float = 0.0):
+    async for chunk in api.stream_text(text, chunk_size=chunk_size, delay=delay):
+        yield chunk
+
+api.stream_text = _fast_stream_text
+
 DATA_DIR = Path(os.getenv("NOVA_DATA_DIR", "data"))
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 auth.USERS_FILE = DATA_DIR / "users.json"
 api.auth_sessions = PersistentSessionStore(os.getenv("NOVA_SESSION_DB", str(DATA_DIR / "sessions.sqlite3")))
 
-configured_origins = [
-    origin.strip()
-    for origin in os.getenv("NOVA_ALLOWED_ORIGINS", "https://nova-frontend.onrender.com,http://localhost:5173,http://127.0.0.1:5173").split(",")
-    if origin.strip()
-]
-api.app.add_middleware(
-    CORSMiddleware,
-    allow_origins=configured_origins,
-    allow_credentials=True,
-    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    allow_headers=["Authorization", "Content-Type", "X-Nova-Session"],
-)
+configured_origins = [origin.strip() for origin in os.getenv("NOVA_ALLOWED_ORIGINS", "https://nova-frontend.onrender.com,http://localhost:5173,http://127.0.0.1:5173").split(",") if origin.strip()]
+api.app.add_middleware(CORSMiddleware, allow_origins=configured_origins, allow_credentials=True, allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"], allow_headers=["Authorization", "Content-Type", "X-Nova-Session"])
 
 PUBLIC_PATHS = {"/", "/api", "/health", "/ready", "/status", "/register", "/login", "/auth/session", "/auth/logout", "/docs", "/redoc", "/openapi.json", "/demo/session"}
 PUBLIC_PREFIXES = ("/demo/session/", "/demo/chat/")
@@ -51,9 +49,6 @@ _rate_windows: dict[tuple[str, str], deque[float]] = defaultdict(deque)
 
 
 def _client_key(request: Request) -> str:
-    forwarded = request.headers.get("x-forwarded-for", "")
-    if forwarded:
-        return forwarded.split(",", 1)[0].strip()
     return request.client.host if request.client else "unknown"
 
 
@@ -123,7 +118,6 @@ async def production_auth_boundary(request: Request, call_next):
         return await call_next(request)
     if os.getenv("NOVA_ENV", "development").lower() != "production":
         return await call_next(request)
-
     content_length = request.headers.get("content-length")
     if content_length:
         try:
@@ -135,21 +129,17 @@ async def production_auth_boundary(request: Request, call_next):
             return JSONResponse(status_code=413, content={"success": False, "error": {"code": "REQUEST_TOO_LARGE", "message": "Request is too large."}})
     if _rate_limited(request):
         return JSONResponse(status_code=429, content={"success": False, "error": {"code": "RATE_LIMITED", "message": "Too many requests. Please try again shortly."}})
-
     path = request.url.path
-    is_public = path in PUBLIC_PATHS or any(path.startswith(prefix) for prefix in PUBLIC_PREFIXES)
-    if is_public:
+    if path in PUBLIC_PATHS or any(path.startswith(prefix) for prefix in PUBLIC_PREFIXES):
         response = await call_next(request)
         if path in {"/login", "/register"}:
             response = await _set_login_cookie(response)
         if path == "/auth/logout":
             response.delete_cookie(COOKIE_NAME, path="/")
         return response
-
     cookie_token = _inject_cookie_session(request)
     if not cookie_token and not api.get_auth_session(request):
         return JSONResponse(status_code=401, content={"success": False, "error": {"code": "NOT_AUTHENTICATED", "message": "A valid Nova session is required."}})
-
     response = await call_next(request)
     token = cookie_token
     if not token:
