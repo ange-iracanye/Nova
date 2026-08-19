@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import os
 import time
 from collections import defaultdict, deque
@@ -10,7 +11,7 @@ from pathlib import Path
 
 from fastapi import Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
 
 from backend import api
 from backend import auth
@@ -20,10 +21,7 @@ from backend.persistent_sessions import PersistentSessionStore
 DATA_DIR = Path(os.getenv("NOVA_DATA_DIR", "data"))
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 auth.USERS_FILE = DATA_DIR / "users.json"
-
-api.auth_sessions = PersistentSessionStore(
-    os.getenv("NOVA_SESSION_DB", str(DATA_DIR / "sessions.sqlite3"))
-)
+api.auth_sessions = PersistentSessionStore(os.getenv("NOVA_SESSION_DB", str(DATA_DIR / "sessions.sqlite3")))
 
 configured_origins = [
     origin.strip()
@@ -44,16 +42,13 @@ api.app.add_middleware(
 
 PUBLIC_PATHS = {
     "/", "/api", "/health", "/ready", "/status", "/register", "/login",
-    "/auth/session", "/auth/logout", "/docs", "/redoc", "/openapi.json",
-    "/demo/session",
+    "/auth/session", "/auth/logout", "/docs", "/redoc", "/openapi.json", "/demo/session",
 }
 PUBLIC_PREFIXES = ("/demo/session/", "/demo/chat/")
-
 COOKIE_NAME = os.getenv("NOVA_SESSION_COOKIE", "nova_session")
 COOKIE_SAMESITE = os.getenv("NOVA_COOKIE_SAMESITE", "lax").lower()
 if COOKIE_SAMESITE not in {"lax", "strict", "none"}:
     COOKIE_SAMESITE = "lax"
-
 MAX_BODY_BYTES = int(os.getenv("NOVA_MAX_BODY_BYTES", str(512 * 1024)))
 MAX_UPLOAD_BYTES = int(os.getenv("NOVA_MAX_UPLOAD_BYTES", str(10 * 1024 * 1024)))
 
@@ -118,6 +113,33 @@ def _inject_cookie_session(request: Request) -> str | None:
     return token
 
 
+async def _set_login_cookie(response: Response) -> Response:
+    """Attach the server session as an HttpOnly cookie to auth responses."""
+    if response.status_code not in {200, 201}:
+        return response
+    if not hasattr(response, "body_iterator"):
+        return response
+    body = b"".join([chunk async for chunk in response.body_iterator])
+    try:
+        payload = json.loads(body.decode("utf-8"))
+        token = payload.get("session", {}).get("token")
+    except (ValueError, AttributeError, UnicodeDecodeError):
+        token = None
+    if not isinstance(token, str) or not token:
+        return Response(content=body, status_code=response.status_code, headers=dict(response.headers), media_type=response.media_type)
+    replacement = Response(content=body, status_code=response.status_code, headers=dict(response.headers), media_type=response.media_type)
+    replacement.set_cookie(
+        key=COOKIE_NAME,
+        value=token,
+        max_age=7 * 24 * 60 * 60,
+        httponly=True,
+        secure=True,
+        samesite=COOKIE_SAMESITE,
+        path="/",
+    )
+    return replacement
+
+
 @api.app.middleware("http")
 async def production_auth_boundary(request: Request, call_next):
     if request.method == "OPTIONS":
@@ -141,14 +163,18 @@ async def production_auth_boundary(request: Request, call_next):
     path = request.url.path
     is_public = path in PUBLIC_PATHS or any(path.startswith(prefix) for prefix in PUBLIC_PREFIXES)
     if is_public:
-        return await call_next(request)
+        response = await call_next(request)
+        if path in {"/login", "/register"}:
+            response = await _set_login_cookie(response)
+        if path == "/auth/logout":
+            response.delete_cookie(COOKIE_NAME, path="/")
+        return response
 
     cookie_token = _inject_cookie_session(request)
     if not cookie_token and not api.get_auth_session(request):
         return JSONResponse(status_code=401, content={"success": False, "error": {"code": "NOT_AUTHENTICATED", "message": "A valid Nova session is required."}})
 
     response = await call_next(request)
-
     token = cookie_token
     if not token:
         authorization = request.headers.get("authorization", "")
@@ -157,15 +183,7 @@ async def production_auth_boundary(request: Request, call_next):
         else:
             token = request.headers.get("x-nova-session")
     if token and api.auth_sessions.get(token):
-        response.set_cookie(
-            key=COOKIE_NAME,
-            value=token,
-            max_age=7 * 24 * 60 * 60,
-            httponly=True,
-            secure=True,
-            samesite=COOKIE_SAMESITE,
-            path="/",
-        )
+        response.set_cookie(key=COOKIE_NAME, value=token, max_age=7 * 24 * 60 * 60, httponly=True, secure=True, samesite=COOKIE_SAMESITE, path="/")
     return response
 
 
