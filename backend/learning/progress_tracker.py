@@ -6,6 +6,35 @@ from datetime import datetime
 from backend.user_context import set_active_user
 
 
+_SUBJECT_ALIASES = {
+    "math": "Mathematics",
+    "mathematics": "Mathematics",
+    "algebra": "Mathematics",
+    "calculus": "Mathematics",
+    "geometry": "Mathematics",
+    "statistics": "Mathematics",
+    "stats": "Mathematics",
+    "physics": "Physics",
+    "biology": "Biology",
+    "chemistry": "Chemistry",
+    "geography": "Geography",
+    "history": "History",
+    "tech": "Technology",
+    "technology": "Technology",
+    "computer science": "Technology",
+    "programming": "Technology",
+    "coding": "Technology",
+    "software development": "Technology",
+}
+
+
+def canonical_subject(subject):
+    value = " ".join(str(subject or "").strip().split())
+    if not value:
+        return ""
+    return _SUBJECT_ALIASES.get(value.casefold(), value)
+
+
 class ProgressTracker:
     """Persistent, user-isolated learning progress tracker."""
 
@@ -19,8 +48,6 @@ class ProgressTracker:
             else None
         )
 
-        # This also selects the active user for the legacy LearningGraph
-        # adapter used by the dashboard.
         if self.user_email:
             set_active_user(self.user_email)
 
@@ -40,7 +67,6 @@ class ProgressTracker:
     def _get_file(self):
         if not self.user_email:
             return self.base_path / "default.json"
-
         user_id = hashlib.sha256(
             self.user_email.encode("utf-8")
         ).hexdigest()
@@ -49,21 +75,55 @@ class ProgressTracker:
     def _save(self):
         temporary = self.file.with_suffix(".tmp")
         temporary.write_text(
-            json.dumps(
-                self.progress,
-                indent=4,
-                ensure_ascii=False,
-            ),
+            json.dumps(self.progress, indent=4, ensure_ascii=False),
             encoding="utf-8",
         )
         temporary.replace(self.file)
 
+    def _merge_subject_aliases(self):
+        """Merge legacy aliases without deleting any learning evidence."""
+        merged = {}
+        changed = False
+        for subject, topics in self.progress.items():
+            target = canonical_subject(subject)
+            if target != subject:
+                changed = True
+            bucket = merged.setdefault(target, {})
+            if not isinstance(topics, dict):
+                continue
+            for topic, data in topics.items():
+                if topic not in bucket:
+                    bucket[topic] = data
+                    continue
+                old = bucket[topic]
+                if not isinstance(old, dict) or not isinstance(data, dict):
+                    continue
+                old_attempts = int(old.get("attempts", 0) or 0)
+                new_attempts = int(data.get("attempts", 0) or 0)
+                total = old_attempts + new_attempts
+                if total:
+                    old_conf = float(old.get("confidence", 50) or 50)
+                    new_conf = float(data.get("confidence", 50) or 50)
+                    old["confidence"] = round(
+                        (old_conf * old_attempts + new_conf * new_attempts) / total,
+                        1,
+                    )
+                old["attempts"] = total
+                old["last_seen"] = max(
+                    str(old.get("last_seen") or ""),
+                    str(data.get("last_seen") or ""),
+                )
+        if changed:
+            self.progress = merged
+            self._save()
+
     def update(self, subject, topic, confidence):
+        subject = canonical_subject(subject)
+        topic = " ".join(str(topic or "").strip().split())
         if not subject or not topic:
             return
 
-        subject = str(subject).strip()
-        topic = str(topic).strip()
+        self._merge_subject_aliases()
         try:
             confidence = max(0.0, min(100.0, float(confidence)))
         except (TypeError, ValueError):
@@ -82,12 +142,10 @@ class ProgressTracker:
             }
 
         data = self.progress[subject][topic]
-        data["attempts"] += 1
+        data["attempts"] = int(data.get("attempts", 0) or 0) + 1
 
-        # Confidence is evidence, not a binary mastery switch. Repeated
-        # observations converge smoothly instead of making one answer 100%.
         previous = float(data.get("confidence", 50) or 50)
-        attempts = int(data.get("attempts", 1) or 1)
+        attempts = int(data["attempts"])
         learning_rate = 0.35 if attempts <= 3 else 0.20
         data["confidence"] = round(
             previous + (confidence - previous) * learning_rate,
@@ -102,4 +160,5 @@ class ProgressTracker:
         self._save()
 
     def get(self):
+        self._merge_subject_aliases()
         return self.progress
