@@ -1,8 +1,14 @@
-"""Nova backend package."""
+"""Nova backend package initialization and runtime compatibility hooks."""
 
 from __future__ import annotations
 
 import os
+
+# The repository ships with qwen2.5:3b as the practical local development
+# baseline. Production explicitly overrides this with OLLAMA_MODEL (for
+# example the configured cloud model), so this never overrides deployment
+# configuration.
+os.environ.setdefault("OLLAMA_MODEL", "qwen2.5:3b")
 
 try:
     import ollama
