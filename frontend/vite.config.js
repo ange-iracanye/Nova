@@ -1,9 +1,13 @@
-import { defineConfig } from "vite";
+import { defineConfig, loadEnv } from "vite";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 
 export default defineConfig(({ mode }) => {
-    const apiUrl = (process.env.VITE_API_URL || "").trim().replace(/\/$/, "");
+    // Vite intentionally does not expose process.env in browser-oriented
+    // config files. loadEnv gives the config the same .env/.env.local values
+    // that Vite uses for import.meta.env without requiring Node globals.
+    const env = loadEnv(mode, process.cwd(), "VITE_");
+    const apiUrl = (env.VITE_API_URL || "").trim().replace(/\/$/, "");
 
     // Never ship a production bundle that silently points at localhost.
     // Local development keeps the historical localhost fallback.
