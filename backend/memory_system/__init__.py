@@ -1,15 +1,16 @@
 """Nova memory system package.
 
-The quality layer is installed before MemoryManager is imported by NovaCore,
-so existing callers keep the same API while receiving V3 memory behavior.
+V3 quality adapters are installed before NovaCore imports the concrete
+memory classes, preserving compatibility while making memory and learning
+state user-isolated and lifecycle-aware.
 """
 
 from .memory_quality import install_memory_quality
-
-# Importing MemoryManager here is intentional. It gives the compatibility
-# layer one canonical class to enhance before application code imports it.
+from .learning_quality import install_learning_quality
 from .memory_manager import MemoryManager
+from .learning_memory import LearningMemory
 
 install_memory_quality(MemoryManager)
+install_learning_quality(MemoryManager, LearningMemory)
 
-__all__ = ["MemoryManager"]
+__all__ = ["MemoryManager", "LearningMemory"]
