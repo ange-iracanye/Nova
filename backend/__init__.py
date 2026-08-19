@@ -33,3 +33,14 @@ except Exception:
     # Health/readiness endpoints must remain importable even if the optional
     # LLM client cannot initialize. NovaCore reports the actual LLM failure.
     pass
+
+# These extensions are intentionally loaded at package import time so every
+# SubjectDetector instance gets the expanded taxonomy without requiring a
+# second subject-detection code path.
+try:
+    from backend.subject_extension import install_subject_extension
+    install_subject_extension()
+except Exception:
+    # Subject detection remains available with the original taxonomy if the
+    # optional extension cannot load.
+    pass
