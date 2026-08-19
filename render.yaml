@@ -2,24 +2,20 @@ services:
   - type: web
     name: nova-api
     runtime: python
-    plan: starter
+    plan: free
     region: frankfurt
     buildCommand: pip install --upgrade pip && pip install -r requirements.txt
     startCommand: uvicorn backend.production:app --host 0.0.0.0 --port $PORT
     healthCheckPath: /health
     autoDeploy: true
     numInstances: 1
-    disk:
-      name: nova-data
-      mountPath: /opt/render/project/src/data
-      sizeGB: 10
     envVars:
       - key: NOVA_ENV
         value: production
       - key: NOVA_DATA_DIR
-        value: /opt/render/project/src/data
+        value: /tmp/nova-data
       - key: NOVA_SESSION_DB
-        value: /opt/render/project/src/data/sessions.sqlite3
+        value: /tmp/nova-data/sessions.sqlite3
       - key: NOVA_ALLOWED_ORIGINS
         sync: false
       - key: NOVA_ENABLE_DOCS
@@ -30,12 +26,14 @@ services:
         value: "524288"
       - key: NOVA_MAX_UPLOAD_BYTES
         value: "10485760"
-      - key: OLLAMA_HOST
-        value: https://ollama.com
-      - key: OLLAMA_API_KEY
+      - key: NOVA_LLM_PROVIDER
+        value: gemini
+      - key: NOVA_LLM_MODEL
+        value: gemini-3.1-flash-lite
+      - key: GEMINI_API_KEY
         sync: false
-      - key: OLLAMA_MODEL
-        value: glm-4.7:cloud
+      - key: NOVA_DATABASE_URL
+        sync: false
       - key: PYTHON_VERSION
         value: 3.11.9
 
