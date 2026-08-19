@@ -24,13 +24,12 @@ _ORIGINAL_ANSWER = None
 def install_fast_runtime() -> None:
     """Install the production LLM model override and response cache once."""
     global _INSTALLED, _ORIGINAL_ANSWER
+    configured_model = os.getenv("OLLAMA_MODEL", "").strip()
     with _INSTALL_LOCK:
-        if _INSTALLED:
-            return
-
-        configured_model = os.getenv("OLLAMA_MODEL", "").strip()
         if configured_model:
             LocalLLM.DEFAULT_MODEL = configured_model
+        if _INSTALLED:
+            return
 
         _ORIGINAL_ANSWER = LocalLLM.answer
 
@@ -40,14 +39,8 @@ def install_fast_runtime() -> None:
             user: str,
             creativity: str = "medium",
         ) -> str:
-            # Never cache empty, oversized, or interactive requests.
             if not is_cacheable_request(user, mode=None):
-                return _ORIGINAL_ANSWER(
-                    self,
-                    system=system,
-                    user=user,
-                    creativity=creativity,
-                )
+                return _ORIGINAL_ANSWER(self, system=system, user=user, creativity=creativity)
 
             return _CACHE.answer(
                 lambda **kwargs: _ORIGINAL_ANSWER(self, **kwargs),
