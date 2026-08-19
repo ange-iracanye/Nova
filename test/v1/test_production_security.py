@@ -21,9 +21,13 @@ def production_module(monkeypatch, tmp_path):
 def test_production_requires_https_allowlist(monkeypatch, tmp_path):
     monkeypatch.setenv("NOVA_ENV", "production")
     monkeypatch.setenv("NOVA_DATA_DIR", str(tmp_path))
-    monkeypatch.setenv("NOVA_ALLOWED_ORIGINS", "http://localhost:5173")
+    monkeypatch.setenv("NOVA_SESSION_DB", str(tmp_path / "sessions.sqlite3"))
+    monkeypatch.setenv("NOVA_ALLOWED_ORIGINS", "https://nova.example.com")
 
     import backend.production as production
+
+    production = importlib.reload(production)
+    monkeypatch.setenv("NOVA_ALLOWED_ORIGINS", "http://localhost:5173")
 
     with pytest.raises(RuntimeError, match="non-HTTPS"):
         production._configured_origins()
