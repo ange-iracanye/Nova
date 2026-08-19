@@ -18,9 +18,6 @@ from backend import auth
 from backend.fast_runtime import install_fast_runtime
 from backend.persistent_sessions import PersistentSessionStore
 
-
-# Apply the production model configuration before any NovaCore/TutorEngine
-# instance can construct LocalLLM.
 install_fast_runtime()
 
 DATA_DIR = Path(os.getenv("NOVA_DATA_DIR", "data"))
@@ -30,13 +27,9 @@ api.auth_sessions = PersistentSessionStore(os.getenv("NOVA_SESSION_DB", str(DATA
 
 configured_origins = [
     origin.strip()
-    for origin in os.getenv(
-        "NOVA_ALLOWED_ORIGINS",
-        "https://nova-frontend.onrender.com,http://localhost:5173,http://127.0.0.1:5173",
-    ).split(",")
+    for origin in os.getenv("NOVA_ALLOWED_ORIGINS", "https://nova-frontend.onrender.com,http://localhost:5173,http://127.0.0.1:5173").split(",")
     if origin.strip()
 ]
-
 api.app.add_middleware(
     CORSMiddleware,
     allow_origins=configured_origins,
@@ -45,10 +38,7 @@ api.app.add_middleware(
     allow_headers=["Authorization", "Content-Type", "X-Nova-Session"],
 )
 
-PUBLIC_PATHS = {
-    "/", "/api", "/health", "/ready", "/status", "/register", "/login",
-    "/auth/session", "/auth/logout", "/docs", "/redoc", "/openapi.json", "/demo/session",
-}
+PUBLIC_PATHS = {"/", "/api", "/health", "/ready", "/status", "/register", "/login", "/auth/session", "/auth/logout", "/docs", "/redoc", "/openapi.json", "/demo/session"}
 PUBLIC_PREFIXES = ("/demo/session/", "/demo/chat/")
 COOKIE_NAME = os.getenv("NOVA_SESSION_COOKIE", "nova_session")
 COOKIE_SAMESITE = os.getenv("NOVA_COOKIE_SAMESITE", "lax").lower()
@@ -56,14 +46,7 @@ if COOKIE_SAMESITE not in {"lax", "strict", "none"}:
     COOKIE_SAMESITE = "lax"
 MAX_BODY_BYTES = int(os.getenv("NOVA_MAX_BODY_BYTES", str(512 * 1024)))
 MAX_UPLOAD_BYTES = int(os.getenv("NOVA_MAX_UPLOAD_BYTES", str(10 * 1024 * 1024)))
-
-_RATE_LIMITS = {
-    "/login": (10, 300),
-    "/register": (8, 600),
-    "/chat": (30, 60),
-    "/chat/stream": (30, 60),
-    "/demo/chat/stream": (20, 60),
-}
+_RATE_LIMITS = {"/login": (10, 300), "/register": (8, 600), "/chat": (30, 60), "/chat/stream": (30, 60), "/demo/chat/stream": (20, 60)}
 _rate_windows: dict[tuple[str, str], deque[float]] = defaultdict(deque)
 
 
@@ -79,9 +62,8 @@ def _rate_limited(request: Request) -> bool:
     if not rule:
         return False
     limit, window = rule
-    key = (_client_key(request), request.url.path)
+    bucket = _rate_windows[(_client_key(request), request.url.path)]
     now = time.monotonic()
-    bucket = _rate_windows[key]
     while bucket and now - bucket[0] >= window:
         bucket.popleft()
     if len(bucket) >= limit:
@@ -119,30 +101,19 @@ def _inject_cookie_session(request: Request) -> str | None:
 
 
 async def _set_login_cookie(response: Response) -> Response:
-    if response.status_code not in {200, 201} or not hasattr(response, "body_iterator"):
+    if response.status_code not in {200, 201}:
         return response
-    body = b"".join([chunk async for chunk in response.body_iterator])
+    body = getattr(response, "body", None)
+    if not isinstance(body, (bytes, bytearray)):
+        return response
     try:
-        payload = json.loads(body.decode("utf-8"))
+        payload = json.loads(bytes(body).decode("utf-8"))
         token = payload.get("session", {}).get("token")
     except (ValueError, AttributeError, UnicodeDecodeError):
         token = None
-    replacement = Response(
-        content=body,
-        status_code=response.status_code,
-        headers=dict(response.headers),
-        media_type=response.media_type,
-    )
+    replacement = Response(content=bytes(body), status_code=response.status_code, headers=dict(response.headers), media_type=response.media_type)
     if isinstance(token, str) and token:
-        replacement.set_cookie(
-            key=COOKIE_NAME,
-            value=token,
-            max_age=7 * 24 * 60 * 60,
-            httponly=True,
-            secure=True,
-            samesite=COOKIE_SAMESITE,
-            path="/",
-        )
+        replacement.set_cookie(key=COOKIE_NAME, value=token, max_age=7 * 24 * 60 * 60, httponly=True, secure=True, samesite=COOKIE_SAMESITE, path="/")
     return replacement
 
 
@@ -162,7 +133,6 @@ async def production_auth_boundary(request: Request, call_next):
         limit = MAX_UPLOAD_BYTES if request.url.path.startswith("/upload") else MAX_BODY_BYTES
         if size > limit:
             return JSONResponse(status_code=413, content={"success": False, "error": {"code": "REQUEST_TOO_LARGE", "message": "Request is too large."}})
-
     if _rate_limited(request):
         return JSONResponse(status_code=429, content={"success": False, "error": {"code": "RATE_LIMITED", "message": "Too many requests. Please try again shortly."}})
 
@@ -184,10 +154,7 @@ async def production_auth_boundary(request: Request, call_next):
     token = cookie_token
     if not token:
         authorization = request.headers.get("authorization", "")
-        if authorization.lower().startswith("bearer "):
-            token = authorization[7:].strip()
-        else:
-            token = request.headers.get("x-nova-session")
+        token = authorization[7:].strip() if authorization.lower().startswith("bearer ") else request.headers.get("x-nova-session")
     if token and api.auth_sessions.get(token):
         response.set_cookie(key=COOKIE_NAME, value=token, max_age=7 * 24 * 60 * 60, httponly=True, secure=True, samesite=COOKIE_SAMESITE, path="/")
     return response
