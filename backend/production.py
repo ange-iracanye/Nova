@@ -15,8 +15,13 @@ from fastapi.responses import JSONResponse, Response
 
 from backend import api
 from backend import auth
+from backend.fast_runtime import install_fast_runtime
 from backend.persistent_sessions import PersistentSessionStore
 
+
+# Apply the production model configuration before any NovaCore/TutorEngine
+# instance can construct LocalLLM.
+install_fast_runtime()
 
 DATA_DIR = Path(os.getenv("NOVA_DATA_DIR", "data"))
 DATA_DIR.mkdir(parents=True, exist_ok=True)
@@ -114,10 +119,7 @@ def _inject_cookie_session(request: Request) -> str | None:
 
 
 async def _set_login_cookie(response: Response) -> Response:
-    """Attach the server session as an HttpOnly cookie to auth responses."""
-    if response.status_code not in {200, 201}:
-        return response
-    if not hasattr(response, "body_iterator"):
+    if response.status_code not in {200, 201} or not hasattr(response, "body_iterator"):
         return response
     body = b"".join([chunk async for chunk in response.body_iterator])
     try:
@@ -125,18 +127,22 @@ async def _set_login_cookie(response: Response) -> Response:
         token = payload.get("session", {}).get("token")
     except (ValueError, AttributeError, UnicodeDecodeError):
         token = None
-    if not isinstance(token, str) or not token:
-        return Response(content=body, status_code=response.status_code, headers=dict(response.headers), media_type=response.media_type)
-    replacement = Response(content=body, status_code=response.status_code, headers=dict(response.headers), media_type=response.media_type)
-    replacement.set_cookie(
-        key=COOKIE_NAME,
-        value=token,
-        max_age=7 * 24 * 60 * 60,
-        httponly=True,
-        secure=True,
-        samesite=COOKIE_SAMESITE,
-        path="/",
+    replacement = Response(
+        content=body,
+        status_code=response.status_code,
+        headers=dict(response.headers),
+        media_type=response.media_type,
     )
+    if isinstance(token, str) and token:
+        replacement.set_cookie(
+            key=COOKIE_NAME,
+            value=token,
+            max_age=7 * 24 * 60 * 60,
+            httponly=True,
+            secure=True,
+            samesite=COOKIE_SAMESITE,
+            path="/",
+        )
     return replacement
 
 
