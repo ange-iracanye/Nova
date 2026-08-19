@@ -2,24 +2,22 @@ services:
   - type: web
     name: nova-api
     runtime: python
-    plan: starter
+    plan: free
     region: frankfurt
     buildCommand: pip install --upgrade pip && pip install -r requirements.txt
     startCommand: uvicorn backend.production:app --host 0.0.0.0 --port $PORT
     healthCheckPath: /health
     autoDeploy: true
     numInstances: 1
-    disk:
-      name: nova-data
-      mountPath: /opt/render/project/src/data
-      sizeGB: 10
     envVars:
       - key: NOVA_ENV
         value: production
+      # Render Free has an ephemeral filesystem. Keep runtime data in a
+      # writable temporary directory instead of requiring a paid disk.
       - key: NOVA_DATA_DIR
-        value: /opt/render/project/src/data
+        value: /tmp/nova-data
       - key: NOVA_SESSION_DB
-        value: /opt/render/project/src/data/sessions.sqlite3
+        value: /tmp/nova-data/sessions.sqlite3
       - key: NOVA_ALLOWED_ORIGINS
         sync: false
       - key: NOVA_ENABLE_DOCS
