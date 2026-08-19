@@ -20,10 +20,10 @@ from backend.persistent_sessions import PersistentSessionStore
 
 install_fast_runtime()
 
-# API streaming currently wraps a completed model response. Increase chunk
-# size and remove the artificial sleep so the frontend displays it promptly.
+_ORIGINAL_STREAM_TEXT = api.stream_text
+
 async def _fast_stream_text(text: str, chunk_size: int = 120, delay: float = 0.0):
-    async for chunk in api.stream_text(text, chunk_size=chunk_size, delay=delay):
+    async for chunk in _ORIGINAL_STREAM_TEXT(text, chunk_size=chunk_size, delay=delay):
         yield chunk
 
 api.stream_text = _fast_stream_text
