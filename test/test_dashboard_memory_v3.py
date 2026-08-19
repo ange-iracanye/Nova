@@ -5,20 +5,16 @@ from backend.memory_system.memory_manager import MemoryManager
 
 class FakeEmbedder:
     def encode(self, text, normalize_embeddings=True):
-        # Small deterministic vector for the memory-search contract.
         value = sum(ord(ch) for ch in str(text)) % 997
         return [float(value), 1.0]
 
 
 def test_progress_is_user_isolated_and_not_instantly_mastered(tmp_path, monkeypatch):
-    base = tmp_path / "progress"
-    monkeypatch.setattr(ProgressTracker, "base_path", base, raising=False)
+    monkeypatch.chdir(tmp_path)
 
     alice = ProgressTracker("alice@example.com")
     bob = ProgressTracker("bob@example.com")
-
-    for _ in range(1):
-        alice.update("Technology", "Python", 100)
+    alice.update("Technology", "Python", 100)
 
     assert "Technology" in alice.get()
     assert "Technology" not in bob.get()
@@ -26,7 +22,8 @@ def test_progress_is_user_isolated_and_not_instantly_mastered(tmp_path, monkeypa
     assert alice.get()["Technology"]["Python"]["mastered"] is False
 
 
-def test_memory_is_user_isolated_and_replaces_stale_preference(tmp_path):
+def test_memory_is_user_isolated_and_replaces_stale_preference(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
     manager = MemoryManager(
         embedder=FakeEmbedder(),
         base_path=str(tmp_path / "memory"),
@@ -59,8 +56,7 @@ def test_memory_is_user_isolated_and_replaces_stale_preference(tmp_path):
 
 
 def test_learning_graph_reads_user_progress(tmp_path, monkeypatch):
-    progress_base = tmp_path / "progress"
-    monkeypatch.setattr(ProgressTracker, "base_path", progress_base, raising=False)
+    monkeypatch.chdir(tmp_path)
 
     tracker = ProgressTracker("student@example.com")
     tracker.update("Technology", "Python", 80)
