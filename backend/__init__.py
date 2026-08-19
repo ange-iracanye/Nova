@@ -35,3 +35,10 @@ try:
     install_tracker_quality(UnderstandingTracker)
 except Exception:
     pass
+
+try:
+    from backend.learning.session_manager import SessionManager
+    from backend.learning.session_quality import install_session_quality
+    install_session_quality(SessionManager)
+except Exception:
+    pass
