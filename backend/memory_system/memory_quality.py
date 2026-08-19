@@ -1,8 +1,7 @@
 """Quality layer for Nova's long-term memory.
 
-The original memory store is intentionally kept compatible. This module adds
-memory lifecycle, contradiction handling, recency-aware retrieval and
-consolidation without changing the public MemoryManager API.
+The original memory store is kept compatible. This module adds memory
+lifecycle, contradiction handling, recency-aware retrieval and consolidation.
 """
 
 from __future__ import annotations
@@ -11,6 +10,8 @@ import math
 import re
 from datetime import datetime, timezone, timedelta
 from typing import Any
+
+from backend.user_context import set_active_user
 
 
 _PATCHED = False
@@ -40,19 +41,17 @@ def _parse(value: Any) -> datetime | None:
 def _norm(text: Any) -> str:
     value = str(text or "").casefold().strip()
     value = re.sub(r"\s+", " ", value)
-    value = re.sub(r"[^\w\s]", "", value)
-    return value
+    return re.sub(r"[^\w\s]", "", value)
 
 
 def _canonical_type(memory_type: Any) -> str:
     value = str(memory_type or "episode").strip().casefold()
-    aliases = {
+    return {
         "explicit_memory": "fact",
         "long_term": "fact",
         "long-term": "fact",
         "temporary": "episode",
-    }
-    return aliases.get(value, value or "episode")
+    }.get(value, value or "episode")
 
 
 def _importance(memory: dict[str, Any]) -> float:
@@ -90,20 +89,10 @@ def _is_active(memory: dict[str, Any]) -> bool:
 
 
 def _memory_key(memory: dict[str, Any]) -> tuple[str, str, str]:
-    return (
-        _canonical_type(memory.get("type")),
-        _norm(memory.get("subject")),
-        _norm(memory.get("text")),
-    )
+    return (_canonical_type(memory.get("type")), _norm(memory.get("subject")), _norm(memory.get("text")))
 
 
 def _contradiction_key(memory: dict[str, Any]) -> tuple[str, str]:
-    """Key for preference/fact/goal replacement.
-
-    Exact semantic contradiction detection is deliberately conservative. We
-    only replace memories when they are clearly about the same category and
-    subject, avoiding destructive guesses about what the student meant.
-    """
     text = _norm(memory.get("text"))
     subject = _norm(memory.get("subject"))
     prefixes = (
@@ -131,17 +120,14 @@ def install_memory_quality(MemoryManager) -> None:
     def add_memory(self, email, text, memory_type="episode", subject=None,
                    conversation_id=None, importance=0.5, confidence=0.8,
                    metadata=None, formatted_text=None):
+        set_active_user(email)
         kind = _canonical_type(memory_type)
         importance_f = max(0.0, min(1.0, float(importance or 0.5)))
         confidence_f = float(confidence if confidence is not None else 0.7)
         if confidence_f > 1:
             confidence_f /= 100
         confidence_f = max(0.0, min(1.0, confidence_f))
-
-        # Temporary episodes should not live forever. Long-term memories do.
-        expires_at = None
-        if kind == "episode":
-            expires_at = (_now() + timedelta(days=180)).isoformat()
+        expires_at = (_now() + timedelta(days=180)).isoformat() if kind == "episode" else None
 
         result = _ORIGINAL_ADD(
             self, email, text, memory_type=kind, subject=subject,
@@ -162,14 +148,10 @@ def install_memory_quality(MemoryManager) -> None:
         result.setdefault("metadata", {})
         result["metadata"].setdefault("memory_version", 3)
 
-        # Repeated long-term statements strengthen one memory instead of
-        # creating a graveyard of duplicates.
         if kind in {"fact", "preference", "goal", "learning"}:
             target_key = _contradiction_key(result)
             for existing in data.get("memories", []):
-                if existing.get("id") == result.get("id"):
-                    continue
-                if not _is_active(existing):
+                if existing.get("id") == result.get("id") or not _is_active(existing):
                     continue
                 if _contradiction_key(existing) != target_key:
                     continue
@@ -178,11 +160,8 @@ def install_memory_quality(MemoryManager) -> None:
                     existing["importance"] = max(_importance(existing), importance_f)
                     existing["updated_at"] = now
                     existing["recall_count"] = existing.get("recall_count", 0) + 1
-                    result["status"] = "active"
                     self._write(self.user_file(email), data)
                     return existing
-                # Newer explicit information supersedes an older conflicting
-                # statement, but the old evidence is retained for auditability.
                 if confidence_f >= _confidence(existing) or kind in {"fact", "preference", "goal"}:
                     existing["status"] = "superseded"
                     existing["superseded_by"] = result.get("id")
@@ -210,21 +189,16 @@ def install_memory_quality(MemoryManager) -> None:
             importance = _importance(memory)
             confidence = _confidence(memory)
             recall = min(1.0, float(memory.get("recall_count", 0) or 0) / 10.0)
-            score = (0.62 * semantic) + (0.16 * recency) + (0.14 * importance) + (0.06 * confidence) + (0.02 * recall)
             item = dict(item)
-            item["score"] = score
+            item["score"] = (0.62 * semantic) + (0.16 * recency) + (0.14 * importance) + (0.06 * confidence) + (0.02 * recall)
             rescored.append(item)
-
         rescored.sort(key=lambda x: x.get("score", 0.0), reverse=True)
         return rescored[:limit]
 
     def build_context(self, email, query, subject=None, limit=8, max_characters=12000):
-        # Use the improved retrieval but keep the original public formatting
-        # contract for callers that expect the existing sections.
         results = search(self, email, query, limit=limit, subject=subject)
         if not results:
             return "No relevant long-term memory."
-        sections = []
         grouped = {"fact": [], "preference": [], "goal": [], "learning": [], "episode": []}
         for result in results:
             memory = result.get("memory", {})
@@ -236,6 +210,7 @@ def install_memory_quality(MemoryManager) -> None:
             "learning": "LEARNING PROFILE:",
             "episode": "RELEVANT PREVIOUS DISCUSSIONS:",
         }
+        sections = []
         for kind in ("fact", "preference", "goal", "learning", "episode"):
             memories = grouped.get(kind, [])
             if not memories:
