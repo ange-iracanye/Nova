@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from collections import defaultdict
 from typing import Any
 
 from fastapi import APIRouter, HTTPException, Request
@@ -10,7 +9,7 @@ from backend.learning_graph import LearningGraph
 from backend.learning.progress_tracker import ProgressTracker
 from backend.student.knowledge_map import KnowledgeMap
 from backend.memory_system.memory_manager import MemoryManager
-from backend.student_profile import StudentProfile
+from student_profile import StudentProfile
 
 
 router = APIRouter()
@@ -21,9 +20,7 @@ def _normalize_email(email: str | None) -> str:
 
 
 def _session_email(request: Request) -> str | None:
-    # Import lazily to avoid a dashboard -> api -> dashboard import cycle.
     from backend import api
-
     session = api.get_auth_session(request)
     if not isinstance(session, dict):
         return None
@@ -34,18 +31,14 @@ def _session_email(request: Request) -> str | None:
 def _authorized_email(request: Request, requested_email: str | None = None) -> str:
     requested = _normalize_email(requested_email)
     session_email = _session_email(request)
-
     if session_email:
         if requested and requested != session_email:
             raise HTTPException(status_code=403, detail="Dashboard access is limited to the authenticated student.")
         return session_email
 
-    # Development fallback keeps the local V1 dashboard usable when the
-    # frontend is running outside the production middleware.
     from os import getenv
     if getenv("NOVA_ENV", "development").lower() != "production" and requested:
         return requested
-
     raise HTTPException(status_code=401, detail="A valid Nova session is required.")
 
 
@@ -65,18 +58,10 @@ def _int(value: Any) -> int:
 
 
 def _merge_topic_stats(progress: dict, graph: dict) -> tuple[dict, int, int, int, int]:
-    """Build one canonical subject map from the user's learning evidence.
-
-    ProgressTracker is the confidence/mastery source. LearningGraph contributes
-    answer-level evidence when it exists. No global/default graph is consulted
-    for an authenticated student.
-    """
     subjects: dict[str, dict] = {}
     total_attempts = total_correct = total_wrong = total_topics = 0
-
     graph_subjects = graph.get("subjects", {}) if isinstance(graph, dict) else {}
     graph_subjects = graph_subjects if isinstance(graph_subjects, dict) else {}
-
     all_subjects = set(progress.keys()) | set(graph_subjects.keys())
 
     for subject in sorted(all_subjects, key=str.casefold):
@@ -85,37 +70,27 @@ def _merge_topic_stats(progress: dict, graph: dict) -> tuple[dict, int, int, int
         graph_topics = graph_node.get("topics", {}) if isinstance(graph_node, dict) else {}
         progress_topics = progress_topics if isinstance(progress_topics, dict) else {}
         graph_topics = graph_topics if isinstance(graph_topics, dict) else {}
-
         topic_names = set(progress_topics.keys()) | set(graph_topics.keys())
         topic_rows = {}
         subject_attempts = subject_correct = subject_wrong = 0
-        weighted_mastery = 0.0
-        weighted_count = 0.0
+        weighted_mastery = weighted_count = 0.0
         last_seen = None
 
         for topic in sorted(topic_names, key=str.casefold):
             p = progress_topics.get(topic, {}) if isinstance(progress_topics.get(topic, {}), dict) else {}
             g = graph_topics.get(topic, {}) if isinstance(graph_topics.get(topic, {}), dict) else {}
-
             attempts = max(_int(p.get("attempts")), _int(g.get("times_studied")))
             correct = _int(g.get("correct_answers"))
             wrong = _int(g.get("wrong_answers"))
             answers = correct + wrong
-
             confidence = _clamp(p.get("confidence", g.get("mastery", 0)))
-            graph_mastery = _clamp(g.get("mastery", confidence))
-            mastery = confidence if attempts else graph_mastery
+            mastery = confidence if attempts else _clamp(g.get("mastery", confidence))
             if answers >= 2:
-                # Accuracy is useful evidence, but repeated confidence remains
-                # the primary mastery signal so one lucky answer cannot produce
-                # instant mastery.
                 accuracy = correct / answers * 100.0
                 mastery = round(0.7 * mastery + 0.3 * accuracy, 1)
-
             seen = p.get("last_seen") or g.get("last_review") or ""
             if seen and (last_seen is None or str(seen) > str(last_seen)):
                 last_seen = str(seen)
-
             topic_rows[topic] = {
                 "name": topic,
                 "mastery": mastery,
@@ -127,7 +102,6 @@ def _merge_topic_stats(progress: dict, graph: dict) -> tuple[dict, int, int, int
                 "last_review": seen,
                 "mastered": bool(p.get("mastered")) and attempts >= 5,
             }
-
             subject_attempts += attempts
             subject_correct += correct
             subject_wrong += wrong
@@ -138,16 +112,14 @@ def _merge_topic_stats(progress: dict, graph: dict) -> tuple[dict, int, int, int
 
         if not topic_rows:
             continue
-
         subject_mastery = round(weighted_mastery / weighted_count, 1) if weighted_count else 0.0
         subject_questions = subject_correct + subject_wrong
         subject_accuracy = round(subject_correct / subject_questions * 100, 1) if subject_questions else None
+        denominator = sum(max(1, row["attempts"]) for row in topic_rows.values())
         subject_confidence = round(
-            sum(row["confidence"] * max(1, row["attempts"]) for row in topic_rows.values())
-            / sum(max(1, row["attempts"]) for row in topic_rows.values()),
+            sum(row["confidence"] * max(1, row["attempts"]) for row in topic_rows.values()) / denominator,
             1,
-        )
-
+        ) if denominator else 0.0
         subjects[subject] = {
             "name": subject,
             "mastery": subject_mastery,
@@ -161,7 +133,6 @@ def _merge_topic_stats(progress: dict, graph: dict) -> tuple[dict, int, int, int
             "last_activity": last_seen,
             "topics": list(topic_rows.values()),
         }
-
         total_attempts += subject_attempts
         total_correct += subject_correct
         total_wrong += subject_wrong
@@ -171,30 +142,20 @@ def _merge_topic_stats(progress: dict, graph: dict) -> tuple[dict, int, int, int
 
 def _build_dashboard(email: str) -> dict:
     set_active_user(email)
-
     progress = ProgressTracker(email).get()
     graph = LearningGraph(email).get()
     knowledge = KnowledgeMap(email).get()
     profile = StudentProfile(email).get()
-
     subjects, total_attempts, total_correct, total_wrong, total_topics = _merge_topic_stats(progress, graph)
     total_answers = total_correct + total_wrong
 
     if subjects:
-        overall_mastery = round(
-            sum(item["mastery"] * max(1, item["attempts"]) for item in subjects.values())
-            / sum(max(1, item["attempts"]) for item in subjects.values()),
-            1,
-        )
-        average_confidence = round(
-            sum(item["confidence"] * max(1, item["attempts"]) for item in subjects.values())
-            / sum(max(1, item["attempts"]) for item in subjects.values()),
-            1,
-        )
+        denominator = sum(max(1, item["attempts"]) for item in subjects.values())
+        overall_mastery = round(sum(item["mastery"] * max(1, item["attempts"]) for item in subjects.values()) / denominator, 1)
+        average_confidence = round(sum(item["confidence"] * max(1, item["attempts"]) for item in subjects.values()) / denominator, 1)
     else:
         overall_mastery = 0.0
         average_confidence = 0.0
-
     accuracy = round(total_correct / total_answers * 100, 1) if total_answers else 0.0
 
     strengths = []
@@ -202,64 +163,36 @@ def _build_dashboard(email: str) -> dict:
     recent = []
     confidence = []
     knowledge_subjects = []
-
     for name, subject in subjects.items():
-        knowledge_subjects.append({
-            "id": name.casefold().replace(" ", "-"),
-            "name": name,
-            "confidence": subject["confidence"],
-            "topics": subject["topics_count"],
-            "attempts": subject["attempts"],
-        })
-        confidence.append({
-            "subject": name,
-            "confidence": subject["confidence"],
-            "attempts": subject["attempts"],
-            "mistakes": subject["wrong_answers"],
-        })
+        knowledge_subjects.append({"id": name.casefold().replace(" ", "-"), "name": name, "confidence": subject["confidence"], "topics": subject["topics_count"], "attempts": subject["attempts"]})
+        confidence.append({"subject": name, "confidence": subject["confidence"], "attempts": subject["attempts"], "mistakes": subject["wrong_answers"]})
         if subject["mastery"] >= 75 and subject["attempts"] >= 3:
             strengths.append(f"{name} ({subject['mastery']:.0f}%)")
         if subject["mastery"] < 50:
             weaknesses.append(f"{name} ({subject['mastery']:.0f}%)")
         for topic in subject["topics"]:
-            recent.append({
-                "subject": name,
-                "topic": topic["name"],
-                "mastery": topic["mastery"],
-                "attempts": topic["attempts"],
-                "last_review": topic["last_review"],
-            })
+            recent.append({"subject": name, "topic": topic["name"], "mastery": topic["mastery"], "attempts": topic["attempts"], "last_review": topic["last_review"]})
 
     recent.sort(key=lambda item: item.get("last_review", ""), reverse=True)
-    strengths.sort(key=lambda text: text, reverse=True)
-    weaknesses.sort(key=lambda text: text)
-
     try:
         memory = MemoryManager().get_all(email)
-        memory_count = _int(memory.get("statistics", {}).get("total_memories"))
     except Exception:
-        memory_count = 0
-
-    questions = _int(profile.get("questions_asked", profile.get("questions")))
-    conversation_count = 0
-    episodes = []
-    try:
-        memory = MemoryManager().get_all(email)
-        conversation_count = _int(memory.get("statistics", {}).get("total_episodes"))
-        episodes = [m for m in memory.get("memories", []) if m.get("type") == "episode"]
-    except Exception:
-        pass
-
+        memory = {"memories": [], "statistics": {}}
+    memory_count = _int(memory.get("statistics", {}).get("total_memories"))
+    conversation_count = _int(memory.get("statistics", {}).get("total_episodes"))
+    episodes = [m for m in memory.get("memories", []) if m.get("type") == "episode"]
     recent_conversations = []
     for item in sorted(episodes, key=lambda m: m.get("created_at", ""), reverse=True)[:50]:
+        text = str(item.get("text", ""))
         recent_conversations.append({
             "id": item.get("conversation_id") or item.get("id"),
-            "title": str(item.get("text", "")).splitlines()[0][:80] or "Conversation",
-            "last_message": str(item.get("text", ""))[-160:],
+            "title": text.splitlines()[0][:80] or "Conversation",
+            "last_message": text[-160:],
             "message_count": 1,
             "updated_at": item.get("created_at"),
         })
 
+    questions = _int(profile.get("questions_asked", profile.get("questions")))
     return {
         "stats": {
             "questions": questions,
@@ -288,23 +221,15 @@ def _build_dashboard(email: str) -> dict:
         "recent_activity": recent[:20],
         "recent_conversations": recent_conversations,
         "session": {"subject": "None", "topic": "None", "mode": "None", "score": 0},
-        "overall": {
-            "mastery": overall_mastery,
-            "attempts": total_attempts,
-            "correct": total_correct,
-            "wrong": total_wrong,
-            "topics": total_topics,
-        },
+        "overall": {"mastery": overall_mastery, "attempts": total_attempts, "correct": total_correct, "wrong": total_wrong, "topics": total_topics},
     }
 
 
 @router.get("/dashboard")
 def get_dashboard_authenticated(request: Request):
-    email = _authorized_email(request)
-    return _build_dashboard(email)
+    return _build_dashboard(_authorized_email(request))
 
 
 @router.get("/dashboard/{email}")
 def get_dashboard(request: Request, email: str):
-    email = _authorized_email(request, email)
-    return _build_dashboard(email)
+    return _build_dashboard(_authorized_email(request, email))
