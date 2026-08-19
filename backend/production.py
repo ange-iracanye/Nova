@@ -1,18 +1,11 @@
-"""Production application entrypoint for Nova.
-
-This module keeps the existing API implementation intact while adding the
-small amount of infrastructure that should only exist in a public deployment:
-persistent sessions, durable application data, deployment CORS, security
-headers, authentication boundaries, request limits, and cookie-backed
-sessions.
-"""
+"""Production application entrypoint for Nova."""
 
 from __future__ import annotations
 
 import os
 import time
 from collections import defaultdict, deque
-from http.cookies import SimpleCookie
+from datetime import datetime, timezone
 from pathlib import Path
 
 from fastapi import Request
@@ -49,27 +42,12 @@ api.app.add_middleware(
     allow_headers=["Authorization", "Content-Type", "X-Nova-Session"],
 )
 
-
 PUBLIC_PATHS = {
-    "/",
-    "/api",
-    "/health",
-    "/ready",
-    "/status",
-    "/register",
-    "/login",
-    "/auth/session",
-    "/auth/logout",
-    "/docs",
-    "/redoc",
-    "/openapi.json",
+    "/", "/api", "/health", "/ready", "/status", "/register", "/login",
+    "/auth/session", "/auth/logout", "/docs", "/redoc", "/openapi.json",
     "/demo/session",
 }
-
-PUBLIC_PREFIXES = (
-    "/demo/session/",
-    "/demo/chat/",
-)
+PUBLIC_PREFIXES = ("/demo/session/", "/demo/chat/")
 
 COOKIE_NAME = os.getenv("NOVA_SESSION_COOKIE", "nova_session")
 COOKIE_SAMESITE = os.getenv("NOVA_COOKIE_SAMESITE", "lax").lower()
@@ -112,19 +90,29 @@ def _rate_limited(request: Request) -> bool:
     return False
 
 
-def _inject_cookie_session(request: Request) -> str | None:
-    """Make the HttpOnly cookie usable by the legacy API session resolver."""
+def _cookie_session_token(request: Request) -> str | None:
     token = request.cookies.get(COOKIE_NAME)
     if not token:
         return None
-    if not api.get_auth_session(request):
+    session = api.auth_sessions.get(token)
+    if not isinstance(session, dict):
         return None
-    # Starlette exposes request headers through the ASGI scope. Injecting the
-    # already-validated cookie token lets the existing API remain compatible
-    # without duplicating the session store in this deployment wrapper.
+    try:
+        expires_at = datetime.fromisoformat(str(session.get("expires_at")))
+    except (TypeError, ValueError):
+        return None
+    if expires_at <= datetime.now(timezone.utc):
+        api.auth_sessions.pop(token, None)
+        return None
+    return token
+
+
+def _inject_cookie_session(request: Request) -> str | None:
+    token = _cookie_session_token(request)
+    if not token:
+        return None
     headers = list(request.scope.get("headers", []))
-    lower_names = {name.lower() for name, _ in headers}
-    if b"x-nova-session" not in lower_names:
+    if not any(name.lower() == b"x-nova-session" for name, _ in headers):
         headers.append((b"x-nova-session", token.encode("latin-1")))
         request.scope["headers"] = headers
     return token
@@ -134,7 +122,6 @@ def _inject_cookie_session(request: Request) -> str | None:
 async def production_auth_boundary(request: Request, call_next):
     if request.method == "OPTIONS":
         return await call_next(request)
-
     if os.getenv("NOVA_ENV", "development").lower() != "production":
         return await call_next(request)
 
@@ -151,26 +138,17 @@ async def production_auth_boundary(request: Request, call_next):
     if _rate_limited(request):
         return JSONResponse(status_code=429, content={"success": False, "error": {"code": "RATE_LIMITED", "message": "Too many requests. Please try again shortly."}})
 
-    if request.url.path in PUBLIC_PATHS or any(request.url.path.startswith(prefix) for prefix in PUBLIC_PREFIXES):
+    path = request.url.path
+    is_public = path in PUBLIC_PATHS or any(path.startswith(prefix) for prefix in PUBLIC_PREFIXES)
+    if is_public:
         return await call_next(request)
 
     cookie_token = _inject_cookie_session(request)
     if not cookie_token and not api.get_auth_session(request):
-        return JSONResponse(
-            status_code=401,
-            content={
-                "success": False,
-                "error": {
-                    "code": "NOT_AUTHENTICATED",
-                    "message": "A valid Nova session is required.",
-                },
-            },
-        )
+        return JSONResponse(status_code=401, content={"success": False, "error": {"code": "NOT_AUTHENTICATED", "message": "A valid Nova session is required."}})
 
     response = await call_next(request)
 
-    # Upgrade an existing bearer/header session into a browser cookie. The
-    # cookie is HttpOnly so frontend JavaScript cannot read it after this point.
     token = cookie_token
     if not token:
         authorization = request.headers.get("authorization", "")
@@ -178,7 +156,7 @@ async def production_auth_boundary(request: Request, call_next):
             token = authorization[7:].strip()
         else:
             token = request.headers.get("x-nova-session")
-    if token and api.get_auth_session(request):
+    if token and api.auth_sessions.get(token):
         response.set_cookie(
             key=COOKIE_NAME,
             value=token,
@@ -198,13 +176,10 @@ async def production_security_headers(request: Request, call_next):
     response.headers.setdefault("X-Frame-Options", "DENY")
     response.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
     response.headers.setdefault("Permissions-Policy", "camera=(), microphone=(), geolocation=()")
-
     if request.url.path.startswith("/auth/"):
         response.headers.setdefault("Cache-Control", "no-store")
-
     if os.getenv("NOVA_ENV", "development").lower() == "production":
         response.headers.setdefault("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
-
     return response
 
 
