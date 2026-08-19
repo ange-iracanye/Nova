@@ -64,7 +64,6 @@ try:
             except Exception as _error:
                 print(f"Nova free persistence sync warning: {_error}")
 
-        # Account creation/password migration is synchronized immediately.
         _nova_original_save_users = _auth.save_users
         def _nova_save_users_and_sync(data):
             result = _nova_original_save_users(data)
@@ -83,12 +82,13 @@ try:
 except Exception as _error:
     print(f"Nova free persistence unavailable: {_error}")
 
-# Public V1 uses the free Gemini provider without changing TutorEngine's API.
+# Public V1 uses the OpenRouter free-model provider without changing
+# TutorEngine's existing LocalLLM interface.
 try:
-    if os.getenv("NOVA_LLM_PROVIDER", "").strip().lower() == "gemini":
+    if os.getenv("NOVA_LLM_PROVIDER", "").strip().lower() == "openrouter":
         from backend.free_llm import FreeLLM
         import backend.tutor_system.tutor_engine as _nova_tutor_engine
         _nova_tutor_engine.LocalLLM = FreeLLM
-        print("Nova free Gemini provider enabled.")
+        print("Nova OpenRouter free provider enabled.")
 except Exception as _error:
-    print(f"Nova free Gemini provider unavailable: {_error}")
+    print(f"Nova OpenRouter free provider unavailable: {_error}")
