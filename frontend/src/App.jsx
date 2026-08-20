@@ -1,5 +1,5 @@
 import React, { Suspense, lazy, useEffect, useMemo, useState } from "react";
-import { BrowserRouter, Navigate, Route, Routes, useLocation, useNavigate } from "react-router-dom";
+import { BrowserRouter, Navigate, Route, Routes, useLocation } from "react-router-dom";
 import { LoaderCircle } from "lucide-react";
 
 const Home = lazy(() => import("./pages/Home"));
@@ -19,9 +19,7 @@ function readUser() {
         if (!raw) return null;
         const parsed = JSON.parse(raw);
         return parsed && typeof parsed === "object" ? parsed : null;
-    } catch {
-        return null;
-    }
+    } catch { return null; }
 }
 
 function useAuthState() {
@@ -30,10 +28,12 @@ function useAuthState() {
         const sync = () => setUser(readUser());
         window.addEventListener("storage", sync);
         window.addEventListener("nova-auth-changed", sync);
+        window.addEventListener("nova:auth", sync);
         const timer = window.setInterval(sync, 1000);
         return () => {
             window.removeEventListener("storage", sync);
             window.removeEventListener("nova-auth-changed", sync);
+            window.removeEventListener("nova:auth", sync);
             window.clearInterval(timer);
         };
     }, []);
