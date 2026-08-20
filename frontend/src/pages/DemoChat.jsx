@@ -1,0 +1,55 @@
+import { useEffect, useRef, useState } from "react";
+import { ArrowRight, Bot, ChevronLeft, LoaderCircle, Lock, Menu, Send, Sparkles, User } from "lucide-react";
+import { Link } from "react-router-dom";
+import NovaLogo from "../components/NovaLogo";
+
+const STARTERS = ["Explain photosynthesis simply", "Quiz me on algebra", "Why is the sky blue?", "Help me understand Newton's laws"];
+
+function demoAnswer(text) {
+    const q = text.toLowerCase();
+    if (q.includes("photosynthesis")) return "Photosynthesis is how plants turn light into usable chemical energy. In simple terms: the plant takes in light, carbon dioxide and water, then uses them to make glucose and releases oxygen. Think of a leaf as a tiny solar-powered food factory.\n\nWant me to quiz you on the process?";
+    if (q.includes("algebra")) return "Absolutely. Let’s warm up with one: if 3x + 5 = 20, what is x?\n\nTake your time. I’ll give you a hint rather than the answer if you get stuck.";
+    if (q.includes("sky")) return "The sky looks blue because molecules in Earth's atmosphere scatter shorter blue wavelengths of sunlight more strongly than longer red wavelengths. Your eyes receive lots of that scattered blue light from across the sky.";
+    if (q.includes("newton")) return "Newton’s laws describe how forces and motion relate. The third law is the famous action-reaction idea: when one object exerts a force on another, the second exerts an equal and opposite force back.\n\nFor example, when you push the ground while walking, the ground pushes you forward.";
+    return "I’m Nova’s public demo. I can show you the tutoring experience without an account. For full conversations, memory, progress and personalized learning, create a free account.";
+}
+
+export default function DemoChat() {
+    const [messages, setMessages] = useState([]);
+    const [input, setInput] = useState("");
+    const [busy, setBusy] = useState(false);
+    const [menu, setMenu] = useState(false);
+    const bottom = useRef(null);
+
+    useEffect(() => bottom.current?.scrollIntoView({ behavior: "smooth" }), [messages, busy]);
+
+    const send = value => {
+        const text = String(value ?? input).trim();
+        if (!text || busy) return;
+        setInput("");
+        setMessages(prev => [...prev, { role: "user", text }]);
+        setBusy(true);
+        setTimeout(() => {
+            setMessages(prev => [...prev, { role: "nova", text: demoAnswer(text) }]);
+            setBusy(false);
+        }, 550);
+    };
+
+    return <main className="min-h-screen bg-[#070a13] text-white">
+        <style>{`@keyframes demoIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}.demo-in{animation:demoIn .35s ease-out both}@media(prefers-reduced-motion:reduce){.demo-in{animation:none}}`}</style>
+        <header className="sticky top-0 z-30 border-b border-white/[.06] bg-[#070a13]/90 backdrop-blur-xl">
+            <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-4 sm:px-6"><Link to="/" className="flex items-center gap-3"><NovaLogo className="h-9 w-9 rounded-xl"/><span className="text-sm font-bold tracking-[.18em]">NOVA</span></Link><div className="hidden items-center gap-2 sm:flex"><span className="rounded-full border border-cyan-300/15 bg-cyan-300/[.05] px-3 py-1.5 text-[10px] font-bold uppercase tracking-[.16em] text-cyan-200">Demo mode</span><Link to="/login" className="rounded-xl px-3 py-2 text-xs text-slate-400 hover:text-white">Sign in</Link><Link to="/register" className="rounded-xl bg-white px-3.5 py-2 text-xs font-bold text-slate-950">Create account</Link></div><button className="rounded-xl border border-white/10 p-2 sm:hidden" onClick={()=>setMenu(v=>!v)}><Menu size={18}/></button></div>
+            {menu && <div className="border-t border-white/[.06] px-4 py-3 sm:hidden"><div className="flex gap-2"><Link to="/login" className="flex-1 rounded-xl border border-white/10 px-3 py-2 text-center text-xs">Sign in</Link><Link to="/register" className="flex-1 rounded-xl bg-white px-3 py-2 text-center text-xs font-bold text-slate-950">Create account</Link></div></div>}
+        </header>
+
+        <div className="mx-auto flex min-h-[calc(100vh-64px)] max-w-6xl">
+            <aside className="hidden w-64 shrink-0 border-r border-white/[.06] p-4 md:block"><Link to="/" className="mb-5 flex items-center gap-2 text-xs text-slate-500 hover:text-white"><ChevronLeft size={15}/>Home</Link><div className="rounded-2xl border border-cyan-300/10 bg-cyan-300/[.04] p-4"><Sparkles size={18} className="text-cyan-300"/><div className="mt-3 text-sm font-semibold">Try Nova</div><p className="mt-1 text-xs leading-5 text-slate-500">This demo resets when you leave. Create an account to keep your learning.</p></div></aside>
+            <section className="flex min-w-0 flex-1 flex-col">
+                <div className="flex-1 overflow-y-auto px-4 py-8 sm:px-8"><div className="mx-auto max-w-3xl">
+                    {messages.length === 0 ? <div className="flex min-h-[58vh] flex-col items-center justify-center text-center"><div className="flex h-16 w-16 items-center justify-center rounded-3xl border border-cyan-300/15 bg-cyan-300/[.06] shadow-[0_0_70px_rgba(34,211,238,.1)]"><Sparkles size={27} className="text-cyan-200"/></div><h1 className="mt-6 text-3xl font-semibold tracking-tight sm:text-5xl">What do you want to learn?</h1><p className="mt-4 max-w-xl text-sm leading-6 text-slate-500">This is Nova's public demo. Ask a question and see how the tutoring experience feels before creating an account.</p><div className="mt-8 grid w-full max-w-2xl gap-2 sm:grid-cols-2">{STARTERS.map(s=><button key={s} onClick={()=>send(s)} className="group rounded-2xl border border-white/[.07] bg-white/[.025] p-4 text-left text-sm text-slate-300 transition hover:-translate-y-0.5 hover:border-cyan-300/20 hover:bg-white/[.045]"><span>{s}</span><ArrowRight size={15} className="mt-3 text-slate-600 transition group-hover:translate-x-1 group-hover:text-cyan-300"/></button>)}</div></div> : <div className="space-y-5">{messages.map((m,i)=><div key={i} className="demo-in flex gap-3"><div className={`mt-1 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border ${m.role === "user" ? "border-sky-400/20 bg-sky-400/10 text-sky-300" : "border-cyan-300/15 bg-cyan-300/[.06] text-cyan-200"}`}>{m.role === "user" ? <User size={16}/> : <Bot size={17}/>}</div><div className="min-w-0 rounded-2xl border border-white/[.07] bg-white/[.025] px-4 py-3 text-sm leading-7 text-slate-200 whitespace-pre-wrap">{m.text}</div></div>)}{busy && <div className="flex gap-3"><div className="flex h-9 w-9 items-center justify-center rounded-xl border border-cyan-300/15 bg-cyan-300/[.06]"><Sparkles size={16} className="text-cyan-200"/></div><div className="rounded-2xl border border-white/[.07] bg-white/[.025] px-4 py-3"><LoaderCircle size={16} className="animate-spin text-slate-500"/></div></div>}<div ref={bottom}/></div>}
+                </div></div>
+                <div className="border-t border-white/[.06] p-4 sm:p-6"><div className="mx-auto max-w-3xl"><div className="rounded-2xl border border-white/10 bg-white/[.035] p-2 shadow-2xl focus-within:border-cyan-300/20"><div className="flex items-end gap-2"><textarea value={input} onChange={e=>setInput(e.target.value)} onKeyDown={e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();send()}}} rows={1} placeholder="Ask Nova anything..." className="min-h-11 flex-1 resize-none bg-transparent px-3 py-2.5 text-sm text-white outline-none placeholder:text-slate-600"/><button onClick={()=>send()} disabled={!input.trim()||busy} className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-white text-slate-950 transition hover:scale-105 disabled:cursor-not-allowed disabled:opacity-30"><Send size={17}/></button></div></div><div className="mt-3 flex items-center justify-center gap-2 text-[10px] text-slate-600"><Lock size={11}/> Demo conversations are temporary · <Link to="/register" className="text-cyan-300 hover:text-cyan-200">Create a free account to keep them</Link></div></div></div>
+            </section>
+        </div>
+    </main>;
+}
