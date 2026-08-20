@@ -12,10 +12,12 @@ services:
     envVars:
       - key: NOVA_ENV
         value: production
+      # Render Free storage is ephemeral. Keep all runtime files under this
+      # directory so the free PostgreSQL mirror can restore/sync them.
       - key: NOVA_DATA_DIR
-        value: /tmp/nova-data
+        value: data
       - key: NOVA_SESSION_DB
-        value: /tmp/nova-data/sessions.sqlite3
+        value: data/sessions.sqlite3
       - key: NOVA_ALLOWED_ORIGINS
         sync: false
       - key: NOVA_ENABLE_DOCS
