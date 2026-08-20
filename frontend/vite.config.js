@@ -37,6 +37,13 @@ export default defineConfig(({ mode }) => {
             name: "nova-chat-production-fixes",
             enforce: "post",
             transform(code, id) {
+                if (id.endsWith("/src/main.jsx")) {
+                    return {
+                        code: `${code}\nimport "./chat-fixes.css";\n`,
+                        map: null,
+                    };
+                }
+
                 if (!id.endsWith("/src/pages/Chat.jsx")) {
                     return null;
                 }
