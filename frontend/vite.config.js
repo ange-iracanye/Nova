@@ -3,23 +3,15 @@ import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 
 export default defineConfig(({ mode }) => {
-    // Vite intentionally does not expose process.env in browser-oriented
-    // config files. loadEnv gives the config the same .env/.env.local values
-    // that Vite uses for import.meta.env without requiring Node globals.
     const env = loadEnv(mode, process.cwd(), "VITE_");
     const apiUrl = (env.VITE_API_URL || "").trim().replace(/\/$/, "");
 
-    // Never ship a production bundle that silently points at localhost.
-    // Local development keeps the historical localhost fallback.
     if (mode === "production" && !apiUrl) {
         throw new Error(
             "VITE_API_URL is required for production builds. Set it to the public Nova API URL."
         );
     }
 
-    // V1 still has a few legacy pages with an inline localhost API constant.
-    // Rewrite that literal only during the production build so the existing UI
-    // stays unchanged while Render can point the browser at the real API.
     function productionApiEndpoint() {
         return {
             name: "nova-production-api-endpoint",
@@ -40,11 +32,43 @@ export default defineConfig(({ mode }) => {
         };
     }
 
+    function novaChatProductionFixes() {
+        return {
+            name: "nova-chat-production-fixes",
+            enforce: "post",
+            transform(code, id) {
+                if (!id.endsWith("/src/pages/Chat.jsx")) {
+                    return null;
+                }
+
+                let next = code;
+
+                next = next.replace(
+                    /fetch\(\`\$\{API_URL\}\/\`,\s*\{\s*cache:\s*"no-store"\s*\}\)/,
+                    'fetch(`${API_URL}/health`, { cache: "no-store" })'
+                );
+
+                next = next.replace(
+                    /previous\.slice\(0, index\)/,
+                    'previous.slice(0, Math.max(0, index - 1))'
+                );
+
+                next = next.replace(
+                    /const \[sidebar, setSidebar\] = useState\(true\);/,
+                    'const [sidebar, setSidebar] = useState(() => typeof window !== "undefined" && window.innerWidth >= 768);'
+                );
+
+                return next === code ? null : { code: next, map: null };
+            },
+        };
+    }
+
     return {
         plugins: [
             react(),
             tailwindcss(),
             productionApiEndpoint(),
+            novaChatProductionFixes(),
         ],
     };
 });
