@@ -49,33 +49,15 @@ export default defineConfig(({ mode }) => {
                 }
 
                 let next = code;
-
-                next = next.replace(
-                    /fetch\(\`\$\{API_URL\}\/\`,\s*\{\s*cache:\s*"no-store"\s*\}\)/,
-                    'fetch(`${API_URL}/health`, { cache: "no-store" })'
-                );
-
-                next = next.replace(
-                    /previous\.slice\(0, index\)/,
-                    'previous.slice(0, Math.max(0, index - 1))'
-                );
-
-                next = next.replace(
-                    /const \[sidebar, setSidebar\] = useState\(true\);/,
-                    'const [sidebar, setSidebar] = useState(() => typeof window !== "undefined" && window.innerWidth >= 768);'
-                );
-
+                next = next.replace(/fetch\(\`\$\{API_URL\}\/\`,\s*\{\s*cache:\s*"no-store"\s*\}\)/, 'fetch(`${API_URL}/health`, { cache: "no-store" })');
+                next = next.replace(/previous\.slice\(0, index\)/, 'previous.slice(0, Math.max(0, index - 1))');
+                next = next.replace(/const \[sidebar, setSidebar\] = useState\(true\);/, 'const [sidebar, setSidebar] = useState(() => typeof window !== "undefined" && window.innerWidth >= 768);');
                 return next === code ? null : { code: next, map: null };
             },
         };
     }
 
     return {
-        plugins: [
-            react(),
-            tailwindcss(),
-            productionApiEndpoint(),
-            novaChatProductionFixes(),
-        ],
+        plugins: [react(), tailwindcss(), productionApiEndpoint(), novaChatProductionFixes()],
     };
 });
