@@ -23,32 +23,35 @@ function getApiBase() {
 
 const API_BASE = getApiBase();
 
+function readSessionToken() {
+    try {
+        const raw = localStorage.getItem(NOVA_CONFIG.storageKeys.session);
+        if (!raw) return null;
+        const parsed = JSON.parse(raw);
+        return typeof parsed?.token === "string" && parsed.token.trim() ? parsed.token.trim() : null;
+    } catch {
+        return null;
+    }
+}
+
 function installApiCredentialPolicy() {
     if (window.__novaCredentialFetchInstalled) return;
     const originalFetch = window.fetch.bind(window);
     window.fetch = (input, init = {}) => {
         const url = typeof input === "string" ? input : input?.url || "";
         if (url !== API_BASE && !url.startsWith(`${API_BASE}/`)) return originalFetch(input, init);
-        return originalFetch(input, { ...init, credentials: "include" });
+        const headers = new Headers(init.headers || {});
+        headers.set("Accept", headers.get("Accept") || "application/json");
+        const token = readSessionToken();
+        if (token) headers.set("Authorization", `Bearer ${token}`);
+        return originalFetch(input, { ...init, headers, credentials: "include" });
     };
     window.__novaCredentialFetchInstalled = true;
-}
-
-function installSecureSessionStorage() {
-    if (window.__novaSecureSessionStorageInstalled) return;
-    const originalSetItem = localStorage.setItem.bind(localStorage);
-    localStorage.removeItem(NOVA_CONFIG.storageKeys.session);
-    localStorage.setItem = (key, value) => {
-        if (key === NOVA_CONFIG.storageKeys.session) return;
-        return originalSetItem(key, value);
-    };
-    window.__novaSecureSessionStorageInstalled = true;
 }
 
 function initializeNova() {
     try {
         installApiCredentialPolicy();
-        installSecureSessionStorage();
         localStorage.setItem(NOVA_CONFIG.storageKeys.initialized, "true");
         const savedTheme = localStorage.getItem(NOVA_CONFIG.storageKeys.theme);
         document.documentElement.dataset.theme = savedTheme === "light" || savedTheme === "dark" ? savedTheme : "dark";
@@ -96,33 +99,14 @@ function useNovaReady() {
     const [ready, setReady] = useState(false);
     useEffect(() => {
         let cancelled = false;
-        const initialize = async () => {
-            try {
-                initializeNova();
-                await new Promise(resolve => requestAnimationFrame(resolve));
-                if (cancelled) return;
-                document.documentElement.dataset.novaReady = "true";
-                setReady(true);
-            } catch (error) {
-                console.error("[Nova] Startup error:", error);
-                if (!cancelled) setReady(true);
-            }
-        };
-        initialize();
+        initializeNova();
+        requestAnimationFrame(() => { if (!cancelled) { document.documentElement.dataset.novaReady = "true"; setReady(true); } });
         return () => { cancelled = true; };
     }, []);
     return ready;
 }
 
 function NovaApplication() { const ready = useNovaReady(); return ready ? <App /> : <NovaLoadingScreen />; }
-
-function enableDevelopmentDiagnostics() {
-    if (import.meta.env.DEV) {
-        console.info(`%cNova AI v${NOVA_CONFIG.version}`, "font-weight:700;font-size:16px;");
-        console.info("[Nova] Development mode enabled.");
-        console.info("[Nova] Frontend initialized.");
-    }
-}
 
 function installGlobalErrorHandlers() {
     window.addEventListener("error", event => console.error("[Nova] Unhandled browser error:", event.error || event.message));
@@ -136,17 +120,12 @@ function getApplicationRoot() {
 }
 
 function bootstrapNova() {
-    enableDevelopmentDiagnostics();
     installGlobalErrorHandlers();
-    const rootElement = getApplicationRoot();
-    const root = ReactDOM.createRoot(rootElement);
+    const root = ReactDOM.createRoot(getApplicationRoot());
     root.render(<React.StrictMode><NovaErrorBoundary><Suspense fallback={<NovaLoadingScreen />}><NovaApplication /></Suspense></NovaErrorBoundary></React.StrictMode>);
-    return root;
 }
 
-try {
-    bootstrapNova();
-} catch (error) {
+try { bootstrapNova(); } catch (error) {
     console.error("[Nova] Fatal bootstrap error:", error);
     const root = document.getElementById(NOVA_CONFIG.rootId);
     if (root) root.innerHTML = `<div class="nova-fatal-error" role="alert"><div class="nova-fatal-error-card"><div class="nova-fatal-error-icon">N</div><h1>Nova could not start.</h1><p>The frontend failed during startup.</p><button type="button" onclick="window.location.reload()">Reload Nova</button></div></div>`;
