@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import base64
 import hashlib
+import json
 import os
 import secrets
 import threading
@@ -80,6 +81,22 @@ def _normalize_email(email: str) -> str:
     return email.strip().lower()
 
 
+def _load_file_users() -> dict:
+    USERS_FILE.parent.mkdir(parents=True, exist_ok=True)
+    if not USERS_FILE.exists():
+        return {"users": {}}
+    try:
+        data = json.loads(USERS_FILE.read_text(encoding="utf-8"))
+        return data if isinstance(data, dict) and isinstance(data.get("users"), dict) else {"users": {}}
+    except (OSError, ValueError) as error:
+        raise RuntimeError("Nova local user database could not be read safely.") from error
+
+
+def _save_file_users(data: dict) -> None:
+    USERS_FILE.parent.mkdir(parents=True, exist_ok=True)
+    USERS_FILE.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
+
+
 def _ensure_database() -> None:
     global _DB_READY
     if not DATABASE_URL or _DB_READY:
@@ -91,28 +108,16 @@ def _ensure_database() -> None:
             with psycopg.connect(DATABASE_URL, connect_timeout=10) as conn:
                 with conn.cursor() as cur:
                     cur.execute("CREATE TABLE IF NOT EXISTS nova_users (email TEXT PRIMARY KEY, password TEXT NOT NULL, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW())")
+                    # Migrate any accounts that were created before PostgreSQL was configured.
+                    local = _load_file_users().get("users", {})
+                    for email, user in local.items():
+                        password = user.get("password") if isinstance(user, dict) else None
+                        if password:
+                            cur.execute("INSERT INTO nova_users (email, password) VALUES (%s, %s) ON CONFLICT (email) DO NOTHING", (email, password))
                 conn.commit()
             _DB_READY = True
         except Exception as error:
             raise RuntimeError("Nova could not connect to the configured PostgreSQL database.") from error
-
-
-def _load_file_users() -> dict:
-    USERS_FILE.parent.mkdir(parents=True, exist_ok=True)
-    if not USERS_FILE.exists():
-        return {"users": {}}
-    try:
-        import json
-        data = json.loads(USERS_FILE.read_text(encoding="utf-8"))
-        return data if isinstance(data, dict) and isinstance(data.get("users"), dict) else {"users": {}}
-    except (OSError, ValueError):
-        raise RuntimeError("Nova local user database could not be read safely.")
-
-
-def _save_file_users(data: dict) -> None:
-    import json
-    USERS_FILE.parent.mkdir(parents=True, exist_ok=True)
-    USERS_FILE.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
 
 
 def load_users() -> dict:
