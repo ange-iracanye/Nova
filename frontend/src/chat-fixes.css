@@ -1,0 +1,21 @@
+/* Production chat readability fixes. */
+.nova-chat-shell .bg-white {
+    color: #0f172a !important;
+}
+
+.nova-chat-shell .bg-white .text-white,
+.nova-chat-shell .bg-white .text-slate-50,
+.nova-chat-shell .bg-white .text-slate-100,
+.nova-chat-shell .bg-white .text-slate-200,
+.nova-chat-shell .bg-white .text-slate-300,
+.nova-chat-shell .bg-white .text-slate-400,
+.nova-chat-shell .bg-white .text-slate-500,
+.nova-chat-shell .bg-white .text-slate-600,
+.nova-chat-shell .bg-white .text-slate-700 {
+    color: #334155 !important;
+}
+
+.nova-chat-shell .bg-white button:hover,
+.nova-chat-shell .bg-white a:hover {
+    color: #0f172a !important;
+}
