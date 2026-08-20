@@ -23,7 +23,7 @@ services:
       - key: NOVA_ENABLE_DOCS
         value: "false"
       - key: NOVA_ENABLE_DEMO
-        value: "false"
+        value: "true"
       - key: NOVA_MAX_BODY_BYTES
         value: "524288"
       - key: NOVA_MAX_UPLOAD_BYTES
