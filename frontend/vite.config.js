@@ -9,26 +9,31 @@ export default defineConfig(({ mode }) => {
     const configuredApiUrl = (env.VITE_API_URL || "").trim().replace(/\/$/, "");
     const apiUrl = configuredApiUrl || (mode === "production" ? PRODUCTION_API_URL : "");
 
-    if (mode === "production" && !apiUrl) {
-        throw new Error(
-            "VITE_API_URL is required for production builds. Set it to the public Nova API URL."
-        );
-    }
-
     function productionApiEndpoint() {
         return {
             name: "nova-production-api-endpoint",
             enforce: "post",
             transform(code, id) {
-                if (!apiUrl || !/\.(jsx?|tsx?)$/.test(id)) {
-                    return null;
-                }
+                if (!apiUrl || !/\.(jsx?|tsx?)$/.test(id)) return null;
                 const legacy = "http://127.0.0.1:8000";
-                if (!code.includes(legacy)) {
-                    return null;
-                }
+                const localhost = "http://localhost:8000";
+                let next = code;
+                next = next.split(legacy).join(apiUrl);
+                next = next.split(localhost).join(apiUrl);
+                if (next === code) return null;
+                return { code: next, map: null };
+            },
+        };
+    }
+
+    function novaProductionRuntime() {
+        return {
+            name: "nova-production-runtime",
+            enforce: "post",
+            transform(code, id) {
+                if (!id.endsWith("/src/main.jsx")) return null;
                 return {
-                    code: code.split(legacy).join(apiUrl),
+                    code: `${code}\nimport "./auth-production-fixes.js";\nimport "./chat-fixes.css";\n`,
                     map: null,
                 };
             },
@@ -40,17 +45,7 @@ export default defineConfig(({ mode }) => {
             name: "nova-chat-production-fixes",
             enforce: "post",
             transform(code, id) {
-                if (id.endsWith("/src/main.jsx")) {
-                    return {
-                        code: `${code}\nimport "./chat-fixes.css";\n`,
-                        map: null,
-                    };
-                }
-
-                if (!id.endsWith("/src/pages/Chat.jsx")) {
-                    return null;
-                }
-
+                if (!id.endsWith("/src/pages/Chat.jsx")) return null;
                 let next = code;
                 next = next.replace(/fetch\(\`\$\{API_URL\}\/\`,\s*\{\s*cache:\s*"no-store"\s*\}\)/, 'fetch(`${API_URL}/health`, { cache: "no-store" })');
                 next = next.replace(/previous\.slice\(0, index\)/, 'previous.slice(0, Math.max(0, index - 1))');
@@ -61,11 +56,8 @@ export default defineConfig(({ mode }) => {
     }
 
     return {
-        plugins: [react(), tailwindcss(), productionApiEndpoint(), novaChatProductionFixes()],
+        plugins: [react(), tailwindcss(), productionApiEndpoint(), novaProductionRuntime(), novaChatProductionFixes()],
         define: {
-            // Bake the known public API into production bundles. This prevents
-            // a blank Render VITE_API_URL variable from falling back to the
-            // developer's localhost server.
             "import.meta.env.VITE_API_URL": JSON.stringify(apiUrl),
         },
     };
