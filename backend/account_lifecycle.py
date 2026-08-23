@@ -14,13 +14,20 @@ def _normalize_email(email: str) -> str:
     return str(email).strip().lower()
 
 
+def _user_hash(email: str) -> str:
+    return hashlib.sha256(_normalize_email(email).encode("utf-8")).hexdigest()
+
+
 def _memory_user_dir(email: str) -> Path:
-    user_id = hashlib.sha256(_normalize_email(email).encode("utf-8")).hexdigest()
-    return Path(os.getenv("NOVA_MEMORY_DIR", "data/memory/users")) / user_id
+    return Path(os.getenv("NOVA_MEMORY_DIR", "data/memory/users")) / _user_hash(email)
+
+
+def _settings_user_dir(email: str) -> Path:
+    return Path(os.getenv("NOVA_USER_SETTINGS_DIR", "data/settings/users")) / _user_hash(email)
 
 
 def clear_user_memory(email: str) -> bool:
-    """Clear only the user's long-term memory, leaving the account and chats intact."""
+    """Clear only the user's long-term memory, leaving account and chats intact."""
     memory_dir = _memory_user_dir(email)
     if not memory_dir.exists():
         return False
@@ -32,7 +39,6 @@ def _remove_local_user(email: str) -> bool:
     path = auth.USERS_FILE
     if not path.exists():
         return False
-
     data = json.loads(path.read_text(encoding="utf-8"))
     users = data.get("users", {})
     normalized = _normalize_email(email)
@@ -41,7 +47,6 @@ def _remove_local_user(email: str) -> bool:
         return False
     for key in keys:
         users.pop(key, None)
-
     temporary = path.with_suffix(path.suffix + ".tmp")
     temporary.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
     temporary.replace(path)
@@ -68,11 +73,10 @@ def delete_user_data(email: str, session_store: Any = None) -> dict[str, Any]:
         "sessions": 0,
         "memory": False,
         "conversations": False,
+        "settings": False,
     }
 
-    db_deleted = _remove_database_user(normalized)
-    local_deleted = _remove_local_user(normalized)
-    deleted["account"] = db_deleted or local_deleted
+    deleted["account"] = _remove_database_user(normalized) or _remove_local_user(normalized)
 
     if session_store is not None:
         for token, session in list(session_store.items()):
@@ -81,6 +85,11 @@ def delete_user_data(email: str, session_store: Any = None) -> dict[str, Any]:
                 deleted["sessions"] += 1
 
     deleted["memory"] = clear_user_memory(normalized)
+
+    settings_dir = _settings_user_dir(normalized)
+    if settings_dir.exists():
+        shutil.rmtree(settings_dir)
+        deleted["settings"] = True
 
     conversation_file = Path(os.getenv("NOVA_CONVERSATIONS_FILE", "data/memory/conversations.json"))
     if conversation_file.exists():
