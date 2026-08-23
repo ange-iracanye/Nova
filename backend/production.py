@@ -61,7 +61,7 @@ api.app.add_middleware(
 
 ENABLE_DOCS = os.getenv("NOVA_ENABLE_DOCS", "false" if IS_PRODUCTION else "true").lower() == "true"
 ENABLE_DEMO = os.getenv("NOVA_ENABLE_DEMO", "false" if IS_PRODUCTION else "true").lower() == "true"
-PUBLIC_PATHS = {"/", "/api", "/health", "/ready", "/status", "/register", "/login", "/auth/session", "/auth/logout"}
+PUBLIC_PATHS = {"/", "/api", "/health", "/ready", "/register", "/login", "/auth/session", "/auth/logout"}
 if ENABLE_DOCS:
     PUBLIC_PATHS.update({"/docs", "/redoc", "/openapi.json"})
 if ENABLE_DEMO:
@@ -215,9 +215,7 @@ async def production_security_headers(request: Request, call_next):
         "Content-Security-Policy",
         "default-src 'self'; base-uri 'self'; frame-ancestors 'none'; object-src 'none'; img-src 'self' data: blob: https:; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self' https:; font-src 'self' data:; form-action 'self'",
     )
-    if request.url.path.startswith("/auth/"):
-        response.headers.setdefault("Cache-Control", "no-store")
-    if request.url.path == "/account":
+    if request.url.path.startswith("/auth/") or request.url.path == "/account":
         response.headers.setdefault("Cache-Control", "no-store")
     if IS_PRODUCTION:
         response.headers.setdefault("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
