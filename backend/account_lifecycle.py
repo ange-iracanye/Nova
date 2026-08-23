@@ -3,11 +3,11 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import shutil
 from pathlib import Path
 from typing import Any
 
 from backend import auth
-
 
 
 def _normalize_email(email: str) -> str:
@@ -17,6 +17,15 @@ def _normalize_email(email: str) -> str:
 def _memory_user_dir(email: str) -> Path:
     user_id = hashlib.sha256(_normalize_email(email).encode("utf-8")).hexdigest()
     return Path(os.getenv("NOVA_MEMORY_DIR", "data/memory/users")) / user_id
+
+
+def clear_user_memory(email: str) -> bool:
+    """Clear only the user's long-term memory, leaving the account and chats intact."""
+    memory_dir = _memory_user_dir(email)
+    if not memory_dir.exists():
+        return False
+    shutil.rmtree(memory_dir)
+    return True
 
 
 def _remove_local_user(email: str) -> bool:
@@ -34,10 +43,7 @@ def _remove_local_user(email: str) -> bool:
         users.pop(key, None)
 
     temporary = path.with_suffix(path.suffix + ".tmp")
-    temporary.write_text(
-        json.dumps(data, indent=2, ensure_ascii=False),
-        encoding="utf-8",
-    )
+    temporary.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
     temporary.replace(path)
     return True
 
@@ -55,12 +61,7 @@ def _remove_database_user(email: str) -> bool:
 
 
 def delete_user_data(email: str, session_store: Any = None) -> dict[str, Any]:
-    """Delete the user-owned data Nova currently persists locally/database-side.
-
-    This intentionally does not delete shared model assets or application-wide
-    configuration. It removes the account, authentication sessions, memory
-    directory and the user's entry in the persisted conversation store.
-    """
+    """Delete user-owned data currently persisted by Nova V1."""
     normalized = _normalize_email(email)
     deleted: dict[str, Any] = {
         "account": False,
@@ -69,19 +70,15 @@ def delete_user_data(email: str, session_store: Any = None) -> dict[str, Any]:
         "conversations": False,
     }
 
+    deleted["account"] = _remove_database_user(normalized) or _remove_local_user(normalized)
+
     if session_store is not None:
         for token, session in list(session_store.items()):
             if isinstance(session, dict) and _normalize_email(session.get("email", "")) == normalized:
                 session_store.pop(token, None)
                 deleted["sessions"] += 1
 
-    deleted["account"] = _remove_database_user(normalized) or _remove_local_user(normalized)
-
-    memory_dir = _memory_user_dir(normalized)
-    if memory_dir.exists():
-        import shutil
-        shutil.rmtree(memory_dir)
-        deleted["memory"] = True
+    deleted["memory"] = clear_user_memory(normalized)
 
     conversation_file = Path(os.getenv("NOVA_CONVERSATIONS_FILE", "data/memory/conversations.json"))
     if conversation_file.exists():
@@ -96,7 +93,7 @@ def delete_user_data(email: str, session_store: Any = None) -> dict[str, Any]:
                 temporary.write_text(json.dumps(data, indent=4, ensure_ascii=False), encoding="utf-8")
                 temporary.replace(conversation_file)
                 deleted["conversations"] = True
-        except (OSError, ValueError):
-            raise RuntimeError("Nova could not safely remove persisted conversation data.")
+        except (OSError, ValueError) as error:
+            raise RuntimeError("Nova could not safely remove persisted conversation data.") from error
 
     return deleted
