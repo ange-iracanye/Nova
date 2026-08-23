@@ -12,16 +12,22 @@ from typing import Any
 
 
 class PersistentSessionStore(MutableMapping[str, dict[str, Any]]):
-    """Small SQLite-backed mapping for authentication sessions.
+    """Persistent session mapping.
 
-    The API layer can keep its existing dict-like session code while sessions
-    survive process restarts. The database path is configurable with
-    NOVA_SESSION_DB and defaults to data/sessions.sqlite3.
-
-    Every connection is explicitly closed. This matters on Windows, where a
-    live SQLite connection can keep the database file locked and prevent
-    temporary-directory cleanup in tests or application shutdown.
+    In production, when NOVA_DATABASE_URL is configured, this class delegates
+    to the PostgreSQL session store because Render web-service disks are
+    ephemeral. Local/test environments continue to use SQLite.
     """
+
+    def __new__(cls, path: str | None = None):
+        if (
+            cls is PersistentSessionStore
+            and os.getenv("NOVA_ENV", "development").strip().lower() == "production"
+            and os.getenv("NOVA_DATABASE_URL", "").strip()
+        ):
+            from backend.postgres_sessions import PostgresSessionStore
+            return PostgresSessionStore(os.environ["NOVA_DATABASE_URL"].strip())
+        return super().__new__(cls)
 
     def __init__(self, path: str | None = None) -> None:
         configured = path or os.getenv("NOVA_SESSION_DB", "data/sessions.sqlite3")
@@ -42,14 +48,6 @@ class PersistentSessionStore(MutableMapping[str, dict[str, Any]]):
 
     @contextmanager
     def _db(self) -> Iterator[sqlite3.Connection]:
-        """Yield a connection and always close it after the transaction.
-
-        ``sqlite3.Connection`` is a transaction context manager, not a
-        connection-lifetime context manager. Using ``with self._connect()``
-        alone commits/rolls back but leaves the connection open. Keeping the
-        close here makes the store safe for short-lived test databases and
-        Windows file cleanup while preserving normal transaction semantics.
-        """
         connection = self._connect()
         try:
             with connection:
