@@ -70,7 +70,9 @@ def delete_user_data(email: str, session_store: Any = None) -> dict[str, Any]:
         "conversations": False,
     }
 
-    deleted["account"] = _remove_database_user(normalized) or _remove_local_user(normalized)
+    db_deleted = _remove_database_user(normalized)
+    local_deleted = _remove_local_user(normalized)
+    deleted["account"] = db_deleted or local_deleted
 
     if session_store is not None:
         for token, session in list(session_store.items()):
