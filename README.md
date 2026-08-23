@@ -2,17 +2,17 @@
 
 Nova is a student-focused AI tutor with a React frontend and a FastAPI backend.
 
-## Nova V1: $0/month deployment
+## Nova V1: $0/month deployment target
 
-Nova V1 is configured to run without a paid server, paid persistent disk, or paid model API:
+Nova V1 is designed to run without a paid server, paid persistent disk, or paid model API:
 
 - Render Free for the public backend and static frontend;
 - free PostgreSQL persistence through `NOVA_DATABASE_URL` (Supabase Free is supported);
-- Gemini Developer API free tier through `GEMINI_API_KEY`;
+- OpenRouter as the production AI gateway, currently configured for a free model;
 - local Ollama remains available for development;
 - free-tier quotas are treated as hard limits and Nova does not silently upgrade to paid usage.
 
-The Render Free filesystem is ephemeral, so the production runtime restores and periodically synchronizes Nova's generated runtime data to PostgreSQL.
+The Render Free filesystem is ephemeral, so production persistence must come from PostgreSQL rather than local runtime files.
 
 ## V1 production hardening
 
@@ -25,6 +25,7 @@ Nova V1 includes:
 - fail-closed handling for a corrupted user database;
 - persistent production authentication sessions;
 - production CORS and security middleware;
+- request-size limits and endpoint rate limits;
 - CI checks for Python compilation, authentication security, frontend linting, and production builds;
 - explicit FastAPI and Uvicorn runtime dependencies;
 - a two-account production smoke-test script.
@@ -60,12 +61,13 @@ NOVA_LLM_PROVIDER=ollama
 OLLAMA_MODEL=qwen2.5:3b
 ```
 
-For the free Gemini provider:
+For the public V1 OpenRouter provider:
 
 ```text
-NOVA_LLM_PROVIDER=gemini
-NOVA_LLM_MODEL=gemini-3.1-flash-lite
-GEMINI_API_KEY=your-key
+NOVA_LLM_PROVIDER=openrouter
+NOVA_LLM_MODEL=nvidia/nemotron-3-ultra:free
+NOVA_LLM_FALLBACK_MODEL=openrouter/free
+OPENROUTER_API_KEY=your-key
 ```
 
 ### Frontend
@@ -87,4 +89,6 @@ The Vite development server normally runs on port `5173`.
 
 ## Public V1 launch
 
-See [`docs/V1_RELEASE.md`](docs/V1_RELEASE.md) for the exact free deployment and production verification checklist.
+See [`docs/V1_RELEASE.md`](docs/V1_RELEASE.md) for the production deployment and verification checklist.
+
+**Important:** repository readiness does not by itself mean Nova is ready for public registration. Live infrastructure tests, account/data-isolation tests, deletion behavior, provider/quota behavior, and final legal documents must pass before launch.
