@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Nova AI Privacy Controls</title>
+  <style>
+    body{font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;max-width:760px;margin:48px auto;padding:0 22px;line-height:1.6;color:#172033;background:#f8fafc}
+    main{background:#fff;border:1px solid #e2e8f0;border-radius:18px;padding:28px;box-shadow:0 10px 30px rgba(15,23,42,.06)}
+    h1{margin-top:0}button{display:block;width:100%;margin:12px 0;padding:13px 16px;border:0;border-radius:10px;font-weight:700;cursor:pointer}button.secondary{background:#e2e8f0;color:#172033}button.danger{background:#dc2626;color:#fff}button:disabled{opacity:.55;cursor:not-allowed}.status{margin-top:16px;padding:12px;border-radius:10px;background:#f1f5f9;white-space:pre-wrap}.warning{padding:14px;border:1px solid #f59e0b;border-radius:10px;background:#fffbeb;color:#78350f}
+  </style>
+</head>
+<body>
+<main>
+  <h1>Nova AI Privacy Controls</h1>
+  <p>Use these controls to manage account-owned data. You must already be signed in to Nova in this browser.</p>
+
+  <section>
+    <h2>Clear Nova memory</h2>
+    <p>This removes your long-term Nova memory while keeping your account and conversations.</p>
+    <button class="secondary" id="clear-memory">Clear memory</button>
+  </section>
+
+  <section>
+    <h2>Delete account</h2>
+    <div class="warning"><strong>This is permanent.</strong> Account deletion removes the account, active sessions, persisted conversations and user memory where those stores are available.</div>
+    <button class="danger" id="delete-account">Delete my account permanently</button>
+  </section>
+
+  <p><a href="/">Return to Nova</a></p>
+  <div class="status" id="status" aria-live="polite">Ready.</div>
+</main>
+<script>
+const API_URL = "https://nova-api-i07q.onrender.com";
+const status = document.getElementById("status");
+function show(message){ status.textContent = message; }
+async function request(path){
+  const response = await fetch(API_URL + path, {method:"DELETE", credentials:"include", headers:{Accept:"application/json"}});
+  let data = null;
+  try { data = await response.json(); } catch {}
+  if (!response.ok) throw new Error(data?.error?.message || data?.detail || `Request failed (${response.status}).`);
+  return data;
+}
+document.getElementById("clear-memory").addEventListener("click", async () => {
+  if (!confirm("Clear your Nova memory? Your account and conversations will remain.")) return;
+  show("Clearing memory…");
+  try { const data = await request("/memory"); show(data.memory_existed ? "Nova memory cleared." : "No stored Nova memory was found."); }
+  catch (error) { show(error.message); }
+});
+document.getElementById("delete-account").addEventListener("click", async () => {
+  const first = confirm("Delete your Nova account and account-owned data permanently?");
+  if (!first) return;
+  const second = confirm("Final confirmation: this cannot be undone. Continue?");
+  if (!second) return;
+  show("Deleting account…");
+  try {
+    await request("/account");
+    localStorage.removeItem("nova_user");
+    localStorage.removeItem("nova_settings");
+    show("Your Nova account has been deleted. You can close this page.");
+  } catch (error) { show(error.message); }
+});
+</script>
+</body>
+</html>
