@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import os
 import time
+import uuid
 from collections import defaultdict, deque
 from datetime import datetime, timezone
 from pathlib import Path
@@ -32,17 +33,16 @@ api.auth_sessions = PersistentSessionStore(os.getenv("NOVA_SESSION_DB", str(DATA
 ENVIRONMENT = os.getenv("NOVA_ENV", "development").strip().lower()
 IS_PRODUCTION = ENVIRONMENT == "production"
 
-# Keep the deployed Nova frontend trusted even if Render's blueprint sync is delayed.
-_DEFAULT_PRODUCTION_ORIGINS = ["https://nova-frontend-i76e.onrender.com"]
 def _configured_origins() -> list[str]:
     raw = os.getenv("NOVA_ALLOWED_ORIGINS", "")
     origins = [origin.strip().rstrip("/") for origin in raw.split(",") if origin.strip()]
     if IS_PRODUCTION:
-        origins = list(dict.fromkeys(origins + _DEFAULT_PRODUCTION_ORIGINS))
+        if not origins:
+            raise RuntimeError("NOVA_ALLOWED_ORIGINS must be configured in production.")
         insecure = [origin for origin in origins if not origin.startswith("https://")]
         if insecure:
             raise RuntimeError("NOVA_ALLOWED_ORIGINS contains non-HTTPS origins in production: " + ", ".join(insecure))
-        return origins
+        return list(dict.fromkeys(origins))
     return origins or ["http://localhost:5173", "http://127.0.0.1:5173"]
 
 configured_origins = _configured_origins()
@@ -51,7 +51,7 @@ api.app.add_middleware(
     allow_origins=configured_origins,
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    allow_headers=["Authorization", "Content-Type", "X-Nova-Session"],
+    allow_headers=["Authorization", "Content-Type", "X-Nova-Session", "X-Request-ID"],
 )
 
 ENABLE_DOCS = os.getenv("NOVA_ENABLE_DOCS", "false" if IS_PRODUCTION else "true").lower() == "true"
@@ -111,6 +111,14 @@ async def _set_login_cookie(response: Response) -> Response:
     except (ValueError, AttributeError, UnicodeDecodeError): token = None
     if not (isinstance(token, str) and token): return response
     response.set_cookie(key=COOKIE_NAME, value=token, max_age=7*24*60*60, httponly=True, secure=IS_PRODUCTION, samesite=COOKIE_SAMESITE, path="/")
+    return response
+
+@api.app.middleware("http")
+async def production_request_context(request: Request, call_next):
+    request_id = str(uuid.uuid4())
+    request.state.request_id = request_id
+    response = await call_next(request)
+    response.headers["X-Request-ID"] = request_id
     return response
 
 @api.app.middleware("http")
