@@ -17,6 +17,7 @@ from fastapi.responses import JSONResponse, Response
 from backend import api
 from backend import auth
 from backend.account_lifecycle import clear_user_memory, delete_user_data
+from backend.age_policy import validate_minimum_age
 from backend.fast_runtime import install_fast_runtime
 from backend.persistent_sessions import PersistentSessionStore
 
@@ -192,6 +193,23 @@ async def production_auth_boundary(request: Request, call_next):
     cookie_token = _inject_cookie_session(request)
     if not cookie_token and not api.get_auth_session(request):
         return JSONResponse(status_code=401, content={"success": False, "error": {"code": "NOT_AUTHENTICATED", "message": "A valid Nova session is required."}})
+    return await call_next(request)
+
+
+@api.app.middleware("http")
+async def production_registration_age_gate(request: Request, call_next):
+    """Require DOB at public registration, validate 16+, and never retain DOB."""
+    if IS_PRODUCTION and request.method == "POST" and request.url.path == "/register":
+        try:
+            body = await request.body()
+            payload = json.loads(body.decode("utf-8"))
+            date_of_birth = payload.get("date_of_birth") if isinstance(payload, dict) else None
+            validate_minimum_age(date_of_birth)
+        except ValueError as exc:
+            return JSONResponse(status_code=400, content={"success": False, "error": {"code": "MINIMUM_AGE_REQUIRED", "message": str(exc)}})
+        except (UnicodeDecodeError, json.JSONDecodeError, AttributeError):
+            return JSONResponse(status_code=400, content={"success": False, "error": {"code": "INVALID_REGISTRATION", "message": "Please provide valid registration information."}})
+        request._body = body
     return await call_next(request)
 
 
