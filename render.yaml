@@ -21,7 +21,7 @@ services:
       - key: NOVA_ENABLE_DOCS
         value: "false"
       - key: NOVA_ENABLE_DEMO
-        value: "true"
+        value: "false"
       - key: NOVA_MAX_BODY_BYTES
         value: "524288"
       - key: NOVA_MAX_UPLOAD_BYTES
@@ -42,7 +42,7 @@ services:
   - type: web
     name: nova-frontend
     runtime: static
-    buildCommand: cd frontend && npm install && npm run build
+    buildCommand: cd frontend && npm ci && npm run build
     staticPublishPath: frontend/dist
     autoDeploy: true
     envVars:
