@@ -65,8 +65,22 @@ def _remove_database_user(email: str) -> bool:
     return deleted
 
 
+def _remove_sessions(email: str, session_store: Any) -> int:
+    if session_store is None:
+        return 0
+    specialized = getattr(session_store, "delete_user_sessions", None)
+    if callable(specialized):
+        return int(specialized(email))
+    removed = 0
+    for token, session in list(session_store.items()):
+        if isinstance(session, dict) and _normalize_email(session.get("email", "")) == _normalize_email(email):
+            session_store.pop(token, None)
+            removed += 1
+    return removed
+
+
 def delete_user_data(email: str, session_store: Any = None) -> dict[str, Any]:
-    """Delete user-owned data currently persisted by Nova V1."""
+    """Delete all user-owned application data currently persisted by Nova V1."""
     normalized = _normalize_email(email)
     deleted: dict[str, Any] = {
         "account": False,
@@ -74,16 +88,14 @@ def delete_user_data(email: str, session_store: Any = None) -> dict[str, Any]:
         "memory": False,
         "conversations": False,
         "settings": False,
+        "legacy_local_account": False,
     }
 
-    deleted["account"] = _remove_database_user(normalized) or _remove_local_user(normalized)
-
-    if session_store is not None:
-        for token, session in list(session_store.items()):
-            if isinstance(session, dict) and _normalize_email(session.get("email", "")) == normalized:
-                session_store.pop(token, None)
-                deleted["sessions"] += 1
-
+    db_deleted = _remove_database_user(normalized)
+    local_deleted = _remove_local_user(normalized)
+    deleted["account"] = db_deleted or local_deleted
+    deleted["legacy_local_account"] = local_deleted
+    deleted["sessions"] = _remove_sessions(normalized, session_store)
     deleted["memory"] = clear_user_memory(normalized)
 
     settings_dir = _settings_user_dir(normalized)
