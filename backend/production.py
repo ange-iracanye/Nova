@@ -16,7 +16,7 @@ from fastapi.responses import JSONResponse, Response
 
 from backend import api
 from backend import auth
-from backend.account_lifecycle import delete_user_data
+from backend.account_lifecycle import clear_user_memory, delete_user_data
 from backend.fast_runtime import install_fast_runtime
 from backend.persistent_sessions import PersistentSessionStore
 
@@ -82,6 +82,7 @@ _RATE_LIMITS = {
     "/chat/stream": (30, 60),
     "/demo/chat/stream": (20, 60),
     "/account": (3, 3600),
+    "/memory": (3, 3600),
 }
 _rate_windows: dict[tuple[str, str], deque[float]] = defaultdict(deque)
 
@@ -146,15 +147,7 @@ async def _set_login_cookie(response: Response) -> Response:
         token = None
     if not (isinstance(token, str) and token):
         return response
-    response.set_cookie(
-        key=COOKIE_NAME,
-        value=token,
-        max_age=7 * 24 * 60 * 60,
-        httponly=True,
-        secure=IS_PRODUCTION,
-        samesite=COOKIE_SAMESITE,
-        path="/",
-    )
+    response.set_cookie(key=COOKIE_NAME, value=token, max_age=7 * 24 * 60 * 60, httponly=True, secure=IS_PRODUCTION, samesite=COOKIE_SAMESITE, path="/")
     return response
 
 
@@ -211,15 +204,25 @@ async def production_security_headers(request: Request, call_next):
     response.headers.setdefault("Permissions-Policy", "camera=(), microphone=(), geolocation=()")
     response.headers.setdefault("Cross-Origin-Opener-Policy", "same-origin")
     response.headers.setdefault("Cross-Origin-Resource-Policy", "same-site")
-    response.headers.setdefault(
-        "Content-Security-Policy",
-        "default-src 'self'; base-uri 'self'; frame-ancestors 'none'; object-src 'none'; img-src 'self' data: blob: https:; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self' https:; font-src 'self' data:; form-action 'self'",
-    )
-    if request.url.path.startswith("/auth/") or request.url.path == "/account":
+    response.headers.setdefault("Content-Security-Policy", "default-src 'self'; base-uri 'self'; frame-ancestors 'none'; object-src 'none'; img-src 'self' data: blob: https:; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self' https:; font-src 'self' data:; form-action 'self'")
+    if request.url.path.startswith("/auth/") or request.url.path in {"/account", "/memory"}:
         response.headers.setdefault("Cache-Control", "no-store")
     if IS_PRODUCTION:
         response.headers.setdefault("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
     return response
+
+
+@api.app.delete("/memory", tags=["Privacy"])
+def delete_memory(request: Request):
+    """Clear only the authenticated user's long-term Nova memory."""
+    session = api.get_auth_session(request)
+    if not session:
+        return JSONResponse(status_code=401, content={"success": False, "error": {"code": "NOT_AUTHENTICATED", "message": "A valid Nova session is required."}})
+    try:
+        deleted = clear_user_memory(str(session["email"]).strip().lower())
+    except Exception:
+        return JSONResponse(status_code=500, content={"success": False, "error": {"code": "MEMORY_DELETION_FAILED", "message": "Nova could not safely clear your memory."}})
+    return {"success": True, "memory_cleared": True, "memory_existed": deleted}
 
 
 @api.app.delete("/account", tags=["Authentication"])
@@ -227,19 +230,13 @@ def delete_account(request: Request):
     """Permanently delete the authenticated user's account-owned data."""
     session = api.get_auth_session(request)
     if not session:
-        return JSONResponse(
-            status_code=401,
-            content={"success": False, "error": {"code": "NOT_AUTHENTICATED", "message": "A valid Nova session is required."}},
-        )
+        return JSONResponse(status_code=401, content={"success": False, "error": {"code": "NOT_AUTHENTICATED", "message": "A valid Nova session is required."}})
 
     email = str(session["email"]).strip().lower()
     try:
         result = delete_user_data(email, api.auth_sessions)
     except Exception:
-        return JSONResponse(
-            status_code=500,
-            content={"success": False, "error": {"code": "ACCOUNT_DELETION_FAILED", "message": "Nova could not safely complete account deletion. No partial success is reported."}},
-        )
+        return JSONResponse(status_code=500, content={"success": False, "error": {"code": "ACCOUNT_DELETION_FAILED", "message": "Nova could not safely complete account deletion. Please contact support before retrying."}})
 
     response = JSONResponse(status_code=200, content={"success": True, "account_deleted": True, "deleted": result})
     response.delete_cookie(COOKIE_NAME, path="/")
