@@ -20,6 +20,7 @@ from backend.account_lifecycle import clear_user_memory, delete_user_data
 from backend.age_policy import validate_minimum_age
 from backend.fast_runtime import install_fast_runtime
 from backend.persistent_sessions import PersistentSessionStore
+from backend.user_settings import UserSettingsProxy, reset_current_user, set_current_user
 
 install_fast_runtime()
 _ORIGINAL_STREAM_TEXT = api.stream_text
@@ -29,6 +30,7 @@ async def _fast_stream_text(text: str, chunk_size: int = 120, delay: float = 0.0
         yield chunk
 
 api.stream_text = _fast_stream_text
+api.settings_manager = UserSettingsProxy()
 
 DATA_DIR = Path(os.getenv("NOVA_DATA_DIR", "data"))
 DATA_DIR.mkdir(parents=True, exist_ok=True)
@@ -191,9 +193,16 @@ async def production_auth_boundary(request: Request, call_next):
         return response
 
     cookie_token = _inject_cookie_session(request)
-    if not cookie_token and not api.get_auth_session(request):
+    session = api.get_auth_session(request)
+    if not cookie_token and not session:
         return JSONResponse(status_code=401, content={"success": False, "error": {"code": "NOT_AUTHENTICATED", "message": "A valid Nova session is required."}})
-    return await call_next(request)
+
+    settings_token = set_current_user(str(session["email"]).strip().lower()) if session else None
+    try:
+        return await call_next(request)
+    finally:
+        if settings_token is not None:
+            reset_current_user(settings_token)
 
 
 @api.app.middleware("http")
