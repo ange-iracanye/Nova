@@ -1,9 +1,8 @@
 """Fast production boot wrapper for Nova.
 
-Render health checks must be able to reach a listening HTTP process before
-Nova's optional ML/runtime dependency tree is imported. This wrapper keeps
-startup lightweight and loads the full production application on the first
-non-health request.
+Render must be able to bind a port immediately. Health/readiness endpoints and
+ASGI lifespan are handled here without importing Nova's heavyweight ML/runtime
+stack. The full application is loaded lazily on the first real HTTP request.
 """
 
 from __future__ import annotations
@@ -31,6 +30,28 @@ async def _send_json(send: Callable[..., Awaitable[None]], status: int, payload:
         "type": "http.response.body",
         "body": body,
     })
+
+
+async def _handle_lifespan(
+    receive: Callable[..., Awaitable[Any]],
+    send: Callable[..., Awaitable[None]],
+) -> None:
+    """Complete ASGI lifespan without importing the heavy application.
+
+    The previous implementation treated non-HTTP scopes as real application
+    traffic. Uvicorn sends a lifespan.startup scope before binding the service,
+    so that accidentally triggered the expensive Nova import and prevented
+    Render from detecting an open port.
+    """
+    while True:
+        message = await receive()
+        message_type = message.get("type")
+
+        if message_type == "lifespan.startup":
+            await send({"type": "lifespan.startup.complete"})
+        elif message_type == "lifespan.shutdown":
+            await send({"type": "lifespan.shutdown.complete"})
+            return
 
 
 def _load_real_app() -> Any:
@@ -86,8 +107,20 @@ def _openrouter_probe() -> tuple[bool, str | None]:
     return True, None
 
 
-async def app(scope: dict[str, Any], receive: Callable[..., Awaitable[Any]], send: Callable[..., Awaitable[None]]) -> None:
-    if scope.get("type") != "http":
+async def app(
+    scope: dict[str, Any],
+    receive: Callable[..., Awaitable[Any]],
+    send: Callable[..., Awaitable[None]],
+) -> None:
+    scope_type = scope.get("type")
+
+    # Never initialize the heavy Nova runtime during ASGI lifespan. Uvicorn
+    # must finish startup and bind the Render port first.
+    if scope_type == "lifespan":
+        await _handle_lifespan(receive, send)
+        return
+
+    if scope_type != "http":
         real_app = _load_real_app()
         await real_app(scope, receive, send)
         return
