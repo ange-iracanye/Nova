@@ -1,5 +1,6 @@
 const PRODUCTION_API_URL = "https://nova-api-i07q.onrender.com";
 const ORIGINAL_FETCH = window.fetch.bind(window);
+const AUTH_TIMEOUT_MS = 60000;
 
 function apiBase() {
     return (import.meta.env.VITE_API_URL || PRODUCTION_API_URL).replace(/\/+$/, "");
@@ -56,34 +57,54 @@ window.fetch = async function novaProductionFetch(input, init = {}) {
     const token = readDevelopmentSessionToken();
     const path = typeof url === "string" ? url : url?.url || "";
     const isAuthRequest = /\/login$|\/register$|\/health$|\/ready$|\/auth\/session$|\/auth\/me$|\/auth\/logout$/.test(path);
+    const isLoginOrRegister = /\/login$|\/register$/.test(path);
+
     if (token && !isAuthRequest && !headers.has("Authorization")) {
         headers.set("Authorization", `Bearer ${token}`);
     }
 
-    const response = await ORIGINAL_FETCH(url, {
+    let requestInit = {
         ...init,
         headers,
         credentials: init.credentials || "include",
-    });
+    };
 
-    if (/\/login$|\/register$/.test(path) && response.ok) {
-        try {
-            const data = await response.clone().json();
-            if (data?.success !== false) saveDevelopmentSession(data);
-        } catch {
-            // Leave normal response handling to the calling page.
-        }
+    // Render's free web services can take a while to wake from sleep. The
+    // login page historically supplied a 10s AbortController, which could
+    // abort a perfectly valid cold-start request before the API responded.
+    // Give authentication requests their own 60s budget in production.
+    let authTimeoutId = null;
+    let authController = null;
+    if (isLoginOrRegister && !isLocalDevelopment()) {
+        authController = new AbortController();
+        authTimeoutId = window.setTimeout(() => authController.abort(), AUTH_TIMEOUT_MS);
+        requestInit.signal = authController.signal;
     }
 
-    // Production authentication uses an HttpOnly, Secure session cookie.
-    // Never persist that bearer token in localStorage where XSS could read it.
-    if (!isLocalDevelopment() && /\/login$|\/register$/.test(path) && response.ok) {
-        try {
-            localStorage.removeItem("nova_session");
-        } catch {
-            // Ignore unavailable storage.
-        }
-    }
+    try {
+        const response = await ORIGINAL_FETCH(url, requestInit);
 
-    return response;
+        if (isLoginOrRegister && response.ok) {
+            try {
+                const data = await response.clone().json();
+                if (data?.success !== false) saveDevelopmentSession(data);
+            } catch {
+                // Leave normal response handling to the calling page.
+            }
+        }
+
+        // Production authentication uses an HttpOnly, Secure session cookie.
+        // Never persist that bearer token in localStorage where XSS could read it.
+        if (!isLocalDevelopment() && isLoginOrRegister && response.ok) {
+            try {
+                localStorage.removeItem("nova_session");
+            } catch {
+                // Ignore unavailable storage.
+            }
+        }
+
+        return response;
+    } finally {
+        if (authTimeoutId !== null) window.clearTimeout(authTimeoutId);
+    }
 };
