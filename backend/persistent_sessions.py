@@ -12,25 +12,42 @@ from typing import Any
 
 
 class PersistentSessionStore(MutableMapping[str, dict[str, Any]]):
-    """Persistent session mapping.
+    """Persistent session mapping with a safe production backend switch.
 
-    In production, when NOVA_DATABASE_URL is configured, this class delegates
-    to the PostgreSQL session store because Render web-service disks are
-    ephemeral. Local/test environments continue to use SQLite.
+    Production uses PostgreSQL when NOVA_DATABASE_URL is configured. Local and
+    test environments use SQLite. A filesystem path is never passed to psycopg.
     """
 
     def __new__(cls, path: str | None = None):
-        if (
-            cls is PersistentSessionStore
-            and os.getenv("NOVA_ENV", "development").strip().lower() == "production"
-            and os.getenv("NOVA_DATABASE_URL", "").strip()
-        ):
-            from backend.postgres_sessions import PostgresSessionStore
-            return PostgresSessionStore(os.environ["NOVA_DATABASE_URL"].strip())
+        if cls is PersistentSessionStore:
+            environment = os.getenv("NOVA_ENV", "development").strip().lower()
+            database_url = os.getenv("NOVA_DATABASE_URL", "").strip()
+
+            # Only auto-select PostgreSQL for production when the actual
+            # database URL is configured. Explicit test/local SQLite paths
+            # continue to use SQLite even if a production env var is present.
+            explicit_path = str(path or "").strip()
+            is_explicit_sqlite = explicit_path and not explicit_path.startswith(
+                ("postgresql://", "postgres://")
+            )
+            if environment == "production" and database_url and not is_explicit_sqlite:
+                from backend.postgres_sessions import PostgresSessionStore
+                return PostgresSessionStore(database_url)
+
+            # A caller may explicitly pass a PostgreSQL URL. Handle it safely
+            # instead of ever giving that URL to sqlite3.
+            if explicit_path.startswith(("postgresql://", "postgres://")):
+                from backend.postgres_sessions import PostgresSessionStore
+                return PostgresSessionStore(explicit_path)
+
         return super().__new__(cls)
 
     def __init__(self, path: str | None = None) -> None:
         configured = path or os.getenv("NOVA_SESSION_DB", "data/sessions.sqlite3")
+        if str(configured).startswith(("postgresql://", "postgres://")):
+            raise ValueError(
+                "A PostgreSQL URL must be handled by PostgresSessionStore, not SQLite."
+            )
         self.path = Path(configured)
         self.path.parent.mkdir(parents=True, exist_ok=True)
         self._lock = threading.RLock()
