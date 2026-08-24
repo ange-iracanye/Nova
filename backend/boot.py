@@ -50,11 +50,17 @@ async def _send_json(
     headers_extra: list[tuple[bytes, bytes]] | None = None,
     cookies: list[str] | None = None,
 ) -> None:
-    body = json.dumps(payload).encode("utf-8")
-    headers = [
-        (b"content-type", b"application/json; charset=utf-8"),
+    # HTTP 204/304 responses MUST NOT contain a response body. Uvicorn will
+    # enforce this at the protocol layer, so never serialize JSON for them.
+    body = b"" if status in {204, 304} else json.dumps(payload).encode("utf-8")
+    headers: list[tuple[bytes, bytes]] = [
         (b"cache-control", b"no-store"),
     ]
+    if status not in {204, 304}:
+        headers.insert(0, (b"content-type", b"application/json; charset=utf-8"))
+        headers.append((b"content-length", str(len(body)).encode("ascii")))
+    else:
+        headers.append((b"content-length", b"0"))
     if headers_extra:
         headers.extend(headers_extra)
     for cookie in cookies or []:
