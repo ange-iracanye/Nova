@@ -42,21 +42,48 @@ def _load_real_app() -> Any:
         raise _REAL_APP_ERROR
 
     try:
-        # The production module currently imports the legacy TutorEngine
-        # during its application construction. Before the first real Nova
-        # request, replace that engine's Ollama adapter with the V1-only
-        # OpenRouter free adapter. This keeps the public deployment on the
-        # provider selected for V1 without changing local/dev compatibility.
+        # Patch the legacy TutorEngine default before the production app is
+        # constructed so the public V1 path uses OpenRouter rather than Ollama.
         from backend.free_llm import FreeLLM
-        import backend.production as production
         import backend.tutor_system.tutor_engine as tutor_engine
 
         tutor_engine.LocalLLM = FreeLLM
+
+        import backend.production as production
+
         _REAL_APP = production.app
         return _REAL_APP
     except Exception as exc:
         _REAL_APP_ERROR = exc
         raise
+
+
+def _database_probe() -> tuple[bool, str | None]:
+    """Perform a lightweight PostgreSQL authentication/connectivity probe.
+
+    This intentionally checks only connectivity and authentication. It never
+    returns the connection string or database error details to the client.
+    """
+    url = os.getenv("NOVA_DATABASE_URL", "").strip()
+    if not url:
+        return False, "NOVA_DATABASE_URL is not configured"
+
+    try:
+        import psycopg
+
+        with psycopg.connect(url, connect_timeout=5) as connection:
+            with connection.cursor() as cursor:
+                cursor.execute("SELECT 1")
+                cursor.fetchone()
+        return True, None
+    except Exception:
+        return False, "PostgreSQL connectivity/authentication failed"
+
+
+def _openrouter_probe() -> tuple[bool, str | None]:
+    if not os.getenv("OPENROUTER_API_KEY", "").strip():
+        return False, "OPENROUTER_API_KEY is not configured"
+    return True, None
 
 
 async def app(scope: dict[str, Any], receive: Callable[..., Awaitable[Any]], send: Callable[..., Awaitable[None]]) -> None:
@@ -77,9 +104,6 @@ async def app(scope: dict[str, Any], receive: Callable[..., Awaitable[Any]], sen
         return
 
     if path == "/ready":
-        # Readiness means the web process is alive and production-critical
-        # environment configuration is present. NovaCore remains lazy so a
-        # slow ML import cannot make Render declare the service dead.
         required = ("NOVA_ENV", "NOVA_ALLOWED_ORIGINS")
         missing = [key for key in required if not os.getenv(key, "").strip()]
         if missing:
@@ -89,11 +113,31 @@ async def app(scope: dict[str, Any], receive: Callable[..., Awaitable[Any]], sen
                 "missing": missing,
             })
             return
+
+        db_ok, db_error = _database_probe()
+        llm_ok, llm_error = _openrouter_probe()
+        if not db_ok or not llm_ok:
+            checks: dict[str, str] = {}
+            if not db_ok:
+                checks["database"] = db_error or "unavailable"
+            if not llm_ok:
+                checks["openrouter"] = llm_error or "unavailable"
+            await _send_json(send, 503, {
+                "success": False,
+                "status": "not_ready",
+                "checks": checks,
+            })
+            return
+
         await _send_json(send, 200, {
             "success": True,
             "status": "ready",
             "service": "nova-api",
             "runtime": "lazy",
+            "checks": {
+                "database": "ok",
+                "openrouter": "configured",
+            },
         })
         return
 
