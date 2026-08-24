@@ -39,10 +39,6 @@ api.auth_sessions = PersistentSessionStore(os.getenv("NOVA_SESSION_DB", str(DATA
 ENVIRONMENT = os.getenv("NOVA_ENV", "development").strip().lower()
 IS_PRODUCTION = ENVIRONMENT == "production"
 
-# Nova's canonical public frontend. Keep this explicit as a safe fallback so
-# production authentication cannot silently lose CORS if Render's environment
-# variable is missing or stale. Additional origins may still be supplied via
-# NOVA_ALLOWED_ORIGINS.
 PUBLIC_FRONTEND_ORIGIN = "https://nova-frontend-i76e.onrender.com"
 
 
@@ -50,13 +46,10 @@ def _configured_origins() -> list[str]:
     raw = os.getenv("NOVA_ALLOWED_ORIGINS", "")
     origins = [origin.strip().rstrip("/") for origin in raw.split(",") if origin.strip()]
     if IS_PRODUCTION:
-        # Always include Nova's canonical production frontend. This prevents a
-        # misconfigured Render environment variable from turning every browser
-        # authentication request into a generic "Failed to fetch" CORS error.
+        # Never let a stale localhost entry prevent the entire production app
+        # from importing. Browser CORS is still restricted to HTTPS origins.
+        origins = [origin for origin in origins if origin.startswith("https://")]
         origins.append(PUBLIC_FRONTEND_ORIGIN)
-        insecure = [origin for origin in origins if not origin.startswith("https://")]
-        if insecure:
-            raise RuntimeError("NOVA_ALLOWED_ORIGINS contains non-HTTPS origins in production: " + ", ".join(insecure))
         return list(dict.fromkeys(origins))
     return origins or ["http://localhost:5173", "http://127.0.0.1:5173"]
 
@@ -86,15 +79,7 @@ if IS_PRODUCTION and COOKIE_SAMESITE == "none":
     COOKIE_SAMESITE = "lax"
 MAX_BODY_BYTES = int(os.getenv("NOVA_MAX_BODY_BYTES", str(512 * 1024)))
 MAX_UPLOAD_BYTES = int(os.getenv("NOVA_MAX_UPLOAD_BYTES", str(10 * 1024 * 1024)))
-_RATE_LIMITS = {
-    "/login": (10, 300),
-    "/register": (8, 600),
-    "/chat": (30, 60),
-    "/chat/stream": (30, 60),
-    "/demo/chat/stream": (20, 60),
-    "/account": (3, 3600),
-    "/memory": (3, 3600),
-}
+_RATE_LIMITS = {"/login": (10, 300), "/register": (8, 600), "/chat": (30, 60), "/chat/stream": (30, 60), "/demo/chat/stream": (20, 60), "/account": (3, 3600), "/memory": (3, 3600)}
 _rate_windows: dict[tuple[str, str], deque[float]] = defaultdict(deque)
 
 
@@ -215,7 +200,6 @@ async def production_auth_boundary(request: Request, call_next):
 
 @api.app.middleware("http")
 async def production_registration_age_gate(request: Request, call_next):
-    """Require DOB at public registration, validate 16+, and never retain DOB."""
     if IS_PRODUCTION and request.method == "POST" and request.url.path == "/register":
         try:
             body = await request.body()
@@ -249,7 +233,6 @@ async def production_security_headers(request: Request, call_next):
 
 @api.app.delete("/memory", tags=["Privacy"])
 def delete_memory(request: Request):
-    """Clear only the authenticated user's long-term Nova memory."""
     session = api.get_auth_session(request)
     if not session:
         return JSONResponse(status_code=401, content={"success": False, "error": {"code": "NOT_AUTHENTICATED", "message": "A valid Nova session is required."}})
@@ -262,17 +245,14 @@ def delete_memory(request: Request):
 
 @api.app.delete("/account", tags=["Authentication"])
 def delete_account(request: Request):
-    """Permanently delete the authenticated user's account-owned data."""
     session = api.get_auth_session(request)
     if not session:
         return JSONResponse(status_code=401, content={"success": False, "error": {"code": "NOT_AUTHENTICATED", "message": "A valid Nova session is required."}})
-
     email = str(session["email"]).strip().lower()
     try:
         result = delete_user_data(email, api.auth_sessions)
     except Exception:
         return JSONResponse(status_code=500, content={"success": False, "error": {"code": "ACCOUNT_DELETION_FAILED", "message": "Nova could not safely complete account deletion. Please contact support before retrying."}})
-
     response = JSONResponse(status_code=200, content={"success": True, "account_deleted": True, "deleted": result})
     response.delete_cookie(COOKIE_NAME, path="/")
     return response
