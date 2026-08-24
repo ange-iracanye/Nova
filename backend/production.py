@@ -35,7 +35,19 @@ api.settings_manager = UserSettingsProxy()
 DATA_DIR = Path(os.getenv("NOVA_DATA_DIR", "data"))
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 auth.USERS_FILE = DATA_DIR / "users.json"
-api.auth_sessions = PersistentSessionStore(os.getenv("NOVA_SESSION_DB", str(DATA_DIR / "sessions.sqlite3")))
+
+# Render's web filesystem is ephemeral. When PostgreSQL is configured, select
+# it explicitly for sessions instead of ever treating a SQLite path as a
+# psycopg connection string. The SQLite fallback remains available locally.
+NOVA_DATABASE_URL = os.getenv("NOVA_DATABASE_URL", "").strip()
+if NOVA_DATABASE_URL:
+    from backend.postgres_sessions import PostgresSessionStore
+    api.auth_sessions = PostgresSessionStore(NOVA_DATABASE_URL)
+else:
+    api.auth_sessions = PersistentSessionStore(
+        os.getenv("NOVA_SESSION_DB", str(DATA_DIR / "sessions.sqlite3"))
+    )
+
 ENVIRONMENT = os.getenv("NOVA_ENV", "development").strip().lower()
 IS_PRODUCTION = ENVIRONMENT == "production"
 
@@ -195,7 +207,7 @@ async def production_auth_boundary(request: Request, call_next):
         return await call_next(request)
     finally:
         if settings_token is not None:
-            reset_current_user(settings_token)
+            reset_current_user(settings_token
 
 
 @api.app.middleware("http")
