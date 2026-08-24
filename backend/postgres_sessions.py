@@ -1,20 +1,61 @@
 from __future__ import annotations
 
 import json
+import socket
 import threading
 from datetime import datetime, timezone
 from typing import Any
 
 import psycopg
+from psycopg.conninfo import conninfo_to_dict
+
+
+def _connect_postgres(database_url: str, timeout: int = 8):
+    """Connect to PostgreSQL while preferring IPv4 on hosts with broken IPv6 routing.
+
+    Render instances can resolve a managed PostgreSQL hostname to an IPv6 address
+    even when the instance has no usable IPv6 route. Resolve an IPv4 address and
+    pass the parsed connection parameters to psycopg so the database URL itself
+    does not need to be changed.
+    """
+    params = conninfo_to_dict(database_url)
+    host = str(params.get("host", "")).strip()
+    if host and not _is_ipv4(host):
+        ipv4 = _resolve_ipv4(host, params.get("port"))
+        if ipv4:
+            params["host"] = ipv4
+    params["connect_timeout"] = timeout
+    params["sslmode"] = "require"
+    return psycopg.connect(**params)
+
+
+def _is_ipv4(host: str) -> bool:
+    try:
+        socket.inet_aton(host)
+        return host.count(".") == 3
+    except OSError:
+        return False
+
+
+def _resolve_ipv4(host: str, port: Any = None) -> str | None:
+    try:
+        results = socket.getaddrinfo(
+            host,
+            int(port or 5432),
+            socket.AF_INET,
+            socket.SOCK_STREAM,
+        )
+    except (OSError, ValueError):
+        return None
+    for result in results:
+        address = result[4][0]
+        if address:
+            return address
+    return None
 
 
 class PostgresSessionStore:
-    """PostgreSQL-backed session mapping for production deployments.
-
-    The connection/table setup is intentionally lazy. A temporary database
-    startup hiccup must not prevent the FastAPI application itself from
-    importing and serving health/auth diagnostics.
-    """
+    """PostgreSQL-backed session mapping for production deployments."""
 
     def __init__(self, database_url: str) -> None:
         if not database_url:
@@ -24,11 +65,7 @@ class PostgresSessionStore:
         self._initialized = False
 
     def _raw_connect(self):
-        return psycopg.connect(
-            self.database_url,
-            connect_timeout=8,
-            sslmode="require",
-        )
+        return _connect_postgres(self.database_url, timeout=8)
 
     def _initialize(self) -> None:
         with self._lock, self._raw_connect() as conn:
