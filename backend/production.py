@@ -36,9 +36,8 @@ DATA_DIR = Path(os.getenv("NOVA_DATA_DIR", "data"))
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 auth.USERS_FILE = DATA_DIR / "users.json"
 
-# Render's web filesystem is ephemeral. When PostgreSQL is configured, select
-# it explicitly for sessions instead of ever treating a SQLite path as a
-# psycopg connection string. The SQLite fallback remains available locally.
+# Render's filesystem is ephemeral. Prefer PostgreSQL when configured and
+# never pass a SQLite path into psycopg. SQLite remains the local fallback.
 NOVA_DATABASE_URL = os.getenv("NOVA_DATABASE_URL", "").strip()
 if NOVA_DATABASE_URL:
     from backend.postgres_sessions import PostgresSessionStore
@@ -50,7 +49,6 @@ else:
 
 ENVIRONMENT = os.getenv("NOVA_ENV", "development").strip().lower()
 IS_PRODUCTION = ENVIRONMENT == "production"
-
 PUBLIC_FRONTEND_ORIGIN = "https://nova-frontend-i76e.onrender.com"
 
 
@@ -58,8 +56,6 @@ def _configured_origins() -> list[str]:
     raw = os.getenv("NOVA_ALLOWED_ORIGINS", "")
     origins = [origin.strip().rstrip("/") for origin in raw.split(",") if origin.strip()]
     if IS_PRODUCTION:
-        # Never let a stale localhost entry prevent the entire production app
-        # from importing. Browser CORS is still restricted to HTTPS origins.
         origins = [origin for origin in origins if origin.startswith("https://")]
         origins.append(PUBLIC_FRONTEND_ORIGIN)
         return list(dict.fromkeys(origins))
@@ -155,7 +151,15 @@ async def _set_login_cookie(response: Response) -> Response:
         token = None
     if not (isinstance(token, str) and token):
         return response
-    response.set_cookie(key=COOKIE_NAME, value=token, max_age=7 * 24 * 60 * 60, httponly=True, secure=IS_PRODUCTION, samesite=COOKIE_SAMESITE, path="/")
+    response.set_cookie(
+        key=COOKIE_NAME,
+        value=token,
+        max_age=7 * 24 * 60 * 60,
+        httponly=True,
+        secure=IS_PRODUCTION,
+        samesite=COOKIE_SAMESITE,
+        path="/",
+    )
     return response
 
 
@@ -207,7 +211,7 @@ async def production_auth_boundary(request: Request, call_next):
         return await call_next(request)
     finally:
         if settings_token is not None:
-            reset_current_user(settings_token
+            reset_current_user(settings_token)
 
 
 @api.app.middleware("http")
