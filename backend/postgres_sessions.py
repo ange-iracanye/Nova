@@ -11,8 +11,9 @@ import psycopg
 class PostgresSessionStore:
     """PostgreSQL-backed session mapping for production deployments.
 
-    Render web-service disks are ephemeral, so authentication sessions must
-    not depend on a local SQLite file when PostgreSQL is configured.
+    The connection/table setup is intentionally lazy. A temporary database
+    startup hiccup must not prevent the FastAPI application itself from
+    importing and serving health/auth diagnostics.
     """
 
     def __init__(self, database_url: str) -> None:
@@ -20,9 +21,9 @@ class PostgresSessionStore:
             raise RuntimeError("NOVA_DATABASE_URL is required for PostgreSQL sessions.")
         self.database_url = database_url
         self._lock = threading.RLock()
-        self._initialize()
+        self._initialized = False
 
-    def _connect(self):
+    def _raw_connect(self):
         return psycopg.connect(
             self.database_url,
             connect_timeout=8,
@@ -30,7 +31,7 @@ class PostgresSessionStore:
         )
 
     def _initialize(self) -> None:
-        with self._lock, self._connect() as conn:
+        with self._lock, self._raw_connect() as conn:
             with conn.cursor() as cur:
                 cur.execute(
                     """
@@ -46,11 +47,21 @@ class PostgresSessionStore:
                     "CREATE INDEX IF NOT EXISTS idx_nova_sessions_expires ON nova_sessions(expires_at)"
                 )
             conn.commit()
+        self._initialized = True
+
+    def _ensure_initialized(self) -> None:
+        if self._initialized:
+            return
+        with self._lock:
+            if not self._initialized:
+                self._initialize()
+
+    def _connect(self):
+        self._ensure_initialized()
+        return self._raw_connect()
 
     def _cleanup(self, conn) -> None:
-        conn.execute(
-            "DELETE FROM nova_sessions WHERE expires_at <= NOW()"
-        )
+        conn.execute("DELETE FROM nova_sessions WHERE expires_at <= NOW()")
 
     def __setitem__(self, token: str, value: dict[str, Any]) -> None:
         expires_at = str(value.get("expires_at", ""))
