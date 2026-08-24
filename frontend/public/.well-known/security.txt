@@ -1,4 +1,4 @@
 Contact: mailto:iracanyemichael@gmail.com
 Preferred-Languages: fr, en
 Policy: /privacy.html
-Canonical: https://nova-api-i07q.onrender.com/.well-known/security.txt
+Canonical: https://nova-frontend-i76e.onrender.com/.well-known/security.txt
