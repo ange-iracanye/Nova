@@ -39,13 +39,21 @@ api.auth_sessions = PersistentSessionStore(os.getenv("NOVA_SESSION_DB", str(DATA
 ENVIRONMENT = os.getenv("NOVA_ENV", "development").strip().lower()
 IS_PRODUCTION = ENVIRONMENT == "production"
 
+# Nova's canonical public frontend. Keep this explicit as a safe fallback so
+# production authentication cannot silently lose CORS if Render's environment
+# variable is missing or stale. Additional origins may still be supplied via
+# NOVA_ALLOWED_ORIGINS.
+PUBLIC_FRONTEND_ORIGIN = "https://nova-frontend-i76e.onrender.com"
+
 
 def _configured_origins() -> list[str]:
     raw = os.getenv("NOVA_ALLOWED_ORIGINS", "")
     origins = [origin.strip().rstrip("/") for origin in raw.split(",") if origin.strip()]
     if IS_PRODUCTION:
-        if not origins:
-            raise RuntimeError("NOVA_ALLOWED_ORIGINS must be configured in production.")
+        # Always include Nova's canonical production frontend. This prevents a
+        # misconfigured Render environment variable from turning every browser
+        # authentication request into a generic "Failed to fetch" CORS error.
+        origins.append(PUBLIC_FRONTEND_ORIGIN)
         insecure = [origin for origin in origins if not origin.startswith("https://")]
         if insecure:
             raise RuntimeError("NOVA_ALLOWED_ORIGINS contains non-HTTPS origins in production: " + ", ".join(insecure))
