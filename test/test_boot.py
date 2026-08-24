@@ -53,3 +53,29 @@ def test_ready_requires_production_configuration(monkeypatch):
     assert sent[0]["status"] == 503
     payload = json.loads(sent[1]["body"].decode())
     assert "NOVA_ALLOWED_ORIGINS" in payload["missing"]
+
+
+def test_ready_reports_database_failure_without_leaking_credentials(monkeypatch):
+    monkeypatch.setenv("NOVA_ENV", "production")
+    monkeypatch.setenv("NOVA_ALLOWED_ORIGINS", "https://nova.example")
+    monkeypatch.setenv("NOVA_DATABASE_URL", "postgresql://postgres:super-secret@example.test/db")
+    monkeypatch.setenv("OPENROUTER_API_KEY", "test-key")
+    monkeypatch.setattr("backend.boot._database_probe", lambda: (False, "PostgreSQL connectivity/authentication failed"))
+    sent = _run_request("/ready")
+    assert sent[0]["status"] == 503
+    body = sent[1]["body"].decode()
+    assert "super-secret" not in body
+    payload = json.loads(body)
+    assert payload["checks"]["database"] == "PostgreSQL connectivity/authentication failed"
+
+
+def test_ready_succeeds_when_production_dependencies_are_available(monkeypatch):
+    monkeypatch.setenv("NOVA_ENV", "production")
+    monkeypatch.setenv("NOVA_ALLOWED_ORIGINS", "https://nova.example")
+    monkeypatch.setenv("OPENROUTER_API_KEY", "test-key")
+    monkeypatch.setattr("backend.boot._database_probe", lambda: (True, None))
+    sent = _run_request("/ready")
+    assert sent[0]["status"] == 200
+    payload = json.loads(sent[1]["body"].decode())
+    assert payload["checks"]["database"] == "ok"
+    assert payload["checks"]["openrouter"] == "configured"
