@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import traceback
 import uuid
 from datetime import datetime, timezone, timedelta
@@ -14,6 +15,7 @@ _REAL_APP_ERROR: Exception | None = None
 
 PUBLIC_FRONTEND_ORIGIN = "https://nova-frontend-i76e.onrender.com"
 COOKIE_NAME = os.getenv("NOVA_SESSION_COOKIE", "nova_session")
+EMAIL_PATTERN = re.compile(r"^[^\s@]+@[^\s@]+\.[^\s@]+$")
 
 
 def _request_origin(scope: dict[str, Any]) -> str:
@@ -73,11 +75,7 @@ async def _handle_lifespan(receive: Callable[..., Awaitable[Any]], send: Callabl
 
 
 def _load_real_app() -> Any:
-    """Load the full application lazily, but do not permanently cache failures.
-
-    A database/model/provider hiccup during the first request must not poison the
-    process forever. The next request gets another chance to initialize Nova.
-    """
+    """Load the full application lazily without permanently caching failures."""
     global _REAL_APP, _REAL_APP_ERROR
     if _REAL_APP is not None:
         return _REAL_APP
@@ -118,13 +116,9 @@ def _openrouter_probe() -> tuple[bool, str | None]:
 
 
 def _get_auth_components():
-    """Return the lightweight auth functions/store without importing production."""
     from backend import auth
     from backend.persistent_sessions import PersistentSessionStore
-
-    store = PersistentSessionStore(
-        os.getenv("NOVA_SESSION_DB", "data/sessions.sqlite3")
-    )
+    store = PersistentSessionStore(os.getenv("NOVA_SESSION_DB", "data/sessions.sqlite3"))
     return auth, store
 
 
@@ -189,7 +183,7 @@ async def _handle_auth_fallback(
     receive: Callable[..., Awaitable[Any]],
     send: Callable[..., Awaitable[Any]],
 ) -> bool:
-    """Keep account creation/login available even if the heavy Nova app is warming."""
+    """Keep authentication available while the heavier Nova runtime is warming."""
     path = scope.get("path", "/")
     method = scope.get("method", "GET").upper()
     if path not in {"/register", "/login", "/auth/session", "/auth/me", "/auth/logout"}:
@@ -253,11 +247,14 @@ async def _handle_auth_fallback(
         password = payload.get("password", "")
         if not isinstance(password, str):
             password = str(password)
+
         try:
-            email = auth._normalize_email(email)
-            auth.validate_password(password)
-            if not email or not auth.re.match(r"^[^\s@]+@[^\s@]+\.[^\s@]+$", email):
+            if not email or not EMAIL_PATTERN.match(email):
                 raise ValueError("Please provide a valid email address.")
+            auth.validate_password(password)
+            if path == "/register":
+                from backend.age_policy import validate_minimum_age
+                validate_minimum_age(payload.get("date_of_birth"))
         except (ValueError, TypeError) as exc:
             await _send_json(send, 400, {"success": False, "error": {"code": "INVALID_CREDENTIALS", "message": str(exc)}}, _cors_headers(scope))
             return True
