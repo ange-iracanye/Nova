@@ -12,30 +12,27 @@ from typing import Any
 
 
 class PersistentSessionStore(MutableMapping[str, dict[str, Any]]):
-    """Persistent session mapping with a safe production backend switch.
-
-    Production uses PostgreSQL when NOVA_DATABASE_URL is configured. Local and
-    test environments use SQLite. A filesystem path is never passed to psycopg.
-    """
+    """Persistent session mapping with SQLite local fallback and PostgreSQL production support."""
 
     def __new__(cls, path: str | None = None):
         if cls is PersistentSessionStore:
             environment = os.getenv("NOVA_ENV", "development").strip().lower()
             database_url = os.getenv("NOVA_DATABASE_URL", "").strip()
-
-            # Only auto-select PostgreSQL for production when the actual
-            # database URL is configured. Explicit test/local SQLite paths
-            # continue to use SQLite even if a production env var is present.
             explicit_path = str(path or "").strip()
-            is_explicit_sqlite = explicit_path and not explicit_path.startswith(
-                ("postgresql://", "postgres://")
-            )
-            if environment == "production" and database_url and not is_explicit_sqlite:
+            default_sqlite_paths = {
+                "data/sessions.sqlite3",
+                str(Path(os.getenv("NOVA_DATA_DIR", "data")) / "sessions.sqlite3"),
+            }
+
+            # Production's normal/default session path is only a compatibility
+            # placeholder. If PostgreSQL is configured, use the real database.
+            if environment == "production" and database_url and (
+                not explicit_path or explicit_path in default_sqlite_paths
+            ):
                 from backend.postgres_sessions import PostgresSessionStore
                 return PostgresSessionStore(database_url)
 
-            # A caller may explicitly pass a PostgreSQL URL. Handle it safely
-            # instead of ever giving that URL to sqlite3.
+            # An explicitly supplied PostgreSQL URL is also supported.
             if explicit_path.startswith(("postgresql://", "postgres://")):
                 from backend.postgres_sessions import PostgresSessionStore
                 return PostgresSessionStore(explicit_path)
@@ -54,11 +51,7 @@ class PersistentSessionStore(MutableMapping[str, dict[str, Any]]):
         self._initialize()
 
     def _connect(self) -> sqlite3.Connection:
-        connection = sqlite3.connect(
-            self.path,
-            timeout=10,
-            check_same_thread=False,
-        )
+        connection = sqlite3.connect(self.path, timeout=10, check_same_thread=False)
         connection.execute("PRAGMA journal_mode=WAL")
         connection.execute("PRAGMA busy_timeout=10000")
         return connection
@@ -83,9 +76,7 @@ class PersistentSessionStore(MutableMapping[str, dict[str, Any]]):
                 )
                 """
             )
-            db.execute(
-                "CREATE INDEX IF NOT EXISTS idx_sessions_expires ON sessions(expires_at)"
-            )
+            db.execute("CREATE INDEX IF NOT EXISTS idx_sessions_expires ON sessions(expires_at)")
 
     def _cleanup(self, db: sqlite3.Connection) -> None:
         now = datetime.now(timezone.utc).isoformat()
@@ -94,10 +85,7 @@ class PersistentSessionStore(MutableMapping[str, dict[str, Any]]):
     def __getitem__(self, token: str) -> dict[str, Any]:
         with self._lock, self._db() as db:
             self._cleanup(db)
-            row = db.execute(
-                "SELECT payload FROM sessions WHERE token = ?",
-                (token,),
-            ).fetchone()
+            row = db.execute("SELECT payload FROM sessions WHERE token = ?", (token,)).fetchone()
             if row is None:
                 raise KeyError(token)
             return json.loads(row[0])
