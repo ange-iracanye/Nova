@@ -17,7 +17,12 @@ function rewriteUrl(input) {
     return input;
 }
 
-function readSessionToken() {
+function isLocalDevelopment() {
+    return window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1";
+}
+
+function readDevelopmentSessionToken() {
+    if (!isLocalDevelopment()) return "";
     try {
         const raw = localStorage.getItem("nova_session");
         if (!raw) return "";
@@ -28,7 +33,8 @@ function readSessionToken() {
     }
 }
 
-function saveSession(data) {
+function saveDevelopmentSession(data) {
+    if (!isLocalDevelopment()) return;
     const session = data?.session;
     const token = data?.token || data?.access_token || data?.session_token || session?.token;
     if (!token) return;
@@ -38,30 +44,44 @@ function saveSession(data) {
             type: data?.token_type || session?.token_type || "Bearer"
         }));
     } catch {
-        // Storage may be unavailable in private browsing. The request itself still works.
+        // Storage may be unavailable in private browsing.
     }
 }
 
 window.fetch = async function novaProductionFetch(input, init = {}) {
-    let url = rewriteUrl(input);
+    const url = rewriteUrl(input);
     const headers = new Headers(input instanceof Request ? input.headers : undefined);
     if (init.headers) new Headers(init.headers).forEach((value, key) => headers.set(key, value));
 
-    const token = readSessionToken();
+    const token = readDevelopmentSessionToken();
     const path = typeof url === "string" ? url : url?.url || "";
-    const isAuthRequest = /\/login$|\/register$|\/health$|\/auth\/session$|\/auth\/me$|\/auth\/logout$/.test(path);
+    const isAuthRequest = /\/login$|\/register$|\/health$|\/ready$|\/auth\/session$|\/auth\/me$|\/auth\/logout$/.test(path);
     if (token && !isAuthRequest && !headers.has("Authorization")) {
         headers.set("Authorization", `Bearer ${token}`);
     }
 
-    const response = await ORIGINAL_FETCH(url, { ...init, headers });
+    const response = await ORIGINAL_FETCH(url, {
+        ...init,
+        headers,
+        credentials: init.credentials || "include",
+    });
 
     if (/\/login$|\/register$/.test(path) && response.ok) {
         try {
             const data = await response.clone().json();
-            if (data?.success !== false) saveSession(data);
+            if (data?.success !== false) saveDevelopmentSession(data);
         } catch {
             // Leave normal response handling to the calling page.
+        }
+    }
+
+    // Production authentication uses an HttpOnly, Secure session cookie.
+    // Never persist that bearer token in localStorage where XSS could read it.
+    if (!isLocalDevelopment() && /\/login$|\/register$/.test(path) && response.ok) {
+        try {
+            localStorage.removeItem("nova_session");
+        } catch {
+            // Ignore unavailable storage.
         }
     }
 
