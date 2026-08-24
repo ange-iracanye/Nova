@@ -1,9 +1,9 @@
 """Zero-cost public LLM adapter for Nova V1.
 
-OpenRouter is used because its current free tier is available to users 13+
-and does not require paid credits. Nova pins a strong free reasoning model
-first, then falls back to OpenRouter's free-model router if that model is
-unavailable. No paid model is ever requested by this adapter.
+OpenRouter is used for the public V1 provider. Nova pins a strong free
+reasoning model first, then falls back to OpenRouter's free-model router if
+that model is unavailable. No paid model is ever requested by this adapter.
+Nova V1 itself is restricted to users aged 16+ by the application policy.
 """
 
 from __future__ import annotations
@@ -41,6 +41,11 @@ class FreeLLM:
         self.total_requests = 0
         self.successful_requests = 0
         self.failed_requests = 0
+
+        # Public V1 must never silently request a paid model.
+        for configured_model in (self.model, self.fallback_model):
+            if configured_model and configured_model != self.FREE_ROUTER_MODEL and not configured_model.endswith(":free"):
+                raise ValueError("Public Nova may only use an OpenRouter free model.")
 
     def get_generation_settings(self, creativity: str = "medium") -> Dict[str, float]:
         key = str(creativity).strip().lower()
@@ -85,18 +90,19 @@ class FreeLLM:
             method="POST",
         )
         try:
-            with urlopen(request, timeout=90) as response:
+            with urlopen(request, timeout=60) as response:
                 data = json.loads(response.read().decode("utf-8"))
         except HTTPError as error:
-            detail = error.read().decode("utf-8", errors="replace")[:1200]
-            raise RuntimeError(f"OpenRouter API HTTP {error.code}: {detail}") from error
+            # Keep provider internals out of user-visible exceptions/logs.
+            raise RuntimeError(f"OpenRouter API request failed (HTTP {error.code}).") from error
         except URLError as error:
-            raise RuntimeError(f"OpenRouter connection failed: {error.reason}") from error
+            raise RuntimeError("OpenRouter connection failed.") from error
+        except (json.JSONDecodeError, UnicodeDecodeError) as error:
+            raise RuntimeError("OpenRouter returned an invalid response.") from error
 
         choices = data.get("choices") or []
         if not choices:
-            error_detail = data.get("error") or "no choices"
-            raise RuntimeError(f"OpenRouter returned no choices: {error_detail}")
+            raise RuntimeError("OpenRouter returned no usable answer.")
 
         message = choices[0].get("message") or {}
         text = str(message.get("content", "")).strip()
@@ -134,4 +140,4 @@ class FreeLLM:
                         time.sleep(self.retry_delay * (attempt + 1))
 
         self.failed_requests += 1
-        raise RuntimeError(f"Nova's free AI provider failed: {last_error}") from last_error
+        raise RuntimeError("Nova's free AI provider is temporarily unavailable.") from last_error
