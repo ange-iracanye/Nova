@@ -47,16 +47,17 @@ except Exception:
 
 # Render Free has an ephemeral filesystem. When NOVA_DATABASE_URL is present,
 # restore runtime files from PostgreSQL and keep syncing generated user data.
+# Session authentication is intentionally NOT monkey-patched here. The
+# production entrypoint selects PostgresSessionStore explicitly, while local
+# and test environments keep the SQLite PersistentSessionStore.
 try:
     if os.getenv("NOVA_DATABASE_URL", "").strip():
-        from backend.free_persistence import DatabaseSessionStore, FreePostgresStore
-        import backend.persistent_sessions as _persistent_sessions
+        from backend.free_persistence import FreePostgresStore
         from backend import auth as _auth
 
         _nova_free_store = FreePostgresStore()
         _nova_data_root = Path(os.getenv("NOVA_DATA_DIR", "data"))
         _nova_free_store.restore(_nova_data_root)
-        _persistent_sessions.PersistentSessionStore = DatabaseSessionStore
 
         def _nova_sync_runtime_data() -> None:
             try:
