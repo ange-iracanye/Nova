@@ -12,22 +12,65 @@ continues to use its local development storage.
 from __future__ import annotations
 
 import hashlib
+import json
 import os
+import socket
+import threading
 from collections.abc import Iterator, MutableMapping
 from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
-import json
-import threading
 
 try:
     import psycopg
+    from psycopg.conninfo import conninfo_to_dict
 except ImportError:  # pragma: no cover - dependency is installed in production
     psycopg = None
+    conninfo_to_dict = None
 
 
 DATABASE_URL = os.getenv("NOVA_DATABASE_URL", "").strip()
+
+
+def _is_ipv4(host: str) -> bool:
+    try:
+        socket.inet_aton(host)
+        return host.count(".") == 3
+    except OSError:
+        return False
+
+
+def _resolve_ipv4(host: str, port: Any = None) -> str | None:
+    try:
+        results = socket.getaddrinfo(
+            host,
+            int(port or 5432),
+            socket.AF_INET,
+            socket.SOCK_STREAM,
+        )
+    except (OSError, ValueError):
+        return None
+    for result in results:
+        address = result[4][0]
+        if address:
+            return address
+    return None
+
+
+def _connect_postgres(database_url: str, timeout: int = 10):
+    """Connect using IPv4 when managed DB DNS exposes unusable IPv6 on Render."""
+    if psycopg is None or conninfo_to_dict is None:
+        raise RuntimeError("psycopg is not installed")
+    params = conninfo_to_dict(database_url)
+    host = str(params.get("host", "")).strip()
+    if host and not _is_ipv4(host):
+        ipv4 = _resolve_ipv4(host, params.get("port"))
+        if ipv4:
+            params["host"] = ipv4
+    params["connect_timeout"] = timeout
+    params["sslmode"] = "require"
+    return psycopg.connect(**params)
 
 
 class FreePostgresStore:
@@ -48,7 +91,7 @@ class FreePostgresStore:
     def _connect(self):
         if not self.enabled:
             raise RuntimeError("Free PostgreSQL persistence is not configured.")
-        connection = psycopg.connect(self.database_url, connect_timeout=10)
+        connection = _connect_postgres(self.database_url, timeout=10)
         try:
             yield connection
             connection.commit()
@@ -88,9 +131,7 @@ class FreePostgresStore:
         root.mkdir(parents=True, exist_ok=True)
         restored = 0
         with self._lock, self._connect() as db:
-            rows = db.execute(
-                "SELECT path, content FROM nova_runtime_files"
-            ).fetchall()
+            rows = db.execute("SELECT path, content FROM nova_runtime_files").fetchall()
             for relative_path, content in rows:
                 target = root / relative_path
                 target.parent.mkdir(parents=True, exist_ok=True)
@@ -164,7 +205,7 @@ class DatabaseSessionStore(MutableMapping[str, dict[str, Any]]):
     def _connect(self):
         if not self.enabled:
             raise RuntimeError("Free PostgreSQL session persistence is not configured.")
-        connection = psycopg.connect(self.database_url, connect_timeout=10)
+        connection = _connect_postgres(self.database_url, timeout=10)
         try:
             yield connection
             connection.commit()
@@ -193,9 +234,7 @@ class DatabaseSessionStore(MutableMapping[str, dict[str, Any]]):
     def __getitem__(self, token: str) -> dict[str, Any]:
         with self._lock, self._connect() as db:
             self._cleanup(db)
-            row = db.execute(
-                "SELECT payload FROM nova_sessions WHERE token = %s", (token,)
-            ).fetchone()
+            row = db.execute("SELECT payload FROM nova_sessions WHERE token = %s", (token,)).fetchone()
             if row is None:
                 raise KeyError(token)
             return dict(row[0])
