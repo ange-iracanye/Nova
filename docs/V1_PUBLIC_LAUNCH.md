@@ -2,16 +2,16 @@
 
 ## Current status
 
-Nova V1 is configured for a public single-instance Render deployment using OpenRouter for AI inference and PostgreSQL persistence. The repository now contains production CORS hardening, secure session cookies, request IDs, security headers including CSP, account deletion, disabled production demo mode, and finalized operational drafts for the Privacy Notice and Terms of Service.
+Nova V1 is configured for a public single-instance Render deployment using OpenRouter for AI inference and PostgreSQL persistence. The repository contains production CORS hardening, secure session cookies, persistent server-side sessions, request IDs, security headers, account deletion, and public demo support.
 
-The remaining gates below require either real production credentials/environment access or an operator decision/review that cannot be verified from source control alone.
+The remaining gates below require real production credentials/environment access or an operator decision/review that cannot be verified from source control alone.
 
 ## Selected V1 product decisions
 
 - AI provider: OpenRouter.
-- Primary model: `nvidia/nemotron-3-ultra:free`.
+- Primary model: `nvidia/nemotron-3-ultra-550b-a55b:free`.
 - Fallback: `openrouter/free`.
-- Public demo: disabled for V1.
+- Public demo: enabled for the deployed V1 experience.
 - Minimum user age: 16.
 - Account deletion: immediate user-requested deletion of account-owned application data where technically available.
 - Memory controls: users should be able to clear memory independently of deleting the account.
@@ -50,11 +50,11 @@ The remaining gates below require either real production credentials/environment
 
 ## Database
 
-The repository is already wired for PostgreSQL through `NOVA_DATABASE_URL`, and the Render blueprint declares that variable as a secret (`sync: false`). Source control cannot reveal whether the real Render secret is currently populated or whether the existing database is the intended Supabase project. Verify that in the Render dashboard without committing the connection string.
+The repository is wired for PostgreSQL through `NOVA_DATABASE_URL`, and the Render blueprint declares that variable as a secret (`sync: false`). Source control cannot reveal whether the real Render secret is currently populated or whether the existing database is the intended Supabase project. Verify that in the Render dashboard without committing the connection string.
 
 ## Product gates
 
-- [ ] Registration enforces the 16+ policy server-side and presents the policy clearly in the frontend.
+- [x] Registration enforces the 16+ policy server-side and presents the policy clearly in the frontend.
 - [ ] Login/register/logout works from a clean browser profile.
 - [ ] Session expiry returns the user to login without stale account state.
 - [ ] Chat, conversations, dashboard, settings, memory and uploads survive normal refreshes.
