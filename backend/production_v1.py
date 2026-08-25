@@ -15,6 +15,7 @@ from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, Field
 
 from backend.memory_system.conversation_manager import ConversationManager
+from backend import api
 
 
 router = APIRouter(prefix="/v1", tags=["Production V1"])
@@ -25,8 +26,6 @@ class RenameRequest(BaseModel):
 
 
 def _email(request: Request) -> str:
-    from backend import api
-
     session = api.get_auth_session(request)
     if not isinstance(session, dict):
         raise HTTPException(status_code=401, detail="A valid Nova session is required.")
@@ -69,11 +68,7 @@ def list_conversations(request: Request):
 def create_conversation(request: Request):
     email = _email(request)
     conversation_id = _manager().create(email)
-    return {
-        "success": True,
-        "id": conversation_id,
-        "conversation_id": conversation_id,
-    }
+    return {"success": True, "id": conversation_id, "conversation_id": conversation_id}
 
 
 @router.get("/conversations/{conversation_id}")
@@ -105,11 +100,10 @@ def delete_conversation(request: Request, conversation_id: str):
 
 
 # ---------------------------------------------------------------------------
-# Legacy route aliases
+# Legacy conversation routes used by the restored UI.
+# They are deliberately backed by ConversationManager directly, so history
+# does not require NovaCore or the LLM runtime to initialize.
 # ---------------------------------------------------------------------------
-# The restored Nova UI still uses the original conversation URLs. Keep those
-# URLs as thin wrappers around the production-safe V1 CRUD implementation so
-# restoring the UI does not require a visual or component rewrite.
 
 
 def _legacy_email(request: Request, supplied_email: str) -> str:
@@ -120,40 +114,41 @@ def _legacy_email(request: Request, supplied_email: str) -> str:
     return email
 
 
-@router.post("/../conversation/new")
-def _legacy_create_conversation(request: Request):
+@api.app.post("/conversation/new", tags=["Conversations"])
+def legacy_create_conversation(request: Request):
     email = _email(request)
     conversation_id = _manager().create(email)
     return {"success": True, "id": conversation_id, "conversation_id": conversation_id}
 
 
-@router.get("/../conversations/{email}")
-def _legacy_list_conversations(request: Request, email: str):
+@api.app.get("/conversations/{email}", tags=["Conversations"])
+def legacy_list_conversations(request: Request, email: str):
     authenticated_email = _legacy_email(request, email)
-    data = _manager().list(authenticated_email)
-    return {"success": True, "conversations": data}
+    return {"success": True, "conversations": _manager().list(authenticated_email)}
 
 
-@router.get("/../conversation/{email}/{conversation_id}")
-def _legacy_get_conversation(request: Request, email: str, conversation_id: str):
+@api.app.get("/conversation/{email}/{conversation_id}", tags=["Conversations"])
+def legacy_get_conversation(request: Request, email: str, conversation_id: str):
     authenticated_email = _legacy_email(request, email)
     conversation = _manager().get(authenticated_email, conversation_id)
     if conversation is None:
         raise HTTPException(status_code=404, detail="Conversation not found.")
-    return {"success": True, "conversation": conversation, **conversation}
+    return {"success": True, "conversation": conversation}
 
 
-@router.put("/../conversation/{email}/{conversation_id}/rename")
-def _legacy_rename_conversation(request: Request, email: str, conversation_id: str, payload: RenameRequest):
+@api.app.put("/conversation/{email}/{conversation_id}/rename", tags=["Conversations"])
+def legacy_rename_conversation(request: Request, email: str, conversation_id: str, payload: dict[str, Any]):
     authenticated_email = _legacy_email(request, email)
-    title = payload.title.strip()
+    title = str(payload.get("title") or "").strip()
+    if not title or len(title) > 200:
+        raise HTTPException(status_code=400, detail="A valid conversation title is required.")
     if not _manager().rename(authenticated_email, conversation_id, title):
         raise HTTPException(status_code=404, detail="Conversation not found.")
     return {"success": True, "title": title}
 
 
-@router.delete("/../conversation/{email}/{conversation_id}")
-def _legacy_delete_conversation(request: Request, email: str, conversation_id: str):
+@api.app.delete("/conversation/{email}/{conversation_id}", tags=["Conversations"])
+def legacy_delete_conversation(request: Request, email: str, conversation_id: str):
     authenticated_email = _legacy_email(request, email)
     if not _manager().delete(authenticated_email, conversation_id):
         raise HTTPException(status_code=404, detail="Conversation not found.")
