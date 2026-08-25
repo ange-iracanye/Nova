@@ -1,7 +1,8 @@
 """Render entrypoint compatibility layer for Nova V1.
 
-The Render entrypoint keeps the public boot path lightweight during platform
-port detection and forwards application traffic to the production ASGI app.
+Keep platform probes and browser health checks lightweight, and forward the
+real application traffic to the production ASGI app without changing its
+security boundary.
 """
 
 from __future__ import annotations
@@ -12,26 +13,38 @@ from typing import Any, Awaitable, Callable
 
 from backend.boot import app as boot_app
 
+PUBLIC_FRONTEND_ORIGIN = "https://nova-frontend-i76e.onrender.com"
+
 
 def _allowed_origins() -> set[str]:
     raw = os.getenv("NOVA_ALLOWED_ORIGINS", "")
-    return {item.strip().rstrip("/") for item in raw.split(",") if item.strip()}
+    origins = {item.strip().rstrip("/") for item in raw.split(",") if item.strip()}
+    # Keep the canonical Render frontend available even if an environment
+    # variable was omitted or stale during a deployment.
+    origins.add(PUBLIC_FRONTEND_ORIGIN)
+    return origins
 
 
 def _origin(scope: dict[str, Any]) -> str:
     return next(
-        (value.decode("latin-1") for name, value in scope.get("headers", []) if name.lower() == b"origin"),
+        (
+            value.decode("latin-1")
+            for name, value in scope.get("headers", [])
+            if name.lower() == b"origin"
+        ),
         "",
     )
 
 
 def _cors_headers(scope: dict[str, Any]) -> list[tuple[bytes, bytes]]:
-    origin = _origin(scope)
+    origin = _origin(scope).rstrip("/")
     if not origin or origin not in _allowed_origins():
         return []
     return [
         (b"access-control-allow-origin", origin.encode("latin-1")),
         (b"access-control-allow-credentials", b"true"),
+        (b"access-control-allow-methods", b"GET,POST,PUT,PATCH,DELETE,OPTIONS"),
+        (b"access-control-allow-headers", b"Authorization,Content-Type,X-Nova-Session,X-Request-ID"),
         (b"vary", b"Origin"),
     ]
 
@@ -51,6 +64,16 @@ async def _send_fast_json(
     headers.extend(_cors_headers(scope))
     await send({"type": "http.response.start", "status": status, "headers": headers})
     await send({"type": "http.response.body", "body": body})
+
+
+async def _send_options(
+    send: Callable[..., Awaitable[Any]],
+    scope: dict[str, Any],
+) -> None:
+    headers = [(b"content-length", b"0"), (b"cache-control", b"no-store")]
+    headers.extend(_cors_headers(scope))
+    await send({"type": "http.response.start", "status": 204, "headers": headers})
+    await send({"type": "http.response.body", "body": b""})
 
 
 async def _forward_with_rewrite(
@@ -86,7 +109,21 @@ async def app(
     send: Callable[..., Awaitable[Any]],
 ) -> None:
     """Production ASGI application used by Render."""
-    if scope.get("type") == "http" and scope.get("path") == "/":
+    if scope.get("type") != "http":
+        await _forward_with_rewrite(scope, receive, send)
+        return
+
+    path = str(scope.get("path", ""))
+
+    # Browser preflight must never depend on the heavy Nova runtime.
+    if scope.get("method") == "OPTIONS":
+        await _send_options(send, scope)
+        return
+
+    # Render and the frontend poll these endpoints frequently. Keep them
+    # deterministic and cheap so platform health checks cannot accidentally
+    # initialize NovaCore/LLM machinery.
+    if path == "/":
         await _send_fast_json(
             send,
             200,
@@ -95,7 +132,16 @@ async def app(
         )
         return
 
-    if scope.get("type") != "http" or scope.get("path") not in {"/login", "/register"}:
+    if path in {"/health", "/ready"}:
+        await _send_fast_json(
+            send,
+            200,
+            {"success": True, "status": "healthy", "service": "nova-api"},
+            scope,
+        )
+        return
+
+    if path not in {"/login", "/register"}:
         await _forward_with_rewrite(scope, receive, send)
         return
 
