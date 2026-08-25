@@ -75,18 +75,6 @@ export default defineConfig(({ mode }) => {
         };
     }
 
-    function novaHomeContrastFixes() {
-        return {
-            name: "nova-home-contrast-fixes",
-            enforce: "post",
-            transform(code, id) {
-                if (!id.endsWith("/src/pages/Home.jsx") && !id.endsWith("/src/pages/DemoHome.jsx")) return null;
-                const next = code.replace(/bg-white/g, "bg-slate-100");
-                return next === code ? null : { code: next, map: null };
-            },
-        };
-    }
-
     return {
         plugins: [
             react(),
@@ -95,7 +83,6 @@ export default defineConfig(({ mode }) => {
             novaProductionRuntime(),
             novaChatProductionFixes(),
             novaDashboardProductionFixes(),
-            novaHomeContrastFixes(),
         ],
         define: {
             "import.meta.env.VITE_API_URL": JSON.stringify(apiUrl),
