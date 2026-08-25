@@ -4,8 +4,8 @@ services:
     runtime: python
     plan: free
     region: frankfurt
-    buildCommand: pip install --upgrade pip && pip install -r requirements.txt
-    startCommand: uvicorn backend.boot:app --host 0.0.0.0 --port $PORT
+    buildCommand: python -m pip install --upgrade pip && python -m pip install -r requirements.txt
+    startCommand: python -m uvicorn backend.boot:app --host 0.0.0.0 --port $PORT --log-level info
     healthCheckPath: /health
     autoDeploy: true
     numInstances: 1
