@@ -11,30 +11,18 @@ function apiBase() {
 function rewriteUrl(input) {
     const raw = typeof input === "string" ? input : input?.url || "";
     if (!raw) return input;
-
     let rewritten = raw;
-    if (rewritten.startsWith("http://127.0.0.1:8000")) {
-        rewritten = rewritten.replace("http://127.0.0.1:8000", apiBase());
-    } else if (rewritten.startsWith("http://localhost:8000")) {
-        rewritten = rewritten.replace("http://localhost:8000", apiBase());
-    }
-
+    if (rewritten.startsWith("http://127.0.0.1:8000")) rewritten = rewritten.replace("http://127.0.0.1:8000", apiBase());
+    else if (rewritten.startsWith("http://localhost:8000")) rewritten = rewritten.replace("http://localhost:8000", apiBase());
     try {
         const url = new URL(rewritten, window.location.origin);
         const base = new URL(apiBase());
         if (url.origin !== base.origin) return rewritten;
-
-        // Chat's connectivity probe uses the API root. The production entry
-        // point exposes /health as the canonical lightweight health check.
-        if (url.pathname === "/" && url.search === "") {
-            url.pathname = "/health";
-        }
-
+        if (url.pathname === "/" && url.search === "") url.pathname = "/health";
         const path = url.pathname;
         const legacyList = path.match(/^\/conversations\/([^/]+)$/);
         const legacyGet = path.match(/^\/conversation\/([^/]+)\/([^/]+)$/);
         const legacyRename = path.match(/^\/conversation\/([^/]+)\/([^/]+)\/rename$/);
-
         if (path === "/conversation/new") {
             url.pathname = "/v1/conversations";
             url.search = "";
@@ -48,7 +36,6 @@ function rewriteUrl(input) {
             url.pathname = "/v1/conversations";
             url.search = "";
         }
-
         return url.toString();
     } catch {
         return rewritten;
@@ -77,13 +64,8 @@ function saveDevelopmentSession(data) {
     const token = data?.token || data?.access_token || data?.session_token || session?.token;
     if (!token) return;
     try {
-        localStorage.setItem("nova_session", JSON.stringify({
-            token: String(token),
-            type: data?.token_type || session?.token_type || "Bearer"
-        }));
-    } catch {
-        // Storage may be unavailable in private browsing.
-    }
+        localStorage.setItem("nova_session", JSON.stringify({ token: String(token), type: data?.token_type || session?.token_type || "Bearer" }));
+    } catch {}
 }
 
 function installHomeContrastFix() {
@@ -94,11 +76,11 @@ function installHomeContrastFix() {
         body.nova-app main a.bg-white,
         body.nova-app main button.bg-white,
         body.nova-app main a[class*="bg-white"]:not([class*="bg-white/"]) {
-            color: #0f172a !important;
+            color: #22d3ee !important;
         }
         body.nova-app main a.bg-white *,
         body.nova-app main button.bg-white * {
-            color: #0f172a !important;
+            color: #22d3ee !important;
         }
     `;
     document.head.appendChild(style);
@@ -108,34 +90,19 @@ window.fetch = async function novaProductionFetch(input, init = {}) {
     const url = rewriteUrl(input);
     const headers = new Headers(input instanceof Request ? input.headers : undefined);
     if (init.headers) new Headers(init.headers).forEach((value, key) => headers.set(key, value));
-
     const token = readDevelopmentSessionToken();
     const path = typeof url === "string" ? url : url?.url || "";
     const isAuthRequest = /\/login$|\/register$|\/health$|\/ready$|\/auth\/session$|\/auth\/me$|\/auth\/logout$/.test(path);
     const isLoginOrRegister = /\/login$|\/register$/.test(path);
-
-    if (token && !isAuthRequest && !headers.has("Authorization")) {
-        headers.set("Authorization", `Bearer ${token}`);
-    }
-
-    const requestInit = {
-        ...init,
-        headers,
-        credentials: init.credentials || "include",
-    };
-
+    if (token && !isAuthRequest && !headers.has("Authorization")) headers.set("Authorization", `Bearer ${token}`);
+    const requestInit = { ...init, headers, credentials: init.credentials || "include" };
     const method = String(requestInit.method || "GET").toUpperCase();
     const isConversationRead = method === "GET" && /^https:\/\/[^/]+\/v1\/conversations(?:\/[^/]+)?$/.test(String(url));
     const dedupeKey = isConversationRead ? String(url) : "";
-
     if (dedupeKey) {
         const cached = recentGets.get(dedupeKey);
-        if (cached && Date.now() - cached.time < GET_DEDUP_WINDOW_MS) {
-            const response = await cached.promise;
-            return response.clone();
-        }
+        if (cached && Date.now() - cached.time < GET_DEDUP_WINDOW_MS) return (await cached.promise).clone();
     }
-
     let authTimeoutId = null;
     let authController = null;
     if (isLoginOrRegister && !isLocalDevelopment()) {
@@ -143,9 +110,7 @@ window.fetch = async function novaProductionFetch(input, init = {}) {
         authTimeoutId = window.setTimeout(() => authController.abort(), AUTH_TIMEOUT_MS);
         requestInit.signal = authController.signal;
     }
-
     const request = ORIGINAL_FETCH(url, requestInit);
-
     if (dedupeKey) {
         recentGets.set(dedupeKey, { time: Date.now(), promise: request });
         request.finally(() => {
@@ -155,27 +120,17 @@ window.fetch = async function novaProductionFetch(input, init = {}) {
             }, GET_DEDUP_WINDOW_MS);
         }).catch(() => {});
     }
-
     try {
         const response = await request;
-
         if (isLoginOrRegister && response.ok) {
             try {
                 const data = await response.clone().json();
                 if (data?.success !== false) saveDevelopmentSession(data);
-            } catch {
-                // Leave normal response handling to the calling page.
-            }
+            } catch {}
         }
-
         if (!isLocalDevelopment() && isLoginOrRegister && response.ok) {
-            try {
-                localStorage.removeItem("nova_session");
-            } catch {
-                // Ignore unavailable storage.
-            }
+            try { localStorage.removeItem("nova_session"); } catch {}
         }
-
         return response;
     } finally {
         if (authTimeoutId !== null) window.clearTimeout(authTimeoutId);
