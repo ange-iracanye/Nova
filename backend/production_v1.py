@@ -56,7 +56,13 @@ def _items(email: str) -> list[dict[str, Any]]:
 @router.get("/conversations")
 def list_conversations(request: Request):
     email = _email(request)
-    return {"success": True, "conversations": _items(email)}
+    items = _items(email)
+    conversations = {
+        str(item["id"]): {key: value for key, value in item.items() if key != "id"}
+        for item in items
+        if item.get("id")
+    }
+    return {"success": True, "conversations": conversations}
 
 
 @router.post("/conversations")
@@ -82,10 +88,11 @@ def get_conversation(request: Request, conversation_id: str):
 @router.put("/conversations/{conversation_id}")
 def rename_conversation(request: Request, conversation_id: str, payload: RenameRequest):
     email = _email(request)
-    success = _manager().rename(email, conversation_id, payload.title.strip())
+    title = payload.title.strip()
+    success = _manager().rename(email, conversation_id, title)
     if not success:
         raise HTTPException(status_code=404, detail="Conversation not found.")
-    return {"success": True, "title": payload.title.strip()}
+    return {"success": True, "title": title}
 
 
 @router.delete("/conversations/{conversation_id}")
