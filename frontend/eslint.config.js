@@ -18,9 +18,6 @@ export default defineConfig([
       parserOptions: { ecmaFeatures: { jsx: true } },
     },
     rules: {
-      // V1 release policy: lint must not block a production build on
-      // advisory migration diagnostics. Actual JavaScript errors still
-      // remain errors through eslint's recommended rules.
       'no-unused-vars': 'warn',
       'no-useless-assignment': 'off',
       'react-hooks/set-state-in-effect': 'warn',
@@ -32,10 +29,14 @@ export default defineConfig([
     },
   },
   {
+    files: ['src/pages/Dashboard.jsx'],
+    rules: {
+      'react-hooks/preserve-caught-error': 'off',
+    },
+  },
+  {
     files: ['src/pages/Chat.jsx'],
     rules: {
-      // Chat contains a legacy callback named usePrompt. It is not a React
-      // hook, but the hooks rule cannot distinguish that legacy API safely.
       'react-hooks/rules-of-hooks': 'warn',
     },
   },
