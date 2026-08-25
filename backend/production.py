@@ -36,16 +36,14 @@ DATA_DIR = Path(os.getenv("NOVA_DATA_DIR", "data"))
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 auth.USERS_FILE = DATA_DIR / "users.json"
 
-# Render's filesystem is ephemeral. Prefer PostgreSQL when configured and
-# never pass a SQLite path into psycopg. SQLite remains the local fallback.
-NOVA_DATABASE_URL = os.getenv("NOVA_DATABASE_URL", "").strip()
-if NOVA_DATABASE_URL:
-    from backend.postgres_sessions import PostgresSessionStore
-    api.auth_sessions = PostgresSessionStore(NOVA_DATABASE_URL)
-else:
-    api.auth_sessions = PersistentSessionStore(
-        os.getenv("NOVA_SESSION_DB", str(DATA_DIR / "sessions.sqlite3"))
-    )
+# Use the same PersistentSessionStore factory as the boot wrapper. It selects
+# PostgreSQL only when the configured database host has a usable IPv4 route,
+# otherwise both boot and the production app share the same SQLite fallback.
+# This is critical because login/register are handled by backend.boot while
+# authenticated chat/dashboard requests are handled by this application.
+api.auth_sessions = PersistentSessionStore(
+    os.getenv("NOVA_SESSION_DB", str(DATA_DIR / "sessions.sqlite3"))
+)
 
 ENVIRONMENT = os.getenv("NOVA_ENV", "development").strip().lower()
 IS_PRODUCTION = ENVIRONMENT == "production"
