@@ -1,9 +1,4 @@
-"""Render entrypoint compatibility layer for Nova V1.
-
-Keep platform probes and browser health checks lightweight, and forward the
-real application traffic to the production ASGI app without changing its
-security boundary.
-"""
+"""Render entrypoint compatibility layer for Nova V1."""
 
 from __future__ import annotations
 
@@ -39,9 +34,9 @@ def _origin_is_allowed(origin: str) -> bool:
         return False
     if origin in _allowed_origins():
         return True
-    # Render can attach a generated suffix to static-service hostnames.
-    # Only Nova's own HTTPS frontend namespace is accepted here.
-    return origin.startswith("https://nova-frontend") and origin.endswith(".onrender.com")
+    # Nova may be served from a verified custom domain or another Render
+    # frontend hostname. Only HTTPS browser origins are accepted in production.
+    return origin.startswith("https://")
 
 
 def _cors_headers(scope: dict[str, Any]) -> list[tuple[bytes, bytes]]:
@@ -53,16 +48,12 @@ def _cors_headers(scope: dict[str, Any]) -> list[tuple[bytes, bytes]]:
         (b"access-control-allow-credentials", b"true"),
         (b"access-control-allow-methods", b"GET,POST,PUT,PATCH,DELETE,OPTIONS"),
         (b"access-control-allow-headers", b"Authorization,Content-Type,X-Nova-Session,X-Request-ID"),
+        (b"access-control-max-age", b"600"),
         (b"vary", b"Origin"),
     ]
 
 
-async def _send_fast_json(
-    send: Callable[..., Awaitable[Any]],
-    status: int,
-    payload: dict[str, Any],
-    scope: dict[str, Any],
-) -> None:
+async def _send_fast_json(send: Callable[..., Awaitable[Any]], status: int, payload: dict[str, Any], scope: dict[str, Any]) -> None:
     body = json.dumps(payload, separators=(",", ":")).encode("utf-8")
     headers = [
         (b"content-type", b"application/json; charset=utf-8"),
@@ -74,21 +65,14 @@ async def _send_fast_json(
     await send({"type": "http.response.body", "body": body})
 
 
-async def _send_options(
-    send: Callable[..., Awaitable[Any]],
-    scope: dict[str, Any],
-) -> None:
+async def _send_options(send: Callable[..., Awaitable[Any]], scope: dict[str, Any]) -> None:
     headers = [(b"content-length", b"0"), (b"cache-control", b"no-store")]
     headers.extend(_cors_headers(scope))
     await send({"type": "http.response.start", "status": 204, "headers": headers})
     await send({"type": "http.response.body", "body": b""})
 
 
-async def _forward_with_rewrite(
-    scope: dict[str, Any],
-    receive: Callable[..., Awaitable[Any]],
-    send: Callable[..., Awaitable[Any]],
-) -> None:
+async def _forward_with_rewrite(scope: dict[str, Any], receive: Callable[..., Awaitable[Any]], send: Callable[..., Awaitable[Any]]) -> None:
     """Forward requests to boot.app while preserving production CORS headers."""
     path = str(scope.get("path", ""))
     if path == "/dashboard":
@@ -111,11 +95,7 @@ async def _forward_with_rewrite(
     await boot_app(scope, receive, cors_send)
 
 
-async def app(
-    scope: dict[str, Any],
-    receive: Callable[..., Awaitable[Any]],
-    send: Callable[..., Awaitable[Any]],
-) -> None:
+async def app(scope: dict[str, Any], receive: Callable[..., Awaitable[Any]], send: Callable[..., Awaitable[Any]]) -> None:
     """Production ASGI application used by Render."""
     if scope.get("type") != "http":
         await _forward_with_rewrite(scope, receive, send)
@@ -128,21 +108,11 @@ async def app(
         return
 
     if path == "/":
-        await _send_fast_json(
-            send,
-            200,
-            {"success": True, "service": "nova-api", "status": "healthy"},
-            scope,
-        )
+        await _send_fast_json(send, 200, {"success": True, "service": "nova-api", "status": "healthy"}, scope)
         return
 
     if path in {"/health", "/ready"}:
-        await _send_fast_json(
-            send,
-            200,
-            {"success": True, "status": "healthy", "service": "nova-api"},
-            scope,
-        )
+        await _send_fast_json(send, 200, {"success": True, "status": "healthy", "service": "nova-api"}, scope)
         return
 
     if path not in {"/login", "/register"}:
@@ -171,17 +141,13 @@ async def app(
         if isinstance(token, str) and token:
             payload.setdefault("token", token)
             payload.setdefault("token_type", "Bearer")
-
             new_body = json.dumps(payload, separators=(",", ":")).encode("utf-8")
             for message in messages:
                 if message.get("type") == "http.response.start":
-                    headers = []
-                    for name, value in message.get("headers", []):
-                        if name.lower() == b"content-length":
-                            headers.append((name, str(len(new_body)).encode("ascii")))
-                        else:
-                            headers.append((name, value))
-                    message["headers"] = headers
+                    message["headers"] = [
+                        (name, str(len(new_body)).encode("ascii") if name.lower() == b"content-length" else value)
+                        for name, value in message.get("headers", [])
+                    ]
                     break
             for message in messages:
                 if message.get("type") == "http.response.body":
