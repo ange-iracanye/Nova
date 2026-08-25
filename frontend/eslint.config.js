@@ -29,12 +29,6 @@ export default defineConfig([
     },
   },
   {
-    files: ['src/pages/Dashboard.jsx'],
-    rules: {
-      'react-hooks/preserve-caught-error': 'off',
-    },
-  },
-  {
     files: ['src/pages/Chat.jsx'],
     rules: {
       'react-hooks/rules-of-hooks': 'warn',
