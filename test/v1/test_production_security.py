@@ -3,6 +3,10 @@ import importlib
 import pytest
 
 
+class InMemorySessionStore(dict):
+    """Keep production configuration tests independent of a real PostgreSQL service."""
+
+
 @pytest.fixture
 def production_module(monkeypatch, tmp_path):
     monkeypatch.setenv("NOVA_ENV", "production")
@@ -11,6 +15,14 @@ def production_module(monkeypatch, tmp_path):
     monkeypatch.setenv("NOVA_ALLOWED_ORIGINS", "https://nova.example.com")
     monkeypatch.delenv("NOVA_ENABLE_DOCS", raising=False)
     monkeypatch.delenv("NOVA_ENABLE_DEMO", raising=False)
+
+    import backend.persistent_sessions as persistent_sessions
+
+    monkeypatch.setattr(
+        persistent_sessions,
+        "PersistentSessionStore",
+        lambda path=None: InMemorySessionStore(),
+    )
 
     import backend.production as production
 
@@ -23,6 +35,14 @@ def test_production_requires_https_allowlist(monkeypatch, tmp_path):
     monkeypatch.setenv("NOVA_DATA_DIR", str(tmp_path))
     monkeypatch.setenv("NOVA_SESSION_DB", str(tmp_path / "sessions.sqlite3"))
     monkeypatch.setenv("NOVA_ALLOWED_ORIGINS", "https://nova.example.com")
+
+    import backend.persistent_sessions as persistent_sessions
+
+    monkeypatch.setattr(
+        persistent_sessions,
+        "PersistentSessionStore",
+        lambda path=None: InMemorySessionStore(),
+    )
 
     import backend.production as production
 
@@ -38,4 +58,7 @@ def test_production_defaults_docs_and_demo_off(production_module):
     assert production_module.ENABLE_DEMO is False
     assert "/docs" not in production_module.PUBLIC_PATHS
     assert "/demo/session" not in production_module.PUBLIC_PATHS
-    assert production_module.configured_origins == ["https://nova.example.com"]
+    assert production_module.configured_origins == [
+        "https://nova.example.com",
+        production_module.PUBLIC_FRONTEND_ORIGIN,
+    ]
