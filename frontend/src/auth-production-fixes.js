@@ -1,6 +1,8 @@
 const PRODUCTION_API_URL = "https://nova-api-i07q.onrender.com";
 const ORIGINAL_FETCH = window.fetch.bind(window);
 const AUTH_TIMEOUT_MS = 60000;
+const GET_DEDUP_WINDOW_MS = 800;
+const recentGets = new Map();
 
 function apiBase() {
     return (import.meta.env.VITE_API_URL || PRODUCTION_API_URL).replace(/\/+$/, "");
@@ -78,6 +80,24 @@ function saveDevelopmentSession(data) {
     }
 }
 
+function installHomeContrastFix() {
+    if (document.getElementById("nova-home-contrast-fix")) return;
+    const style = document.createElement("style");
+    style.id = "nova-home-contrast-fix";
+    style.textContent = `
+        body.nova-app main a.bg-white,
+        body.nova-app main button.bg-white,
+        body.nova-app main a[class*="bg-white"]:not([class*="bg-white/"]) {
+            color: #0f172a !important;
+        }
+        body.nova-app main a.bg-white *,
+        body.nova-app main button.bg-white * {
+            color: #0f172a !important;
+        }
+    `;
+    document.head.appendChild(style);
+}
+
 window.fetch = async function novaProductionFetch(input, init = {}) {
     const url = rewriteUrl(input);
     const headers = new Headers(input instanceof Request ? input.headers : undefined);
@@ -98,6 +118,18 @@ window.fetch = async function novaProductionFetch(input, init = {}) {
         credentials: init.credentials || "include",
     };
 
+    const method = String(requestInit.method || "GET").toUpperCase();
+    const isConversationRead = method === "GET" && /^https:\/\/[^/]+\/v1\/conversations(?:\/[^/]+)?$/.test(String(url));
+    const dedupeKey = isConversationRead ? String(url) : "";
+
+    if (dedupeKey) {
+        const cached = recentGets.get(dedupeKey);
+        if (cached && Date.now() - cached.time < GET_DEDUP_WINDOW_MS) {
+            const response = await cached.promise;
+            return response.clone();
+        }
+    }
+
     let authTimeoutId = null;
     let authController = null;
     if (isLoginOrRegister && !isLocalDevelopment()) {
@@ -106,8 +138,20 @@ window.fetch = async function novaProductionFetch(input, init = {}) {
         requestInit.signal = authController.signal;
     }
 
+    const request = ORIGINAL_FETCH(url, requestInit);
+
+    if (dedupeKey) {
+        recentGets.set(dedupeKey, { time: Date.now(), promise: request });
+        request.finally(() => {
+            window.setTimeout(() => {
+                const current = recentGets.get(dedupeKey);
+                if (current?.promise === request) recentGets.delete(dedupeKey);
+            }, GET_DEDUP_WINDOW_MS);
+        }).catch(() => {});
+    }
+
     try {
-        const response = await ORIGINAL_FETCH(url, requestInit);
+        const response = await request;
 
         if (isLoginOrRegister && response.ok) {
             try {
@@ -132,3 +176,5 @@ window.fetch = async function novaProductionFetch(input, init = {}) {
         void authController;
     }
 };
+
+installHomeContrastFix();
