@@ -1,8 +1,7 @@
 """Render entrypoint compatibility layer for Nova V1.
 
-This wrapper keeps the existing production boot path intact while normalizing
-responses for the deployed frontend and routing one legacy dashboard URL to
-the production V1 dashboard implementation.
+The Render entrypoint keeps the public boot path lightweight during platform
+port detection and forwards application traffic to the production ASGI app.
 """
 
 from __future__ import annotations
@@ -11,6 +10,26 @@ import json
 from typing import Any, Awaitable, Callable
 
 from backend.boot import app as boot_app
+
+
+async def _send_fast_json(
+    send: Callable[..., Awaitable[Any]],
+    status: int,
+    payload: dict[str, Any],
+) -> None:
+    body = json.dumps(payload, separators=(",", ":")).encode("utf-8")
+    await send(
+        {
+            "type": "http.response.start",
+            "status": status,
+            "headers": [
+                (b"content-type", b"application/json; charset=utf-8"),
+                (b"content-length", str(len(body)).encode("ascii")),
+                (b"cache-control", b"no-store"),
+            ],
+        }
+    )
+    await send({"type": "http.response.body", "body": body})
 
 
 async def _forward_with_rewrite(
@@ -34,6 +53,13 @@ async def app(
     send: Callable[..., Awaitable[Any]],
 ) -> None:
     """Production ASGI application used by Render."""
+    # Render's port detector can probe the root URL before the health check.
+    # Keep that probe independent of Nova's heavyweight runtime initialization.
+    # This also gives humans a cheap confirmation that the web process is up.
+    if scope.get("type") == "http" and scope.get("path") == "/":
+        await _send_fast_json(send, 200, {"success": True, "service": "nova-api", "status": "healthy"})
+        return
+
     if scope.get("type") != "http" or scope.get("path") not in {"/login", "/register"}:
         await _forward_with_rewrite(scope, receive, send)
         return
