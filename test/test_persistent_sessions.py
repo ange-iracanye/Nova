@@ -1,6 +1,8 @@
+import os
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from backend.persistent_sessions import PersistentSessionStore
 
@@ -34,6 +36,12 @@ class PersistentSessionStoreTests(unittest.TestCase):
 
             self.assertIsNone(store.get("expired"))
             self.assertEqual(len(store), 0)
+
+    def test_production_never_falls_back_to_sqlite_without_database(self):
+        with patch.dict(os.environ, {"NOVA_ENV": "production"}, clear=False):
+            os.environ.pop("NOVA_DATABASE_URL", None)
+            with self.assertRaisesRegex(RuntimeError, "NOVA_DATABASE_URL"):
+                PersistentSessionStore("data/sessions.sqlite3")
 
 
 if __name__ == "__main__":
