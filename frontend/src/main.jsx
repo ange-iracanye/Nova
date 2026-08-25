@@ -22,6 +22,7 @@ function getApiBase() {
 }
 
 const API_BASE = getApiBase();
+const LOCAL_API_BASES = ["http://127.0.0.1:8000", "http://localhost:8000"];
 
 function readSessionToken() {
     try {
@@ -34,17 +35,32 @@ function readSessionToken() {
     }
 }
 
+function normalizeApiUrl(rawUrl) {
+    let url = String(rawUrl || "");
+    for (const localBase of LOCAL_API_BASES) {
+        if (url === localBase || url.startsWith(`${localBase}/`)) {
+            url = `${API_BASE}${url.slice(localBase.length)}`;
+            break;
+        }
+    }
+    return url;
+}
+
 function installApiCredentialPolicy() {
     if (window.__novaCredentialFetchInstalled) return;
     const originalFetch = window.fetch.bind(window);
     window.fetch = (input, init = {}) => {
-        const url = typeof input === "string" ? input : input?.url || "";
-        if (url !== API_BASE && !url.startsWith(`${API_BASE}/`)) return originalFetch(input, init);
+        const originalUrl = typeof input === "string" ? input : input?.url || "";
+        const url = normalizeApiUrl(originalUrl);
+        const isApiRequest = url === API_BASE || url.startsWith(`${API_BASE}/`);
+        if (!isApiRequest) return originalFetch(input, init);
+
         const headers = new Headers(init.headers || {});
         headers.set("Accept", headers.get("Accept") || "application/json");
         const token = readSessionToken();
         if (token) headers.set("Authorization", `Bearer ${token}`);
-        return originalFetch(input, { ...init, headers, credentials: "include" });
+
+        return originalFetch(url, { ...init, headers, credentials: "include" });
     };
     window.__novaCredentialFetchInstalled = true;
 }
