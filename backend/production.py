@@ -54,7 +54,12 @@ def _configured_origins() -> list[str]:
     raw = os.getenv("NOVA_ALLOWED_ORIGINS", "")
     origins = [origin.strip().rstrip("/") for origin in raw.split(",") if origin.strip()]
     if IS_PRODUCTION:
-        origins = [origin for origin in origins if origin.startswith("https://")]
+        non_https = [origin for origin in origins if not origin.startswith("https://")]
+        if non_https:
+            raise RuntimeError(
+                "Production NOVA_ALLOWED_ORIGINS contains non-HTTPS origin(s): "
+                + ", ".join(non_https)
+            )
         origins.append(PUBLIC_FRONTEND_ORIGIN)
         return list(dict.fromkeys(origins))
     return origins or ["http://localhost:5173", "http://127.0.0.1:5173"]
