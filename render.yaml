@@ -5,7 +5,7 @@ services:
     plan: free
     region: frankfurt
     buildCommand: python -m pip install --upgrade pip && python -m pip install -r requirements.txt
-    startCommand: python -m uvicorn backend.boot:app --host 0.0.0.0 --port $PORT --log-level info
+    startCommand: python -m uvicorn backend.render_entry:app --host 0.0.0.0 --port $PORT --log-level info
     healthCheckPath: /health
     autoDeploy: true
     numInstances: 1
@@ -21,7 +21,7 @@ services:
       - key: NOVA_ENABLE_DOCS
         value: "false"
       - key: NOVA_ENABLE_DEMO
-        value: "false"
+        value: "true"
       - key: NOVA_MAX_BODY_BYTES
         value: "524288"
       - key: NOVA_MAX_UPLOAD_BYTES
@@ -29,7 +29,7 @@ services:
       - key: NOVA_LLM_PROVIDER
         value: openrouter
       - key: NOVA_LLM_MODEL
-        value: nvidia/nemotron-3-ultra:free
+        value: nvidia/nemotron-3-ultra-550b-a55b:free
       - key: NOVA_LLM_FALLBACK_MODEL
         value: openrouter/free
       - key: OPENROUTER_API_KEY
