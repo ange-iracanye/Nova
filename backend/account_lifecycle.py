@@ -56,13 +56,19 @@ def _remove_local_user(email: str) -> bool:
 def _remove_database_user(email: str) -> bool:
     if not auth.DATABASE_URL:
         return False
-    auth._ensure_database()
-    with auth._connect() as conn:
-        with conn.cursor() as cur:
-            cur.execute("DELETE FROM nova_users WHERE email = %s", (_normalize_email(email),))
-            deleted = cur.rowcount > 0
-        conn.commit()
-    return deleted
+    if not auth._ensure_database():
+        # Authentication already marked the database unavailable. Do not call
+        # _connect() again and turn an otherwise safe local cleanup into a 500.
+        return False
+    try:
+        with auth._connect() as conn:
+            with conn.cursor() as cur:
+                cur.execute("DELETE FROM nova_users WHERE email = %s", (_normalize_email(email),))
+                deleted = cur.rowcount > 0
+            conn.commit()
+        return deleted
+    except Exception as error:
+        raise RuntimeError("Nova could not remove the account from PostgreSQL safely.") from error
 
 
 def _remove_sessions(email: str, session_store: Any) -> int:
