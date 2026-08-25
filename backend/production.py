@@ -274,4 +274,9 @@ def delete_account(request: Request):
     return response
 
 
+# Production V1 endpoints are intentionally mounted under a new namespace so
+# they do not collide with the legacy routes in backend.api.
+from backend.production_v1 import router as production_v1_router
+api.app.include_router(production_v1_router)
+
 app = api.app
