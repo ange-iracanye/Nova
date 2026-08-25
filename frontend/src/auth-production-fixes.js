@@ -1,7 +1,7 @@
 const PRODUCTION_API_URL = "https://nova-api-i07q.onrender.com";
 const ORIGINAL_FETCH = window.fetch.bind(window);
 const AUTH_TIMEOUT_MS = 60000;
-const GET_DEDUP_WINDOW_MS = 800;
+const GET_DEDUP_WINDOW_MS = 5000;
 const recentGets = new Map();
 
 function apiBase() {
@@ -23,6 +23,12 @@ function rewriteUrl(input) {
         const url = new URL(rewritten, window.location.origin);
         const base = new URL(apiBase());
         if (url.origin !== base.origin) return rewritten;
+
+        // Chat's connectivity probe uses the API root. The production entry
+        // point exposes /health as the canonical lightweight health check.
+        if (url.pathname === "/" && url.search === "") {
+            url.pathname = "/health";
+        }
 
         const path = url.pathname;
         const legacyList = path.match(/^\/conversations\/([^/]+)$/);
