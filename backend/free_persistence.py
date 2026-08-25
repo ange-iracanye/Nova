@@ -2,11 +2,11 @@
 
 Nova's application code historically stores user state as local JSON/SQLite
 files. Free web hosts use ephemeral filesystems, so production can mirror the
-small runtime data directory into a free PostgreSQL database (for example the
-Supabase Free plan) without changing the rest of Nova's storage APIs.
+small runtime data directory into a free PostgreSQL database without changing
+Nova's storage APIs.
 
-Set NOVA_DATABASE_URL in production to enable this layer. Without it, Nova
-continues to use its local development storage.
+When the configured database is unreachable from Render, persistence becomes
+best-effort and never prevents authentication or application startup.
 """
 
 from __future__ import annotations
@@ -25,12 +25,37 @@ from typing import Any
 try:
     import psycopg
     from psycopg.conninfo import conninfo_to_dict
-except ImportError:  # pragma: no cover - dependency is installed in production
+except ImportError:  # pragma: no cover
     psycopg = None
     conninfo_to_dict = None
 
 
 DATABASE_URL = os.getenv("NOVA_DATABASE_URL", "").strip()
+
+
+def _database_has_ipv4_route(database_url: str) -> bool:
+    """Check DNS suitability without opening a database connection."""
+    if conninfo_to_dict is None:
+        return False
+    try:
+        params = conninfo_to_dict(database_url)
+        host = str(params.get("host", "")).strip()
+        if not host:
+            return False
+        try:
+            socket.inet_aton(host)
+            return True
+        except OSError:
+            pass
+        results = socket.getaddrinfo(
+            host,
+            int(params.get("port") or 5432),
+            socket.AF_INET,
+            socket.SOCK_STREAM,
+        )
+        return any(result[4][0] for result in results)
+    except (OSError, ValueError, TypeError):
+        return False
 
 
 def _is_ipv4(host: str) -> bool:
@@ -74,7 +99,7 @@ def _connect_postgres(database_url: str, timeout: int = 10):
 
 
 class FreePostgresStore:
-    """Small PostgreSQL-backed blob store used to persist Nova's runtime files."""
+    """Small PostgreSQL-backed blob store used to persist Nova runtime files."""
 
     MAX_FILE_BYTES = 8 * 1024 * 1024
     EXCLUDED_PARTS = {"model", "__pycache__"}
@@ -82,15 +107,25 @@ class FreePostgresStore:
 
     def __init__(self, database_url: str | None = None):
         self.database_url = (database_url or DATABASE_URL).strip()
-        self.enabled = bool(self.database_url and psycopg is not None)
+        self.enabled = bool(
+            self.database_url
+            and psycopg is not None
+            and _database_has_ipv4_route(self.database_url)
+        )
         self._lock = threading.RLock()
+        if self.database_url and not self.enabled:
+            print("Nova free persistence disabled: configured PostgreSQL has no IPv4 route.")
         if self.enabled:
-            self._initialize()
+            try:
+                self._initialize()
+            except Exception as error:
+                self.enabled = False
+                print(f"Nova free persistence disabled: database unavailable ({type(error).__name__}).")
 
     @contextmanager
     def _connect(self):
         if not self.enabled:
-            raise RuntimeError("Free PostgreSQL persistence is not configured.")
+            raise RuntimeError("Free PostgreSQL persistence is unavailable.")
         connection = _connect_postgres(self.database_url, timeout=10)
         try:
             yield connection
@@ -130,15 +165,18 @@ class FreePostgresStore:
             return 0
         root.mkdir(parents=True, exist_ok=True)
         restored = 0
-        with self._lock, self._connect() as db:
-            rows = db.execute("SELECT path, content FROM nova_runtime_files").fetchall()
-            for relative_path, content in rows:
-                target = root / relative_path
-                target.parent.mkdir(parents=True, exist_ok=True)
-                temporary = target.with_suffix(target.suffix + ".remote.tmp")
-                temporary.write_bytes(bytes(content))
-                temporary.replace(target)
-                restored += 1
+        try:
+            with self._lock, self._connect() as db:
+                rows = db.execute("SELECT path, content FROM nova_runtime_files").fetchall()
+                for relative_path, content in rows:
+                    target = root / relative_path
+                    target.parent.mkdir(parents=True, exist_ok=True)
+                    temporary = target.with_suffix(target.suffix + ".remote.tmp")
+                    temporary.write_bytes(bytes(content))
+                    temporary.replace(target)
+                    restored += 1
+        except Exception as error:
+            print(f"Nova free persistence restore warning: {error}")
         return restored
 
     def sync(self, root: Path) -> int:
@@ -160,24 +198,28 @@ class FreePostgresStore:
         if not files:
             return 0
 
-        with self._lock, self._connect() as db:
-            for relative, content, digest in files:
-                db.execute(
-                    """
-                    INSERT INTO nova_runtime_files(path, content, sha256, updated_at)
-                    VALUES (%s, %s, %s, %s)
-                    ON CONFLICT(path) DO UPDATE SET
-                        content = EXCLUDED.content,
-                        sha256 = EXCLUDED.sha256,
-                        updated_at = EXCLUDED.updated_at
-                    """,
-                    (relative, content, digest, datetime.now(timezone.utc)),
-                )
+        try:
+            with self._lock, self._connect() as db:
+                for relative, content, digest in files:
+                    db.execute(
+                        """
+                        INSERT INTO nova_runtime_files(path, content, sha256, updated_at)
+                        VALUES (%s, %s, %s, %s)
+                        ON CONFLICT(path) DO UPDATE SET
+                            content = EXCLUDED.content,
+                            sha256 = EXCLUDED.sha256,
+                            updated_at = EXCLUDED.updated_at
+                        """,
+                        (relative, content, digest, datetime.now(timezone.utc)),
+                    )
+        except Exception as error:
+            print(f"Nova free persistence sync warning: {error}")
+            return 0
         return len(files)
 
     def health(self) -> dict[str, Any]:
         if not self.enabled:
-            return {"enabled": False, "configured": False}
+            return {"enabled": False, "configured": bool(self.database_url), "healthy": False}
         try:
             with self._connect() as db:
                 db.execute("SELECT 1").fetchone()
@@ -196,7 +238,7 @@ class DatabaseSessionStore(MutableMapping[str, dict[str, Any]]):
 
     def __init__(self, database_url: str | None = None):
         self.database_url = (database_url or DATABASE_URL).strip()
-        self.enabled = bool(self.database_url and psycopg is not None)
+        self.enabled = bool(self.database_url and psycopg is not None and _database_has_ipv4_route(self.database_url))
         self._lock = threading.RLock()
         if self.enabled:
             self._initialize()
