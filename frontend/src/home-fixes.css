@@ -1,0 +1,18 @@
+/* Production home-page contrast fixes. */
+.nova-home a.bg-white,
+.nova-home a.bg-white * {
+    color: #0f172a !important;
+}
+
+.nova-home a.bg-white:hover,
+.nova-home a.bg-white:hover * {
+    color: #020617 !important;
+}
+
+.nova-home .bg-white\/\[\.025\] {
+    color: #f8fafc;
+}
+
+.nova-home .bg-white\/\[\.025\] * {
+    color: inherit;
+}
