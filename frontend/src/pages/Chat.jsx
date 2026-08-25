@@ -1,1 +1,1 @@
-export { default } from "./ChatProduction.jsx";
+export { default } from "./ChatProductionV2.jsx";
