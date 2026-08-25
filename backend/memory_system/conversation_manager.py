@@ -15,22 +15,24 @@ class ConversationManager:
     def __init__(self, persist=True):
         self.persist = persist
         self.file = Path(os.getenv("NOVA_CONVERSATIONS_FILE", "data/memory/conversations.json"))
+        self.data = {"users": {}}
 
         if self.persist:
             self.file.parent.mkdir(parents=True, exist_ok=True)
             with _DATA_LOCK:
-                if self.file.exists():
-                    try:
-                        loaded = json.loads(self.file.read_text(encoding="utf-8"))
-                        self.data = loaded if isinstance(loaded, dict) else {"users": {}}
-                    except (json.JSONDecodeError, OSError):
-                        self.data = {"users": {}}
-                else:
-                    self.data = {"users": {}}
+                self._reload_locked()
+                if not self.file.exists():
                     self.save()
-        else:
-            self.data = {"users": {}}
 
+    def _reload_locked(self) -> None:
+        if not self.persist or not self.file.exists():
+            self.data = {"users": {}}
+            return
+        try:
+            loaded = json.loads(self.file.read_text(encoding="utf-8"))
+            self.data = loaded if isinstance(loaded, dict) else {"users": {}}
+        except (json.JSONDecodeError, OSError):
+            self.data = {"users": {}}
         if not isinstance(self.data.get("users"), dict):
             self.data["users"] = {}
 
@@ -58,6 +60,7 @@ class ConversationManager:
 
     def create(self, email):
         with _DATA_LOCK:
+            self._reload_locked()
             user = self._user(email)
             cid = str(uuid.uuid4())
             now = datetime.now().isoformat()
@@ -73,6 +76,7 @@ class ConversationManager:
 
     def list(self, email):
         with _DATA_LOCK:
+            self._reload_locked()
             user = self._user(email)
             conversations = user["conversations"]
             return dict(
@@ -85,6 +89,7 @@ class ConversationManager:
 
     def add_message(self, email, cid, role, text):
         with _DATA_LOCK:
+            self._reload_locked()
             user = self._user(email)
             if cid not in user["conversations"]:
                 return False
@@ -115,11 +120,13 @@ class ConversationManager:
 
     def get(self, email, cid):
         with _DATA_LOCK:
+            self._reload_locked()
             user = self._user(email)
             return user["conversations"].get(cid)
 
     def rename(self, email, cid, title):
         with _DATA_LOCK:
+            self._reload_locked()
             user = self._user(email)
             if cid not in user["conversations"]:
                 return False
@@ -136,6 +143,7 @@ class ConversationManager:
 
     def delete(self, email, cid):
         with _DATA_LOCK:
+            self._reload_locked()
             user = self._user(email)
             if cid not in user["conversations"]:
                 return False
