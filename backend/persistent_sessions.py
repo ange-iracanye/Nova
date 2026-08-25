@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import socket
 import sqlite3
 import threading
 from collections.abc import Iterator, MutableMapping
@@ -11,8 +12,39 @@ from pathlib import Path
 from typing import Any
 
 
+def _database_has_ipv4_route(database_url: str) -> bool:
+    """Return whether the configured PostgreSQL host has an IPv4 address."""
+    try:
+        from psycopg.conninfo import conninfo_to_dict
+
+        params = conninfo_to_dict(database_url)
+        host = str(params.get("host", "")).strip()
+        if not host:
+            return False
+        try:
+            socket.inet_aton(host)
+            return True
+        except OSError:
+            pass
+        results = socket.getaddrinfo(
+            host,
+            int(params.get("port") or 5432),
+            socket.AF_INET,
+            socket.SOCK_STREAM,
+        )
+        return any(result[4][0] for result in results)
+    except (OSError, ValueError, TypeError):
+        return False
+
+
 class PersistentSessionStore(MutableMapping[str, dict[str, Any]]):
-    """Persistent session mapping with SQLite local fallback and PostgreSQL production support."""
+    """Persistent sessions with PostgreSQL support and a safe SQLite fallback.
+
+    Render free web instances can resolve some managed PostgreSQL endpoints to
+    IPv6 even though the instance has no IPv6 route. Authentication must remain
+    usable in that situation, so an IPv6-only DB configuration does not get
+    selected as the session backend.
+    """
 
     def __new__(cls, path: str | None = None):
         if cls is PersistentSessionStore:
@@ -24,27 +56,25 @@ class PersistentSessionStore(MutableMapping[str, dict[str, Any]]):
                 str(Path(os.getenv("NOVA_DATA_DIR", "data")) / "sessions.sqlite3"),
             }
 
-            # Production's normal/default session path is only a compatibility
-            # placeholder. If PostgreSQL is configured, use the real database.
             if environment == "production" and database_url and (
                 not explicit_path or explicit_path in default_sqlite_paths
             ):
-                from backend.postgres_sessions import PostgresSessionStore
-                return PostgresSessionStore(database_url)
+                if _database_has_ipv4_route(database_url):
+                    from backend.postgres_sessions import PostgresSessionStore
+                    return PostgresSessionStore(database_url)
 
-            # An explicitly supplied PostgreSQL URL is also supported.
             if explicit_path.startswith(("postgresql://", "postgres://")):
-                from backend.postgres_sessions import PostgresSessionStore
-                return PostgresSessionStore(explicit_path)
+                if _database_has_ipv4_route(explicit_path):
+                    from backend.postgres_sessions import PostgresSessionStore
+                    return PostgresSessionStore(explicit_path)
+                path = None
 
         return super().__new__(cls)
 
     def __init__(self, path: str | None = None) -> None:
         configured = path or os.getenv("NOVA_SESSION_DB", "data/sessions.sqlite3")
         if str(configured).startswith(("postgresql://", "postgres://")):
-            raise ValueError(
-                "A PostgreSQL URL must be handled by PostgresSessionStore, not SQLite."
-            )
+            configured = "data/sessions.sqlite3"
         self.path = Path(configured)
         self.path.parent.mkdir(parents=True, exist_ok=True)
         self._lock = threading.RLock()
