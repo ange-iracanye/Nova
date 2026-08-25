@@ -9,7 +9,7 @@ const DemoChat = lazy(() => import("./pages/DemoChat"));
 const Dashboard = lazy(() => import("./pages/Dashboard"));
 const Login = lazy(() => import("./pages/Login"));
 const Register = lazy(() => import("./pages/Register"));
-const Settings = lazy(() => import("./pages/Settings"));
+const Settings = lazy(() => import("./pages/settings"));
 const DemoSettings = lazy(() => import("./pages/DemoSettings"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 
