@@ -9,13 +9,42 @@ function apiBase() {
 function rewriteUrl(input) {
     const raw = typeof input === "string" ? input : input?.url || "";
     if (!raw) return input;
-    if (raw.startsWith("http://127.0.0.1:8000")) {
-        return raw.replace("http://127.0.0.1:8000", apiBase());
+
+    let rewritten = raw;
+    if (rewritten.startsWith("http://127.0.0.1:8000")) {
+        rewritten = rewritten.replace("http://127.0.0.1:8000", apiBase());
+    } else if (rewritten.startsWith("http://localhost:8000")) {
+        rewritten = rewritten.replace("http://localhost:8000", apiBase());
     }
-    if (raw.startsWith("http://localhost:8000")) {
-        return raw.replace("http://localhost:8000", apiBase());
+
+    try {
+        const url = new URL(rewritten, window.location.origin);
+        const base = new URL(apiBase());
+        if (url.origin !== base.origin) return rewritten;
+
+        const path = url.pathname;
+        const legacyList = path.match(/^\/conversations\/([^/]+)$/);
+        const legacyGet = path.match(/^\/conversation\/([^/]+)\/([^/]+)$/);
+        const legacyRename = path.match(/^\/conversation\/([^/]+)\/([^/]+)\/rename$/);
+
+        if (path === "/conversation/new") {
+            url.pathname = "/v1/conversations";
+            url.search = "";
+        } else if (legacyRename) {
+            url.pathname = `/v1/conversations/${encodeURIComponent(decodeURIComponent(legacyRename[2]))}`;
+            url.search = "";
+        } else if (legacyGet) {
+            url.pathname = `/v1/conversations/${encodeURIComponent(decodeURIComponent(legacyGet[2]))}`;
+            url.search = "";
+        } else if (legacyList) {
+            url.pathname = "/v1/conversations";
+            url.search = "";
+        }
+
+        return url.toString();
+    } catch {
+        return rewritten;
     }
-    return input;
 }
 
 function isLocalDevelopment() {
@@ -63,16 +92,12 @@ window.fetch = async function novaProductionFetch(input, init = {}) {
         headers.set("Authorization", `Bearer ${token}`);
     }
 
-    let requestInit = {
+    const requestInit = {
         ...init,
         headers,
         credentials: init.credentials || "include",
     };
 
-    // Render's free web services can take a while to wake from sleep. The
-    // login page historically supplied a 10s AbortController, which could
-    // abort a perfectly valid cold-start request before the API responded.
-    // Give authentication requests their own 60s budget in production.
     let authTimeoutId = null;
     let authController = null;
     if (isLoginOrRegister && !isLocalDevelopment()) {
@@ -93,8 +118,6 @@ window.fetch = async function novaProductionFetch(input, init = {}) {
             }
         }
 
-        // Production authentication uses an HttpOnly, Secure session cookie.
-        // Never persist that bearer token in localStorage where XSS could read it.
         if (!isLocalDevelopment() && isLoginOrRegister && response.ok) {
             try {
                 localStorage.removeItem("nova_session");
@@ -106,5 +129,6 @@ window.fetch = async function novaProductionFetch(input, init = {}) {
         return response;
     } finally {
         if (authTimeoutId !== null) window.clearTimeout(authTimeoutId);
+        void authController;
     }
 };
