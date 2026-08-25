@@ -40,10 +40,11 @@ def _database_has_ipv4_route(database_url: str) -> bool:
 class PersistentSessionStore(MutableMapping[str, dict[str, Any]]):
     """Persistent sessions with PostgreSQL support and a safe SQLite fallback.
 
-    Render free web instances can resolve some managed PostgreSQL endpoints to
-    IPv6 even though the instance has no IPv6 route. Authentication must remain
-    usable in that situation, so an IPv6-only DB configuration does not get
-    selected as the session backend.
+    SQLite is intentionally available only outside production. Render free
+    web services have ephemeral filesystems, so silently falling back to a
+    local session database in production would create sessions that disappear
+    on restart or spin-down. Production therefore fails closed until a usable
+    PostgreSQL connection is configured.
     """
 
     def __new__(cls, path: str | None = None):
@@ -56,7 +57,15 @@ class PersistentSessionStore(MutableMapping[str, dict[str, Any]]):
                 str(Path(os.getenv("NOVA_DATA_DIR", "data")) / "sessions.sqlite3"),
             }
 
-            if environment == "production" and database_url and (
+            if environment == "production":
+                if not database_url:
+                    raise RuntimeError("NOVA_DATABASE_URL must be configured in production; SQLite session storage is not persistent on Render.")
+                if not _database_has_ipv4_route(database_url):
+                    raise RuntimeError("NOVA_DATABASE_URL is not reachable over IPv4; configure an IPv4-capable PostgreSQL connection string for production.")
+                from backend.postgres_sessions import PostgresSessionStore
+                return PostgresSessionStore(database_url)
+
+            if database_url and (
                 not explicit_path or explicit_path in default_sqlite_paths
             ):
                 if _database_has_ipv4_route(database_url):
