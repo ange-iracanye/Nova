@@ -1,7 +1,6 @@
 import React, { Suspense, useEffect, useState } from "react";
 import ReactDOM from "react-dom/client";
 import "./index.css";
-import "./global-fixes.css";
 import App from "./App.jsx";
 
 const NOVA_CONFIG = {
