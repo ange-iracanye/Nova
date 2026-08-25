@@ -19,8 +19,6 @@ PUBLIC_FRONTEND_ORIGIN = "https://nova-frontend-i76e.onrender.com"
 def _allowed_origins() -> set[str]:
     raw = os.getenv("NOVA_ALLOWED_ORIGINS", "")
     origins = {item.strip().rstrip("/") for item in raw.split(",") if item.strip()}
-    # Keep the canonical Render frontend available even if an environment
-    # variable was omitted or stale during a deployment.
     origins.add(PUBLIC_FRONTEND_ORIGIN)
     return origins
 
@@ -33,12 +31,22 @@ def _origin(scope: dict[str, Any]) -> str:
             if name.lower() == b"origin"
         ),
         "",
-    )
+    ).rstrip("/")
+
+
+def _origin_is_allowed(origin: str) -> bool:
+    if not origin:
+        return False
+    if origin in _allowed_origins():
+        return True
+    # Render can attach a generated suffix to static-service hostnames.
+    # Only Nova's own HTTPS frontend namespace is accepted here.
+    return origin.startswith("https://nova-frontend") and origin.endswith(".onrender.com")
 
 
 def _cors_headers(scope: dict[str, Any]) -> list[tuple[bytes, bytes]]:
-    origin = _origin(scope).rstrip("/")
-    if not origin or origin not in _allowed_origins():
+    origin = _origin(scope)
+    if not _origin_is_allowed(origin):
         return []
     return [
         (b"access-control-allow-origin", origin.encode("latin-1")),
@@ -115,14 +123,10 @@ async def app(
 
     path = str(scope.get("path", ""))
 
-    # Browser preflight must never depend on the heavy Nova runtime.
     if scope.get("method") == "OPTIONS":
         await _send_options(send, scope)
         return
 
-    # Render and the frontend poll these endpoints frequently. Keep them
-    # deterministic and cheap so platform health checks cannot accidentally
-    # initialize NovaCore/LLM machinery.
     if path == "/":
         await _send_fast_json(
             send,
@@ -185,5 +189,13 @@ async def app(
                     message["more_body"] = False
                     break
 
+    cors = _cors_headers(scope)
     for message in messages:
+        if message.get("type") == "http.response.start" and cors:
+            headers = list(message.get("headers", []))
+            existing = {name.lower() for name, _ in headers}
+            for name, value in cors:
+                if name.lower() not in existing:
+                    headers.append((name, value))
+            message["headers"] = headers
         await send(message)
