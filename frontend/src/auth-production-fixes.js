@@ -1,7 +1,6 @@
 const PRODUCTION_API_URL = "https://nova-api-i07q.onrender.com";
 const ORIGINAL_FETCH = window.fetch.bind(window);
 const AUTH_TIMEOUT_MS = 60000;
-const GET_DEDUP_WINDOW_MS = 30000;
 const recentGets = new Map();
 
 function apiBase() {
@@ -103,7 +102,9 @@ window.fetch = async function novaProductionFetch(input, init = {}) {
     const dedupeKey = (isConversationRead || isHealthRead) ? String(url) : "";
     if (dedupeKey) {
         const cached = recentGets.get(dedupeKey);
-        if (cached && Date.now() - cached.time < GET_DEDUP_WINDOW_MS) return (await cached.promise).clone();
+        if (cached) {
+            try { return (await cached).clone(); } catch { recentGets.delete(dedupeKey); }
+        }
     }
     let authTimeoutId = null;
     let authController = null;
@@ -114,12 +115,11 @@ window.fetch = async function novaProductionFetch(input, init = {}) {
     }
     const request = ORIGINAL_FETCH(url, requestInit);
     if (dedupeKey) {
-        recentGets.set(dedupeKey, { time: Date.now(), promise: request });
+        recentGets.set(dedupeKey, request);
         request.finally(() => {
             window.setTimeout(() => {
-                const current = recentGets.get(dedupeKey);
-                if (current?.promise === request) recentGets.delete(dedupeKey);
-            }, GET_DEDUP_WINDOW_MS);
+                if (recentGets.get(dedupeKey) === request) recentGets.delete(dedupeKey);
+            }, 1000);
         }).catch(() => {});
     }
     try {
