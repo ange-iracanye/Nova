@@ -9,23 +9,12 @@ from typing import Any
 from backend.settings import SettingsManager
 
 # Keep the settings schema backwards compatible while allowing the public
-# language selector to grow without changing the storage format.
+# language selector to use the same catalog as the frontend.
 SettingsManager.ALLOWED_LANGUAGES = {
-    "English",
-    "French",
-    "Spanish",
-    "German",
-    "Italian",
-    "Portuguese",
-    "Dutch",
-    "Polish",
-    "Turkish",
-    "Russian",
-    "Arabic",
-    "Hindi",
-    "Chinese",
-    "Japanese",
-    "Korean",
+    "English", "Spanish", "Chinese", "Hindi", "French", "Arabic",
+    "Portuguese", "Russian", "German", "Japanese", "Korean", "Italian",
+    "Turkish", "Dutch", "Polish", "Ukrainian", "Vietnamese", "Thai",
+    "Indonesian", "Swedish", "Greek", "Czech", "Romanian", "Hungarian",
 }
 
 _current_user: contextvars.ContextVar[str | None] = contextvars.ContextVar("nova_settings_user", default=None)
