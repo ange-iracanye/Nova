@@ -46,27 +46,163 @@ function normalizeApiUrl(rawUrl) {
     return url;
 }
 
+function installNovaThinkingIndicator() {
+    if (window.__novaThinkingIndicatorInstalled) return;
+
+    const style = document.createElement("style");
+    style.textContent = `
+        #nova-thinking-indicator {
+            position: fixed;
+            left: 50%;
+            bottom: 92px;
+            transform: translate(-50%, 12px);
+            z-index: 9999;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 9px 14px;
+            border: 1px solid rgba(255,255,255,.10);
+            border-radius: 999px;
+            background: rgba(7,10,17,.90);
+            color: rgba(226,232,240,.86);
+            box-shadow: 0 12px 40px rgba(0,0,0,.35);
+            backdrop-filter: blur(14px);
+            font: 600 12px/1.2 system-ui, sans-serif;
+            letter-spacing: .02em;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity .18s ease, transform .18s ease;
+        }
+        #nova-thinking-indicator.nova-thinking-visible {
+            opacity: 1;
+            transform: translate(-50%, 0);
+        }
+        #nova-thinking-indicator .nova-thinking-dots {
+            display: inline-flex;
+            gap: 4px;
+            align-items: center;
+        }
+        #nova-thinking-indicator .nova-thinking-dot {
+            width: 5px;
+            height: 5px;
+            border-radius: 50%;
+            background: currentColor;
+            opacity: .35;
+            animation: nova-thinking-bounce 1s infinite ease-in-out;
+        }
+        #nova-thinking-indicator .nova-thinking-dot:nth-child(2) { animation-delay: .14s; }
+        #nova-thinking-indicator .nova-thinking-dot:nth-child(3) { animation-delay: .28s; }
+        @keyframes nova-thinking-bounce {
+            0%, 60%, 100% { transform: translateY(0); opacity: .35; }
+            30% { transform: translateY(-4px); opacity: 1; }
+        }
+        @media (max-width: 640px) {
+            #nova-thinking-indicator { bottom: 78px; }
+        }
+    `;
+    document.head.appendChild(style);
+
+    const indicator = document.createElement("div");
+    indicator.id = "nova-thinking-indicator";
+    indicator.setAttribute("role", "status");
+    indicator.setAttribute("aria-live", "polite");
+    indicator.innerHTML = `
+        <span>Nova is thinking</span>
+        <span class="nova-thinking-dots" aria-hidden="true">
+            <span class="nova-thinking-dot"></span>
+            <span class="nova-thinking-dot"></span>
+            <span class="nova-thinking-dot"></span>
+        </span>
+    `;
+    document.body.appendChild(indicator);
+
+    let pendingTimer = null;
+
+    window.__novaShowThinking = () => {
+        if (pendingTimer) window.clearTimeout(pendingTimer);
+        pendingTimer = window.setTimeout(() => {
+            indicator.classList.add("nova-thinking-visible");
+        }, 180);
+    };
+
+    window.__novaHideThinking = () => {
+        if (pendingTimer) {
+            window.clearTimeout(pendingTimer);
+            pendingTimer = null;
+        }
+        indicator.classList.remove("nova-thinking-visible");
+    };
+
+    window.__novaThinkingIndicatorInstalled = true;
+}
+
 function installApiCredentialPolicy() {
     if (window.__novaCredentialFetchInstalled) return;
+
     const originalFetch = window.fetch.bind(window);
+
     window.fetch = (input, init = {}) => {
         const originalUrl = typeof input === "string" ? input : input?.url || "";
-        const url = normalizeApiUrl(originalUrl);
+        let url = normalizeApiUrl(originalUrl);
         const isApiRequest = url === API_BASE || url.startsWith(`${API_BASE}/`);
+
         if (!isApiRequest) return originalFetch(input, init);
 
-        const headers = new Headers(init.headers || {});
+        const method = String(init.method || (input instanceof Request ? input.method : "GET") || "GET").toUpperCase();
+        const isRootHealthProbe = method === "GET" && url === API_BASE;
+
+        // The chat UI historically probes `/`. Use the dedicated health
+        // endpoint instead so the displayed status reflects the real API.
+        if (isRootHealthProbe) {
+            url = `${API_BASE}/health`;
+        }
+
+        const headers = new Headers(input instanceof Request ? input.headers : undefined);
+        const initHeaders = new Headers(init.headers || {});
+        initHeaders.forEach((value, key) => headers.set(key, value));
         headers.set("Accept", headers.get("Accept") || "application/json");
+
         const token = readSessionToken();
         if (token) headers.set("Authorization", `Bearer ${token}`);
 
-        return originalFetch(url, { ...init, headers, credentials: "include" });
+        let requestInput = url;
+        let requestInit = { ...init, headers, credentials: "include" };
+
+        // Preserve Request bodies and methods instead of rebuilding a Request
+        // from only its URL. The old wrapper discarded the Request body, which
+        // could surface as browser errors such as "body is disturbed or locked".
+        if (input instanceof Request && !isRootHealthProbe) {
+            try {
+                requestInput = new Request(url, input);
+                requestInit = { ...init, headers, credentials: "include" };
+            } catch (error) {
+                console.error("[Nova] Could not preserve Fetch Request:", error);
+                return originalFetch(input, init);
+            }
+        }
+
+        const isThinkingRequest = method === "POST" && (
+            url === `${API_BASE}/chat/stream` ||
+            url === `${API_BASE}/demo/chat/stream`
+        );
+
+        if (isThinkingRequest) window.__novaShowThinking?.();
+
+        const requestPromise = originalFetch(requestInput, requestInit);
+
+        if (!isThinkingRequest) return requestPromise;
+
+        return requestPromise.finally(() => {
+            window.__novaHideThinking?.();
+        });
     };
+
     window.__novaCredentialFetchInstalled = true;
 }
 
 function initializeNova() {
     try {
+        installNovaThinkingIndicator();
         installApiCredentialPolicy();
         localStorage.setItem(NOVA_CONFIG.storageKeys.initialized, "true");
         const savedTheme = localStorage.getItem(NOVA_CONFIG.storageKeys.theme);
