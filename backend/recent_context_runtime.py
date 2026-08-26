@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import re
 import threading
-from typing import Any, Dict, Iterable, List
+from typing import Any, Iterable, List
 
 
 _INSTALL_LOCK = threading.Lock()
@@ -29,6 +29,9 @@ _REFERENCE_PHRASES = (
     "where we left off", "pick up", "resume", "again", "same topic", "that thing",
     "what did we", "what were we", "my last", "our last",
 )
+
+_CASUAL_INTENTS = {"greeting", "hello", "hi", "thanks", "farewell", "casual_conversation"}
+_LEARNING_INTENTS = {"learning", "question", "homework", "explanation", "practice", "quiz", "correction", "problem_solving", "study"}
 
 
 def _tokens(value: Any) -> set[str]:
@@ -55,8 +58,12 @@ def _compact_messages(messages: Iterable[Any], limit: int = 4, chars: int = 2600
     return "\n".join(selected)[:chars]
 
 
-def build_recent_context(manager: Any, email: str, current_id: str | None, query: str) -> str:
+def build_recent_context(manager: Any, email: str, current_id: str | None, query: str, intent: str | None = None) -> str:
     """Build a small, relevance-aware memory block from the user's chats."""
+    normalized_intent = str(intent or "").strip().casefold()
+    if normalized_intent in _CASUAL_INTENTS:
+        return ""
+
     conversations = manager.list(email)
     if not isinstance(conversations, dict) or not conversations:
         return ""
@@ -65,16 +72,21 @@ def build_recent_context(manager: Any, email: str, current_id: str | None, query
     lowered = str(query or "").casefold()
     explicit_reference = any(phrase in lowered for phrase in _REFERENCE_PHRASES)
 
+    # Keep continuity for learning requests and explicit references. For a
+    # generic message, only bring another chat in when it is clearly related.
+    include_current = normalized_intent in _LEARNING_INTENTS or explicit_reference
+    allow_cross_chat = include_current or explicit_reference
+
     current = conversations.get(current_id) if current_id else None
     blocks: List[str] = []
 
-    if isinstance(current, dict):
+    if include_current and isinstance(current, dict):
         current_text = _compact_messages(current.get("messages", []), limit=6, chars=3200)
         if current_text:
-            blocks.append(
-                "Current conversation continuity:\n"
-                + current_text
-            )
+            blocks.append("Current conversation continuity:\n" + current_text)
+
+    if not allow_cross_chat:
+        return "\n\n---\n\n".join(blocks) if blocks else ""
 
     candidates = []
     for conversation_id, conversation in conversations.items():
@@ -141,6 +153,7 @@ def install_recent_context_runtime() -> None:
                     request.user_email,
                     request.conversation_id,
                     request.original_message,
+                    request.intent,
                 )
                 if recent:
                     existing = str(request.memory_context or "").strip()
