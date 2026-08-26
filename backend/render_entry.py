@@ -34,8 +34,6 @@ def _origin_is_allowed(origin: str) -> bool:
         return False
     if origin in _allowed_origins():
         return True
-    # Nova may be served from a verified custom domain or another Render
-    # frontend hostname. Only HTTPS browser origins are accepted in production.
     return origin.startswith("https://")
 
 
@@ -51,6 +49,16 @@ def _cors_headers(scope: dict[str, Any]) -> list[tuple[bytes, bytes]]:
         (b"access-control-max-age", b"600"),
         (b"vary", b"Origin"),
     ]
+
+
+def _with_cors(headers: list[tuple[bytes, bytes]], cors: list[tuple[bytes, bytes]]) -> list[tuple[bytes, bytes]]:
+    """Replace conflicting CORS headers instead of leaving two origins behind."""
+    if not cors:
+        return headers
+    cors_names = {name.lower() for name, _ in cors}
+    filtered = [(name, value) for name, value in headers if name.lower() not in cors_names]
+    filtered.extend(cors)
+    return filtered
 
 
 async def _send_fast_json(send: Callable[..., Awaitable[Any]], status: int, payload: dict[str, Any], scope: dict[str, Any]) -> None:
@@ -73,7 +81,7 @@ async def _send_options(send: Callable[..., Awaitable[Any]], scope: dict[str, An
 
 
 async def _forward_with_rewrite(scope: dict[str, Any], receive: Callable[..., Awaitable[Any]], send: Callable[..., Awaitable[Any]]) -> None:
-    """Forward requests to boot.app while preserving production CORS headers."""
+    """Forward requests to boot.app while forcing one correct CORS origin."""
     path = str(scope.get("path", ""))
     if path == "/dashboard":
         scope = dict(scope)
@@ -84,11 +92,7 @@ async def _forward_with_rewrite(scope: dict[str, Any], receive: Callable[..., Aw
 
     async def cors_send(message: dict[str, Any]) -> None:
         if message.get("type") == "http.response.start" and cors:
-            headers = list(message.get("headers", []))
-            existing = {name.lower() for name, _ in headers}
-            for name, value in cors:
-                if name.lower() not in existing:
-                    headers.append((name, value))
+            headers = _with_cors(list(message.get("headers", [])), cors)
             message = {**message, "headers": headers}
         await send(message)
 
@@ -158,10 +162,5 @@ async def app(scope: dict[str, Any], receive: Callable[..., Awaitable[Any]], sen
     cors = _cors_headers(scope)
     for message in messages:
         if message.get("type") == "http.response.start" and cors:
-            headers = list(message.get("headers", []))
-            existing = {name.lower() for name, _ in headers}
-            for name, value in cors:
-                if name.lower() not in existing:
-                    headers.append((name, value))
-            message["headers"] = headers
+            message["headers"] = _with_cors(list(message.get("headers", [])), cors)
         await send(message)
