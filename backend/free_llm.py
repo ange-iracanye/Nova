@@ -1,9 +1,8 @@
 """Zero-cost public LLM adapter for Nova V1.
 
-OpenRouter is used for the public V1 provider. Nova pins a strong free
-reasoning model first, then falls back to OpenRouter's free-model router if
-that model is unavailable. No paid model is ever requested by this adapter.
-Nova V1 itself is restricted to users aged 16+ by the application policy.
+OpenRouter is used for the public V1 provider. Nova prefers a fast free model
+for normal tutoring and falls back to OpenRouter's free-model router when that
+model is unavailable. No paid model is ever requested by this adapter.
 """
 
 from __future__ import annotations
@@ -26,10 +25,13 @@ class FreeLLM:
     }
 
     API_URL = "https://openrouter.ai/api/v1/chat/completions"
-    DEFAULT_MODEL = "nvidia/nemotron-3-ultra:free"
+    # Hy3 has a no-think default and is materially lighter for everyday tutoring
+    # than the previous 550B Nemotron free endpoint.
+    DEFAULT_MODEL = "tencent/hy3:free"
     FREE_ROUTER_MODEL = "openrouter/free"
+    DEFAULT_MAX_TOKENS = 1200
 
-    def __init__(self, model: Optional[str] = None, max_retries: int = 1, retry_delay: float = 1.0):
+    def __init__(self, model: Optional[str] = None, max_retries: int = 1, retry_delay: float = 0.35):
         self.model = model or os.getenv("NOVA_LLM_MODEL", self.DEFAULT_MODEL)
         self.fallback_model = os.getenv("NOVA_LLM_FALLBACK_MODEL", self.FREE_ROUTER_MODEL)
         self.api_key = os.getenv("OPENROUTER_API_KEY", "").strip()
@@ -42,7 +44,6 @@ class FreeLLM:
         self.successful_requests = 0
         self.failed_requests = 0
 
-        # Public V1 must never silently request a paid model.
         for configured_model in (self.model, self.fallback_model):
             if configured_model and configured_model != self.FREE_ROUTER_MODEL and not configured_model.endswith(":free"):
                 raise ValueError("Public Nova may only use an OpenRouter free model.")
@@ -77,6 +78,7 @@ class FreeLLM:
             ],
             "temperature": settings["temperature"],
             "top_p": settings["top_p"],
+            "max_tokens": self.DEFAULT_MAX_TOKENS,
         }
         request = Request(
             self.API_URL,
@@ -90,10 +92,9 @@ class FreeLLM:
             method="POST",
         )
         try:
-            with urlopen(request, timeout=60) as response:
+            with urlopen(request, timeout=35) as response:
                 data = json.loads(response.read().decode("utf-8"))
         except HTTPError as error:
-            # Keep provider internals out of user-visible exceptions/logs.
             raise RuntimeError(f"OpenRouter API request failed (HTTP {error.code}).") from error
         except URLError as error:
             raise RuntimeError("OpenRouter connection failed.") from error
