@@ -1,7 +1,10 @@
 const PRODUCTION_API_URL = "https://nova-api-i07q.onrender.com";
 const ORIGINAL_FETCH = window.fetch.bind(window);
 const AUTH_TIMEOUT_MS = 60000;
+const HEALTH_CACHE_MS = 30000;
+const GET_CACHE_MS = 5000;
 const recentGets = new Map();
+const successfulGetCache = new Map();
 
 function apiBase() {
     return (import.meta.env.VITE_API_URL || PRODUCTION_API_URL).replace(/\/+$/, "");
@@ -85,6 +88,14 @@ function installHomeContrastFix() {
     document.head.appendChild(style);
 }
 
+function isCacheableGet(method, url) {
+    return method === "GET" && /^https:\/\/[^/]+\/(?:health|ready|v1\/conversations(?:\/[^/]+)?)$/.test(String(url));
+}
+
+function cacheTtl(url) {
+    return /\/health$|\/ready$/.test(String(url)) ? HEALTH_CACHE_MS : GET_CACHE_MS;
+}
+
 window.fetch = async function novaProductionFetch(input, init = {}) {
     const url = rewriteUrl(input);
     const headers = new Headers(input instanceof Request ? input.headers : undefined);
@@ -97,13 +108,17 @@ window.fetch = async function novaProductionFetch(input, init = {}) {
     if (token && !isAuthRequest && !headers.has("Authorization")) headers.set("Authorization", `Bearer ${token}`);
     const requestInit = { ...init, headers, credentials: isHealthRequest ? "omit" : (init.credentials || "include") };
     const method = String(requestInit.method || "GET").toUpperCase();
-    const isConversationRead = method === "GET" && /^https:\/\/[^/]+\/v1\/conversations(?:\/[^/]+)?$/.test(String(url));
-    const isHealthRead = method === "GET" && /^https:\/\/[^/]+\/(?:health|ready)$/.test(String(url));
-    const dedupeKey = (isConversationRead || isHealthRead) ? String(url) : "";
-    if (dedupeKey) {
-        const cached = recentGets.get(dedupeKey);
-        if (cached) {
-            try { return (await cached).clone(); } catch { recentGets.delete(dedupeKey); }
+    const cacheableGet = isCacheableGet(method, url);
+    const cacheKey = cacheableGet ? String(url) : "";
+    if (cacheKey) {
+        const cached = successfulGetCache.get(cacheKey);
+        if (cached && Date.now() - cached.timestamp < cacheTtl(url)) {
+            return cached.response.clone();
+        }
+        if (cached) successfulGetCache.delete(cacheKey);
+        const inFlight = recentGets.get(cacheKey);
+        if (inFlight) {
+            try { return (await inFlight).clone(); } catch { recentGets.delete(cacheKey); }
         }
     }
     let authTimeoutId = null;
@@ -114,16 +129,12 @@ window.fetch = async function novaProductionFetch(input, init = {}) {
         requestInit.signal = authController.signal;
     }
     const request = ORIGINAL_FETCH(url, requestInit);
-    if (dedupeKey) {
-        recentGets.set(dedupeKey, request);
-        request.finally(() => {
-            window.setTimeout(() => {
-                if (recentGets.get(dedupeKey) === request) recentGets.delete(dedupeKey);
-            }, 1000);
-        }).catch(() => {});
-    }
+    if (cacheKey) recentGets.set(cacheKey, request);
     try {
         const response = await request;
+        if (cacheKey && response.ok) {
+            successfulGetCache.set(cacheKey, { timestamp: Date.now(), response: response.clone() });
+        }
         if (isLoginOrRegister && response.ok) {
             try {
                 const data = await response.clone().json();
@@ -135,6 +146,7 @@ window.fetch = async function novaProductionFetch(input, init = {}) {
         }
         return response;
     } finally {
+        if (cacheKey && recentGets.get(cacheKey) === request) recentGets.delete(cacheKey);
         if (authTimeoutId !== null) window.clearTimeout(authTimeoutId);
         void authController;
     }
