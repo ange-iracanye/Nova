@@ -1,0 +1,79 @@
+name: One-time Render memory repair
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  repair:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Patch Render production dependencies and semantic memory
+        shell: python
+        run: |
+          from pathlib import Path
+          import re
+
+          memory = Path("backend/memory_system/memory_manager.py")
+          text = memory.read_text(encoding="utf-8")
+
+          text = text.replace(
+              "from sentence_transformers import SentenceTransformer\n\n",
+              "import os\n\n"
+          )
+
+          old = '''    def _load_embedder(self):\n\n        if self.embedder is not None:\n            return\n\n        model_path = Path("data/model")\n\n        try:\n\n            self.embedder = SentenceTransformer(\n                str(model_path)\n            )\n\n            self.search_engine.embedder = (\n                self.embedder\n            )\n\n            print(\n                "Nova Memory Embeddings ready."\n            )\n\n        except Exception as error:\n\n            print(\n                "Memory embeddings unavailable:",\n                error\n            )\n\n            self.embedder = None\n'''
+
+          new = '''    def _load_embedder(self):\n\n        if self.embedder is not None:\n            return\n\n        # The public Render instance has 512 MB RAM. Loading the\n        # SentenceTransformer/Torch stack for every first chat request\n        # can exhaust that limit and make Render return HTTP 503 while\n        # restarting the process. Public V1 therefore uses the existing\n        # keyword/recency/importance memory retrieval unless semantic\n        # embeddings are explicitly enabled. Local development keeps the\n        # previous behavior by default.\n        production = os.getenv("NOVA_ENV", "development").strip().lower() == "production"\n        enabled = os.getenv(\n            "NOVA_ENABLE_SEMANTIC_MEMORY",\n            "false" if production else "true",\n        ).strip().lower() in {"1", "true", "yes", "on"}\n        if not enabled:\n            return\n\n        model_path = Path("data/model")\n\n        try:\n            from sentence_transformers import SentenceTransformer\n\n            self.embedder = SentenceTransformer(\n                str(model_path)\n            )\n\n            self.search_engine.embedder = (\n                self.embedder\n            )\n\n            print(\n                "Nova Memory Embeddings ready."\n            )\n\n        except Exception as error:\n\n            print(\n                "Memory embeddings unavailable:",\n                error\n            )\n\n            self.embedder = None\n'''
+
+          if old not in text:
+              raise SystemExit("Expected memory embedding block was not found")
+          memory.write_text(text.replace(old, new), encoding="utf-8")
+
+          requirements = Path("requirements-render.txt")
+          requirements.write_text("""Flask==3.1.3\nfastapi>=0.115,<1\nuvicorn[standard]>=0.30,<1\nddgs==9.14.4\nollama==0.6.2\npsycopg[binary]>=3.2,<4\nsympy==1.14.0\nPyYAML==6.0.3\nPygments==2.20.0\n""", encoding="utf-8")
+
+          render = Path("render.yaml")
+          render_text = render.read_text(encoding="utf-8")
+          render_text = render_text.replace(
+              "python -m pip install --upgrade pip && python -m pip install -r requirements.txt",
+              "python -m pip install --upgrade pip && python -m pip install -r requirements-render.txt",
+          )
+          render_text = render_text.replace(
+              "value: nvidia/nemotron-3-ultra-550b-a55b:free",
+              "value: nvidia/nemotron-3-ultra:free",
+          )
+          if "NOVA_ENABLE_SEMANTIC_MEMORY" not in render_text:
+              render_text = render_text.replace(
+                  "      - key: NOVA_ENABLE_DOCS\n",
+                  "      - key: NOVA_ENABLE_SEMANTIC_MEMORY\n        value: \"false\"\n      - key: NOVA_ENABLE_DOCS\n",
+              )
+          render.write_text(render_text, encoding="utf-8")
+
+          # Keep the large local ML stack for development/tests, but make the
+          # production deployment install only what the public API needs.
+          renderignore = Path(".renderignore")
+          ri = renderignore.read_text(encoding="utf-8")
+          additions = ["/datasets/", "/Documents/", "/test/", "/tests/", "/training/"]
+          for item in additions:
+              if item not in ri:
+                  ri += f"\n{item}"
+          renderignore.write_text(ri.rstrip() + "\n", encoding="utf-8")
+
+      - name: Commit repair and remove this workflow
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git rm .github/workflows/repair-render-memory.yml
+          git add backend/memory_system/memory_manager.py requirements-render.txt render.yaml .renderignore
+          git commit -m "fix: make Render public backend memory-safe"
+          git push
