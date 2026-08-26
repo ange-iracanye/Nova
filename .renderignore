@@ -23,3 +23,9 @@ __pycache__/
 # Local tooling
 .vscode/
 .idea/
+
+/datasets/
+/Documents/
+/test/
+/tests/
+/training/

@@ -3,7 +3,7 @@ import hashlib
 from pathlib import Path
 from datetime import datetime
 
-from sentence_transformers import SentenceTransformer
+import os
 
 from backend.memory_system.memory_search import MemorySearch
 from backend.memory_system.memory_extractor import MemoryExtractor
@@ -149,9 +149,25 @@ class MemoryManager:
         if self.embedder is not None:
             return
 
+        # The public Render instance has 512 MB RAM. Loading the
+        # SentenceTransformer/Torch stack for every first chat request
+        # can exhaust that limit and make Render return HTTP 503 while
+        # restarting the process. Public V1 therefore uses the existing
+        # keyword/recency/importance memory retrieval unless semantic
+        # embeddings are explicitly enabled. Local development keeps the
+        # previous behavior by default.
+        production = os.getenv("NOVA_ENV", "development").strip().lower() == "production"
+        enabled = os.getenv(
+            "NOVA_ENABLE_SEMANTIC_MEMORY",
+            "false" if production else "true",
+        ).strip().lower() in {"1", "true", "yes", "on"}
+        if not enabled:
+            return
+
         model_path = Path("data/model")
 
         try:
+            from sentence_transformers import SentenceTransformer
 
             self.embedder = SentenceTransformer(
                 str(model_path)
