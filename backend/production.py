@@ -23,13 +23,13 @@ from backend.persistent_sessions import PersistentSessionStore
 from backend.user_settings import UserSettingsProxy, reset_current_user, set_current_user
 
 install_fast_runtime()
-_ORIGINAL_STREAM_TEXT = api.stream_text
 
-async def _fast_stream_text(text: str, chunk_size: int = 120, delay: float = 0.0):
-    async for chunk in _ORIGINAL_STREAM_TEXT(text, chunk_size=chunk_size, delay=delay):
-        yield chunk
-
-api.stream_text = _fast_stream_text
+# `backend.api` owns the streaming helper used by the legacy /chat/stream
+# route. Do not replace or snapshot it here. In the Render boot path the API
+# module can already be partially initialized when this production wrapper is
+# imported, and eagerly reading/rebinding api.stream_text makes startup depend
+# on import order. The production wrapper does not need to patch streaming at
+# all, so leave the API implementation untouched.
 api.settings_manager = UserSettingsProxy()
 
 DATA_DIR = Path(os.getenv("NOVA_DATA_DIR", "data"))
