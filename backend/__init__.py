@@ -93,3 +93,24 @@ try:
         print("Nova OpenRouter free provider enabled.")
 except Exception as _error:
     print(f"Nova OpenRouter free provider unavailable: {_error}")
+
+# Settings are read by a long-lived NovaCore SettingsManager instance. The
+# settings API can update the backing JSON while that instance is alive, so
+# refresh the in-memory snapshot whenever settings are read. This keeps a
+# newly saved name, language and tutoring preferences visible to the next
+# request without requiring a server restart.
+try:
+    from backend.settings import SettingsManager as _NovaSettingsManager
+
+    _nova_original_settings_get = _NovaSettingsManager.get
+
+    def _nova_settings_get_fresh(self, *args, **kwargs):
+        try:
+            self._load()
+        except Exception:
+            pass
+        return _nova_original_settings_get(self, *args, **kwargs)
+
+    _NovaSettingsManager.get = _nova_settings_get_fresh
+except Exception as _error:
+    print(f"Nova settings refresh hook unavailable: {_error}")
