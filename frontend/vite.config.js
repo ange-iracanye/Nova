@@ -49,67 +49,41 @@ export default defineConfig(({ mode }) => {
                 if (!id.endsWith("/src/pages/Chat.jsx")) return null;
                 let next = code;
 
-                // The source currently polls every 3 seconds. Keep the health
-                // indicator lightweight even if a future refactor restores the
-                // shorter interval.
+                // Production Chat must perform one health probe on mount, not a
+                // polling loop. Continuous health polling was amplifying Render
+                // edge/rate-limit failures and made genuine backend failures look
+                // like CORS failures in the browser.
                 next = next.replace(
-                    /setInterval\(\s*checkBackend,\s*3000\s*\)/g,
-                    "setInterval(checkBackend, 30000)"
+                    /\/\* =======================================================\s*BACKEND CHECK\s*======================================================= \*\/[\s\S]*?\/\* =======================================================\s*DEMO SESSION\s*======================================================= \*\//,
+                    `/* =======================================================\n     BACKEND CHECK\n     ======================================================= */\n\n  const checkBackend = useCallback(async () => {\n    try {\n      const r = await fetch(\`${API_URL}/health\`, { cache: "no-store" });\n      if (mountedRef.current) setBackend(r.ok);\n    } catch {\n      if (mountedRef.current) setBackend(false);\n    }\n  }, []);\n\n  useEffect(() => {\n    checkBackend();\n  }, [checkBackend]);\n\n  /* =======================================================\n     DEMO SESSION\n     ======================================================= */`
                 );
 
-                // Replace the exact legacy conversation URLs wherever they are
-                // present. The runtime fetch wrapper also protects older builds.
+                // Fallback for older formatting if the full block replacement did
+                // not match. This deliberately removes only the interval itself.
                 next = next.replace(
-                    /`\$\{API_URL\}\/conversations\/\$\{encodeURIComponent\(\s*user\.email\s*\)\}`/g,
-                    "`${API_URL}/v1/conversations`"
-                );
-                next = next.replace(
-                    /`\$\{API_URL\}\/conversation\/\$\{encodeURIComponent\(\s*user\.email\s*\)\}\/\$\{encodeURIComponent\(id\)\}`/g,
-                    "`${API_URL}/v1/conversations/${encodeURIComponent(id)}`"
-                );
-                next = next.replace(
-                    /`\$\{API_URL\}\/conversation\/new`/g,
-                    "`${API_URL}/v1/conversations`"
+                    /\n\s*const interval\s*=\s*setInterval\([\s\S]*?\);\s*\n\s*return \(\) => \{\s*\n\s*clearInterval\(interval\);\s*\n\s*\};/m,
+                    ""
                 );
 
-                // Fix the actual nested dependency array in Chat.jsx. This is
-                // intentionally broad about whitespace so formatting changes
-                // cannot silently reintroduce the render/effect loop.
+                // Replace legacy conversation endpoints regardless of whitespace
+                // or line wrapping.
+                next = next.replace(/\$\{API_URL\}\/conversations\/\$\{encodeURIComponent\(\s*user\.email\s*\)\}/g, "${API_URL}/v1/conversations");
+                next = next.replace(/\$\{API_URL\}\/conversation\/\$\{encodeURIComponent\(\s*user\.email\s*\)\}\/\$\{encodeURIComponent\(id\)\}/g, "${API_URL}/v1/conversations/${encodeURIComponent(id)}");
+                next = next.replace(/\$\{API_URL\}\/conversation\/new/g, "${API_URL}/v1/conversations");
+
+                // Fix the nested dependency array that otherwise recreates the
+                // openConversation callback on every render.
                 next = next.replace(
                     /\[\s*\[\s*demo\s*,\s*navigate\s*,\s*scrollBottom\s*,\s*mode\s*,?\s*\]\s*\]/g,
                     "[demo, navigate, scrollBottom, mode]"
                 );
 
-                // The health probe should use the explicit health endpoint.
-                next = next.replace(
-                    /fetch\(\s*`\$\{API_URL\}\/`\s*,/g,
-                    "fetch(`${API_URL}/health`,"
-                );
+                // Keep dashboard on the authenticated V1 endpoint.
+                next = next.replace(/\$\{API_URL\}\/dashboard\?email=\$\{encodeURIComponent\(\s*currentUser\.email\s*\)\}/g, "${API_URL}/v1/dashboard");
 
-                next = next.replace(
-                    /previous\.slice\(0, index\)/g,
-                    "previous.slice(0, Math.max(0, index - 1))"
-                );
-                next = next.replace(
-                    /const \[sidebar, setSidebar\] = useState\(true\);/g,
-                    'const [sidebar, setSidebar] = useState(() => typeof window !== "undefined" && window.innerWidth >= 768);'
-                );
+                next = next.replace(/previous\.slice\(0, index\)/g, "previous.slice(0, Math.max(0, index - 1))");
+                next = next.replace(/const \[sidebar, setSidebar\] = useState\(true\);/g, 'const [sidebar, setSidebar] = useState(() => typeof window !== "undefined" && window.innerWidth >= 768);');
 
-                return next === code ? null : { code: next, map: null };
-            },
-        };
-    }
-
-    function novaDashboardProductionFixes() {
-        return {
-            name: "nova-dashboard-production-fixes",
-            enforce: "post",
-            transform(code, id) {
-                if (!id.endsWith("/src/pages/Dashboard.jsx")) return null;
-                const next = code.replace(
-                    /`\$\{API_URL\}\/dashboard\?email=\$\{encodeURIComponent\(\s*currentUser\.email\s*\)\}`/m,
-                    "`${API_URL}/v1/dashboard`"
-                );
                 return next === code ? null : { code: next, map: null };
             },
         };
@@ -122,7 +96,6 @@ export default defineConfig(({ mode }) => {
             productionApiEndpoint(),
             novaProductionRuntime(),
             novaChatProductionFixes(),
-            novaDashboardProductionFixes(),
         ],
         define: {
             "import.meta.env.VITE_API_URL": JSON.stringify(apiUrl),
