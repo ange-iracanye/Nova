@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import time
 from typing import Any, Dict, Optional
 from urllib.error import HTTPError, URLError
@@ -28,6 +29,14 @@ class FreeLLM:
     API_URL = "https://openrouter.ai/api/v1/chat/completions"
     DEFAULT_MODEL = "nvidia/nemotron-3-ultra:free"
     FREE_ROUTER_MODEL = "openrouter/free"
+
+    # Provider/model metadata occasionally leaks into the generated text.
+    # It is never a valid Nova answer and must not reach the user interface.
+    INTERNAL_RESPONSE_PATTERNS = (
+        re.compile(r"^user\s+safety\s*:\s*(?:safe|unsafe|unknown)\s*$", re.I),
+        re.compile(r"^assistant\s+safety\s*:\s*(?:safe|unsafe|unknown)\s*$", re.I),
+        re.compile(r"^safety\s*:\s*(?:safe|unsafe|unknown)\s*$", re.I),
+    )
 
     def __init__(self, model: Optional[str] = None, max_retries: int = 1, retry_delay: float = 1.0):
         self.model = model or os.getenv("NOVA_LLM_MODEL", self.DEFAULT_MODEL)
@@ -59,6 +68,14 @@ class FreeLLM:
 
     def get_model(self) -> str:
         return self.model
+
+    @classmethod
+    def _is_internal_response(cls, text: str) -> bool:
+        """Return True when a provider leaked an internal safety/meta field."""
+        value = str(text or "").strip()
+        if not value:
+            return True
+        return any(pattern.fullmatch(value) for pattern in cls.INTERNAL_RESPONSE_PATTERNS)
 
     def _generate(self, system: str, user: str, settings: Dict[str, Any], model: str) -> str:
         if not self.api_key:
@@ -100,8 +117,8 @@ class FreeLLM:
 
         message = choices[0].get("message") or {}
         text = str(message.get("content", "")).strip()
-        if not text:
-            raise RuntimeError("OpenRouter returned an empty response.")
+        if self._is_internal_response(text):
+            raise RuntimeError("OpenRouter returned an internal safety/meta response instead of an assistant answer.")
         return text
 
     def answer(self, system: str, user: str, creativity: str = "medium") -> str:
