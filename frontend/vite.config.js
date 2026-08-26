@@ -53,9 +53,14 @@ export default defineConfig(({ mode }) => {
                 // polling loop. Continuous health polling was amplifying Render
                 // edge/rate-limit failures and made genuine backend failures look
                 // like CORS failures in the browser.
+                //
+                // IMPORTANT: this template is evaluated by Vite itself. The
+                // frontend runtime variable is API_URL, but the Vite config's
+                // corresponding value is apiUrl. Referencing API_URL here causes
+                // the production build to crash with "API_URL is not defined".
                 next = next.replace(
                     /\/\* =======================================================\s*BACKEND CHECK\s*======================================================= \*\/[\s\S]*?\/\* =======================================================\s*DEMO SESSION\s*======================================================= \*\//,
-                    `/* =======================================================\n     BACKEND CHECK\n     ======================================================= */\n\n  const checkBackend = useCallback(async () => {\n    try {\n      const r = await fetch(\`${API_URL}/health\`, { cache: "no-store" });\n      if (mountedRef.current) setBackend(r.ok);\n    } catch {\n      if (mountedRef.current) setBackend(false);\n    }\n  }, []);\n\n  useEffect(() => {\n    checkBackend();\n  }, [checkBackend]);\n\n  /* =======================================================\n     DEMO SESSION\n     ======================================================= */`
+                    `/* =======================================================\n     BACKEND CHECK\n     ======================================================= */\n\n  const checkBackend = useCallback(async () => {\n    try {\n      const r = await fetch(\`${apiUrl}/health\`, { cache: "no-store" });\n      if (mountedRef.current) setBackend(r.ok);\n    } catch {\n      if (mountedRef.current) setBackend(false);\n    }\n  }, []);\n\n  useEffect(() => {\n    checkBackend();\n  }, [checkBackend]);\n\n  /* =======================================================\n     DEMO SESSION\n     ======================================================= */`
                 );
 
                 // Fallback for older formatting if the full block replacement did
