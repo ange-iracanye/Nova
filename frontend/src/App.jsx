@@ -7,6 +7,7 @@ const DemoHome = lazy(() => import("./pages/DemoHome"));
 const Chat = lazy(() => import("./pages/Chat"));
 const DemoChat = lazy(() => import("./pages/DemoChat"));
 const Dashboard = lazy(() => import("./pages/Dashboard"));
+const Analytics = lazy(() => import("./pages/Analytics"));
 const Login = lazy(() => import("./pages/Login"));
 const Register = lazy(() => import("./pages/Register"));
 const Settings = lazy(() => import("./pages/Settings"));
@@ -59,6 +60,7 @@ function AdaptiveRoute({ authenticated, demo, account }) {
             "/": user ? "Your learning space" : "Learn smarter",
             "/chat": "Learn",
             "/dashboard": "Dashboard",
+            "/analytics": "Analytics",
             "/settings": "Settings",
             "/about": "About Nova",
         };
@@ -74,6 +76,7 @@ function AppRoutes() {
         <Route path="/chat" element={<AdaptiveRoute demo={<DemoChat/>} account={<Chat/>} />} />
         <Route path="/settings" element={<AdaptiveRoute demo={<DemoSettings/>} account={<Settings/>} />} />
         <Route path="/dashboard" element={<AuthRedirect><Dashboard/></AuthRedirect>} />
+        <Route path="/analytics" element={<AuthRedirect><Analytics/></AuthRedirect>} />
         <Route path="/capabilities/:capability" element={<Capabilities/>} />
         <Route path="/about" element={<AboutNova/>} />
         <Route path="/login" element={<Login/>} />
