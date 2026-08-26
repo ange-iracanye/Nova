@@ -12,6 +12,8 @@ const Register = lazy(() => import("./pages/Register"));
 const Settings = lazy(() => import("./pages/Settings"));
 const DemoSettings = lazy(() => import("./pages/DemoSettings"));
 const NotFound = lazy(() => import("./pages/NotFound"));
+const Capabilities = lazy(() => import("./pages/Capabilities"));
+const AboutNova = lazy(() => import("./pages/AboutNova"));
 
 function readUser() {
     try {
@@ -53,7 +55,14 @@ function AdaptiveRoute({ authenticated, demo, account }) {
     const user = useAuthState();
     const location = useLocation();
     useEffect(() => {
-        document.title = location.pathname === "/" ? (user ? "Nova AI · Your learning space" : "Nova AI · Learn smarter") : `Nova AI · ${location.pathname.slice(1)}`;
+        const labels = {
+            "/": user ? "Your learning space" : "Learn smarter",
+            "/chat": "Learn",
+            "/dashboard": "Dashboard",
+            "/settings": "Settings",
+            "/about": "About Nova",
+        };
+        document.title = `Nova AI · ${labels[location.pathname] || "Explore"}`;
     }, [location.pathname, user]);
     if (authenticated) return user ? authenticated : demo;
     return user ? account : demo;
@@ -65,6 +74,8 @@ function AppRoutes() {
         <Route path="/chat" element={<AdaptiveRoute demo={<DemoChat/>} account={<Chat/>} />} />
         <Route path="/settings" element={<AdaptiveRoute demo={<DemoSettings/>} account={<Settings/>} />} />
         <Route path="/dashboard" element={<AuthRedirect><Dashboard/></AuthRedirect>} />
+        <Route path="/capabilities/:capability" element={<Capabilities/>} />
+        <Route path="/about" element={<AboutNova/>} />
         <Route path="/login" element={<Login/>} />
         <Route path="/register" element={<Register/>} />
         <Route path="*" element={<NotFound/>} />
