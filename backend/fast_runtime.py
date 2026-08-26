@@ -13,6 +13,7 @@ from typing import Any
 
 from backend.fast_response_pipeline import FastResponsePipeline, is_cacheable_request
 from backend.llm import LocalLLM
+from backend.recent_context_runtime import install_recent_context_runtime
 
 
 _CACHE = FastResponsePipeline()
@@ -22,13 +23,14 @@ _ORIGINAL_ANSWER = None
 
 
 def install_fast_runtime() -> None:
-    """Install the production LLM model override and response cache once."""
+    """Install production model overrides, caching, and recent-chat context once."""
     global _INSTALLED, _ORIGINAL_ANSWER
     configured_model = os.getenv("OLLAMA_MODEL", "").strip()
     with _INSTALL_LOCK:
         if configured_model:
             LocalLLM.DEFAULT_MODEL = configured_model
         if _INSTALLED:
+            install_recent_context_runtime()
             return
 
         _ORIGINAL_ANSWER = LocalLLM.answer
@@ -53,6 +55,8 @@ def install_fast_runtime() -> None:
 
         LocalLLM.answer = cached_answer
         _INSTALLED = True
+
+    install_recent_context_runtime()
 
 
 def stats() -> dict[str, Any]:
