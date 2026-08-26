@@ -21,17 +21,12 @@ export default defineConfig([
     },
     rules: {
       'no-unused-vars': 'warn',
+      'no-empty': 'warn',
       'no-useless-assignment': 'off',
 
-      // Keep the two React Hooks correctness checks that are useful as
-      // ordinary ESLint diagnostics. The newer React Hooks flat preset also
-      // enables React Compiler diagnostics that are not appropriate as hard
-      // CI failures for this V1 application and can flag valid runtime code.
+      // Keep React Hooks correctness checks as diagnostics for the existing V1 UI.
       'react-hooks/rules-of-hooks': 'warn',
       'react-hooks/exhaustive-deps': 'warn',
-
-      // React Compiler diagnostics are intentionally non-blocking for V1.
-      // They can be revisited independently when Nova adopts the compiler.
       'react-hooks/component-hook-factories': 'warn',
       'react-hooks/error-boundaries': 'warn',
       'react-hooks/globals': 'warn',
