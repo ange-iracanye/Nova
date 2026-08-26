@@ -49,22 +49,22 @@ export default defineConfig(({ mode }) => {
                 if (!id.endsWith("/src/pages/Chat.jsx")) return null;
                 let next = code;
 
-                // Health checks must not poll every few seconds. A 30-second
-                // cadence avoids browser/edge rate limiting while still keeping
-                // the status indicator reasonably fresh.
+                // The source currently polls every 3 seconds. Keep the health
+                // indicator lightweight even if a future refactor restores the
+                // shorter interval.
                 next = next.replace(
-                    /setInterval\(\s*checkBackend,\s*3000\s*\)/,
+                    /setInterval\(\s*checkBackend,\s*3000\s*\)/g,
                     "setInterval(checkBackend, 30000)"
                 );
 
-                // Use the authenticated V1 conversation API instead of the
-                // legacy email-in-URL endpoints.
+                // Replace the exact legacy conversation URLs wherever they are
+                // present. The runtime fetch wrapper also protects older builds.
                 next = next.replace(
-                    /`\$\{API_URL\}\/conversations\/\$\{encodeURIComponent\(\s*user\.email\s*\)\}`/m,
+                    /`\$\{API_URL\}\/conversations\/\$\{encodeURIComponent\(\s*user\.email\s*\)\}`/g,
                     "`${API_URL}/v1/conversations`"
                 );
                 next = next.replace(
-                    /`\$\{API_URL\}\/conversation\/\$\{encodeURIComponent\(\s*user\.email\s*\)\}\/\$\{encodeURIComponent\(id\)\}`/m,
+                    /`\$\{API_URL\}\/conversation\/\$\{encodeURIComponent\(\s*user\.email\s*\)\}\/\$\{encodeURIComponent\(id\)\}`/g,
                     "`${API_URL}/v1/conversations/${encodeURIComponent(id)}`"
                 );
                 next = next.replace(
@@ -72,26 +72,26 @@ export default defineConfig(({ mode }) => {
                     "`${API_URL}/v1/conversations`"
                 );
 
-                // The old callback dependency accidentally contained an array
-                // inside its dependency array, creating a fresh dependency on
-                // every render and repeatedly re-running chat initialization.
+                // Fix the actual nested dependency array in Chat.jsx. This is
+                // intentionally broad about whitespace so formatting changes
+                // cannot silently reintroduce the render/effect loop.
                 next = next.replace(
-                    /\[\s*\[\s*demo,\s*navigate,\s*scrollBottom,\s*mode,\s*\]\s*\]/m,
+                    /\[\s*\[\s*demo\s*,\s*navigate\s*,\s*scrollBottom\s*,\s*mode\s*,?\s*\]\s*\]/g,
                     "[demo, navigate, scrollBottom, mode]"
                 );
 
-                // Health endpoint, not the API root.
+                // The health probe should use the explicit health endpoint.
                 next = next.replace(
-                    /fetch\(`\$\{API_URL\}\/`,\s*\{\s*cache:\s*"no-store"\s*\}\)/,
-                    'fetch(`${API_URL}/health`, { cache: "no-store" })'
+                    /fetch\(\s*`\$\{API_URL\}\/`\s*,/g,
+                    "fetch(`${API_URL}/health`,"
                 );
 
                 next = next.replace(
-                    /previous\.slice\(0, index\)/,
-                    'previous.slice(0, Math.max(0, index - 1))'
+                    /previous\.slice\(0, index\)/g,
+                    "previous.slice(0, Math.max(0, index - 1))"
                 );
                 next = next.replace(
-                    /const \[sidebar, setSidebar\] = useState\(true\);/,
+                    /const \[sidebar, setSidebar\] = useState\(true\);/g,
                     'const [sidebar, setSidebar] = useState(() => typeof window !== "undefined" && window.innerWidth >= 768);'
                 );
 
