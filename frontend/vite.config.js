@@ -48,13 +48,53 @@ export default defineConfig(({ mode }) => {
             transform(code, id) {
                 if (!id.endsWith("/src/pages/Chat.jsx")) return null;
                 let next = code;
-                next = next.replace(/fetch\(`\$\{API_URL\}\/`,\s*\{\s*cache:\s*"no-store"\s*\}\)/, 'fetch(`${API_URL}/health`, { cache: "no-store" })');
-                next = next.replace(/previous\.slice\(0, index\)/, 'previous.slice(0, Math.max(0, index - 1))');
-                next = next.replace(/const \[sidebar, setSidebar\] = useState\(true\);/, 'const [sidebar, setSidebar] = useState(() => typeof window !== "undefined" && window.innerWidth >= 768);');
+
+                // Health checks must not poll every few seconds. A 30-second
+                // cadence avoids browser/edge rate limiting while still keeping
+                // the status indicator reasonably fresh.
+                next = next.replace(
+                    /setInterval\(\s*checkBackend,\s*3000\s*\)/,
+                    "setInterval(checkBackend, 30000)"
+                );
+
+                // Use the authenticated V1 conversation API instead of the
+                // legacy email-in-URL endpoints.
+                next = next.replace(
+                    /`\$\{API_URL\}\/conversations\/\$\{encodeURIComponent\(\s*user\.email\s*\)\}`/m,
+                    "`${API_URL}/v1/conversations`"
+                );
+                next = next.replace(
+                    /`\$\{API_URL\}\/conversation\/\$\{encodeURIComponent\(\s*user\.email\s*\)\}\/\$\{encodeURIComponent\(id\)\}`/m,
+                    "`${API_URL}/v1/conversations/${encodeURIComponent(id)}`"
+                );
+                next = next.replace(
+                    /`\$\{API_URL\}\/conversation\/new`/g,
+                    "`${API_URL}/v1/conversations`"
+                );
+
+                // The old callback dependency accidentally contained an array
+                // inside its dependency array, creating a fresh dependency on
+                // every render and repeatedly re-running chat initialization.
                 next = next.replace(
                     /\[\s*\[\s*demo,\s*navigate,\s*scrollBottom,\s*mode,\s*\]\s*\]/m,
                     "[demo, navigate, scrollBottom, mode]"
                 );
+
+                // Health endpoint, not the API root.
+                next = next.replace(
+                    /fetch\(`\$\{API_URL\}\/`,\s*\{\s*cache:\s*"no-store"\s*\}\)/,
+                    'fetch(`${API_URL}/health`, { cache: "no-store" })'
+                );
+
+                next = next.replace(
+                    /previous\.slice\(0, index\)/,
+                    'previous.slice(0, Math.max(0, index - 1))'
+                );
+                next = next.replace(
+                    /const \[sidebar, setSidebar\] = useState\(true\);/,
+                    'const [sidebar, setSidebar] = useState(() => typeof window !== "undefined" && window.innerWidth >= 768);'
+                );
+
                 return next === code ? null : { code: next, map: null };
             },
         };
