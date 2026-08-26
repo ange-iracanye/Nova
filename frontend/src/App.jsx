@@ -1,6 +1,6 @@
 import { Suspense, lazy, useEffect, useMemo, useState } from "react";
-import { BrowserRouter, Navigate, Route, Routes, useLocation } from "react-router-dom";
-import { LoaderCircle } from "lucide-react";
+import { BrowserRouter, Navigate, Route, Routes, useLocation, useNavigate } from "react-router-dom";
+import { BarChart3, LoaderCircle } from "lucide-react";
 
 const Home = lazy(() => import("./pages/Home"));
 const DemoHome = lazy(() => import("./pages/DemoHome"));
@@ -52,6 +52,11 @@ function AuthRedirect({ children }) {
     return user ? children : <Navigate to="/login" replace />;
 }
 
+function AnalyticsShortcut() {
+    const navigate = useNavigate();
+    return <button onClick={() => navigate("/analytics")} title="Nova Analytics" className="fixed bottom-5 right-5 z-50 flex items-center gap-2 rounded-2xl border border-sky-400/20 bg-[#0b1322]/95 px-4 py-3 text-xs font-semibold text-sky-300 shadow-2xl backdrop-blur-xl transition hover:border-sky-400/40 hover:bg-[#101c30]"><BarChart3 size={16}/> Analytics</button>;
+}
+
 function AdaptiveRoute({ authenticated, demo, account }) {
     const user = useAuthState();
     const location = useLocation();
@@ -75,7 +80,7 @@ function AppRoutes() {
         <Route path="/" element={<AdaptiveRoute demo={<DemoHome/>} account={<Home/>} />} />
         <Route path="/chat" element={<AdaptiveRoute demo={<DemoChat/>} account={<Chat/>} />} />
         <Route path="/settings" element={<AdaptiveRoute demo={<DemoSettings/>} account={<Settings/>} />} />
-        <Route path="/dashboard" element={<AuthRedirect><Dashboard/></AuthRedirect>} />
+        <Route path="/dashboard" element={<AuthRedirect><><Dashboard/><AnalyticsShortcut/></></AuthRedirect>} />
         <Route path="/analytics" element={<AuthRedirect><Analytics/></AuthRedirect>} />
         <Route path="/capabilities/:capability" element={<Capabilities/>} />
         <Route path="/about" element={<AboutNova/>} />
