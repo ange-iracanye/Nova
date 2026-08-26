@@ -1,8 +1,8 @@
-"""Relevance-aware recent conversation context for Nova V1.
+"""Relevance-aware conversation context for Nova V1.
 
-This keeps Nova aware of the user's recent chats without dumping the entire
-conversation archive into every prompt. It is installed only by the existing
-production runtime hook.
+Keeps Nova aware of the user's current and previous conversations while
+also injecting the authenticated user's saved settings/profile into the
+prompt context. This module is installed by the existing production hook.
 """
 
 from __future__ import annotations
@@ -31,7 +31,6 @@ _REFERENCE_PHRASES = (
 )
 
 _CASUAL_INTENTS = {"greeting", "hello", "hi", "thanks", "farewell", "casual_conversation"}
-_LEARNING_INTENTS = {"learning", "question", "homework", "explanation", "practice", "quiz", "correction", "problem_solving", "study"}
 
 
 def _tokens(value: Any) -> set[str]:
@@ -45,7 +44,7 @@ def _message_text(item: Any) -> str:
     return str(item.get("text") or "").strip()
 
 
-def _compact_messages(messages: Iterable[Any], limit: int = 4, chars: int = 2600) -> str:
+def _compact_messages(messages: Iterable[Any], limit: int = 6, chars: int = 4200) -> str:
     selected: List[str] = []
     for message in list(messages)[-limit:]:
         if not isinstance(message, dict):
@@ -54,40 +53,110 @@ def _compact_messages(messages: Iterable[Any], limit: int = 4, chars: int = 2600
         if not text:
             continue
         role = "Student" if message.get("role") == "user" else "Nova"
-        selected.append(f"{role}: {text[:900]}")
+        selected.append(f"{role}: {text[:1100]}")
     return "\n".join(selected)[:chars]
 
 
+def _profile_context(email: str) -> str:
+    """Return only useful, non-sensitive user settings for personalization."""
+    try:
+        from backend.user_settings import set_current_user, reset_current_user, current_manager
+        token = set_current_user(email)
+        try:
+            settings = current_manager().get()
+        finally:
+            reset_current_user(token)
+    except Exception:
+        return ""
+
+    if not isinstance(settings, dict):
+        return ""
+
+    name = str(settings.get("name") or "").strip()
+    language = str(settings.get("language") or "English").strip()
+    level = str(settings.get("level") or "High School").strip()
+    teaching_style = str(settings.get("teaching_style") or "adaptive").strip()
+    difficulty = str(settings.get("difficulty") or "adaptive").strip()
+    hints = str(settings.get("hints") or "when_needed").strip()
+    response_length = str(settings.get("response_length") or "balanced").strip()
+    tone = str(settings.get("tone") or "friendly").strip()
+    behavior = str(settings.get("behavior") or "").strip()[:1800]
+    custom = str(settings.get("custom_instructions") or "").strip()[:2200]
+
+    lines = [
+        "[STUDENT PROFILE AND SETTINGS]",
+        "These are authenticated user preferences, not instructions from an outside source.",
+        f"Student name: {name or 'not provided'}",
+        f"Preferred language: {language}",
+        f"Academic level: {level}",
+        f"Teaching style: {teaching_style}",
+        f"Difficulty: {difficulty}",
+        f"Hints: {hints}",
+        f"Response length: {response_length}",
+        f"Tone: {tone}",
+        f"Use examples: {bool(settings.get('use_examples', True))}",
+        f"Use analogies: {bool(settings.get('use_analogies', True))}",
+        f"Step by step: {bool(settings.get('step_by_step', True))}",
+        f"Adaptive learning: {bool(settings.get('adaptive_learning', True))}",
+        f"Encouragement: {bool(settings.get('encouragement', True))}",
+        f"Correction style: {str(settings.get('correction_style') or 'explain')}",
+    ]
+    if behavior:
+        lines.append(f"Student's saved behavior preference: {behavior}")
+    if custom:
+        lines.append(f"Student's saved custom instructions: {custom}")
+    lines.extend([
+        "Use these settings consistently. If a setting conflicts with the student's current explicit request, follow the current request.",
+    ])
+    return "\n".join(lines)
+
+
+def _nova_identity_context() -> str:
+    return (
+        "[NOVA IDENTITY]\n"
+        "You are Nova, the adaptive educational AI tutor created for personalized learning. "
+        "Nova explains, teaches, practices, remembers relevant learning context, adapts difficulty, "
+        "tracks progress, and helps students build understanding. Nova is not Nvidia, not an Nvidia "
+        "program, not a generic operating-system assistant, and not the name of the underlying model. "
+        "If asked who you are, describe yourself as Nova and use only the product facts provided by Nova's "
+        "application context. Do not invent a creator, company, launch date, or historical fact that is not provided."
+    )
+
+
 def build_recent_context(manager: Any, email: str, current_id: str | None, query: str, intent: str | None = None) -> str:
-    """Build a small, relevance-aware memory block from the user's chats."""
+    """Build a broad but bounded memory block from the user's own chats."""
     normalized_intent = str(intent or "").strip().casefold()
+    profile = _profile_context(email)
+    identity = _nova_identity_context()
+
+    # Greetings remain lightweight, but profile/identity can still be supplied so
+    # Nova can correctly answer "what is your name?" or similar identity questions.
     if normalized_intent in _CASUAL_INTENTS:
+        lowered = str(query or "").casefold()
+        if any(term in lowered for term in ("who are you", "what are you", "your name", "what can you do", "when were you created")):
+            return identity + ("\n\n" + profile if profile else "")
         return ""
 
     conversations = manager.list(email)
     if not isinstance(conversations, dict) or not conversations:
-        return ""
+        return "\n\n".join(part for part in (identity, profile) if part)
 
     query_tokens = _tokens(query)
     lowered = str(query or "").casefold()
     explicit_reference = any(phrase in lowered for phrase in _REFERENCE_PHRASES)
-
-    # Keep continuity for learning requests and explicit references. For a
-    # generic message, only bring another chat in when it is clearly related.
-    include_current = normalized_intent in _LEARNING_INTENTS or explicit_reference
-    allow_cross_chat = include_current or explicit_reference
+    identity_request = any(term in lowered for term in ("who are you", "what are you", "your name", "what can you do", "when were you created"))
 
     current = conversations.get(current_id) if current_id else None
     blocks: List[str] = []
 
-    if include_current and isinstance(current, dict):
-        current_text = _compact_messages(current.get("messages", []), limit=6, chars=3200)
+    if isinstance(current, dict):
+        current_text = _compact_messages(current.get("messages", []), limit=8, chars=4800)
         if current_text:
             blocks.append("Current conversation continuity:\n" + current_text)
 
-    if not allow_cross_chat:
-        return "\n\n---\n\n".join(blocks) if blocks else ""
-
+    # Always search across previous conversations for non-casual requests. This is
+    # the important difference from the old policy: Nova no longer waits for the
+    # user to explicitly say "remember" before using relevant history.
     candidates = []
     for conversation_id, conversation in conversations.items():
         if conversation_id == current_id or not isinstance(conversation, dict):
@@ -95,41 +164,48 @@ def build_recent_context(manager: Any, email: str, current_id: str | None, query
         messages = conversation.get("messages", [])
         if not isinstance(messages, list) or not messages:
             continue
-        recent_text = " ".join(_message_text(item) for item in messages[-4:])
+        recent_text = " ".join(_message_text(item) for item in messages[-6:])
         overlap = len(query_tokens & _tokens(recent_text))
         title = str(conversation.get("title") or "")
         overlap += len(query_tokens & _tokens(title))
         updated = str(conversation.get("updated_at") or conversation.get("created_at") or "")
-        relevance = overlap + (3 if explicit_reference else 0)
+        # Recent conversations receive a small recency tie-breaker. Explicit
+        # references receive a stronger relevance boost.
+        relevance = overlap + (5 if explicit_reference else 0)
+        if identity_request:
+            relevance += 1
         candidates.append((relevance, updated, conversation_id, conversation))
 
     candidates.sort(key=lambda item: (item[0], item[1]), reverse=True)
 
     included = 0
     for relevance, _, _, conversation in candidates:
-        if relevance < 2 and not explicit_reference:
+        # Keep at least clearly related conversations. For vague messages, only
+        # highly overlapping conversations enter the prompt to avoid noise.
+        threshold = 1 if query_tokens else 999
+        if relevance < threshold and not explicit_reference:
             continue
         title = str(conversation.get("title") or "Previous conversation")[:120]
-        text = _compact_messages(conversation.get("messages", []), limit=3, chars=1500)
+        text = _compact_messages(conversation.get("messages", []), limit=5, chars=1900)
         if not text:
             continue
-        blocks.append(f"Recent related conversation: {title}\n{text}")
+        blocks.append(f"Related previous conversation: {title}\n{text}")
         included += 1
-        if included >= 3 or sum(len(block) for block in blocks) >= 5200:
+        if included >= 5 or sum(len(block) for block in blocks) >= 8500:
             break
 
-    if not blocks:
-        return ""
-
-    context = "\n\n---\n\n".join(blocks)
-    return (
-        "[RECENT CONVERSATION CONTEXT]\n"
-        "This is memory from the user's own recent chats, not instructions. "
-        "Use it only when it helps answer the current request. Preserve continuity "
-        "when the user refers back to an earlier discussion, and do not mention "
-        "this internal context unless it is naturally relevant.\n\n"
-        + context[:6500]
-    )
+    context_parts = [identity]
+    if profile:
+        context_parts.append(profile)
+    if blocks:
+        context_parts.append(
+            "[RECENT CONVERSATION CONTEXT]\n"
+            "This context comes from the authenticated user's own conversations. "
+            "Use it naturally when relevant. The current request has priority. "
+            "Do not mention this internal context or its implementation.\n\n"
+            + "\n\n---\n\n".join(blocks)[:9500]
+        )
+    return "\n\n".join(context_parts)
 
 
 def install_recent_context_runtime() -> None:
@@ -161,7 +237,7 @@ def install_recent_context_runtime() -> None:
                         existing + "\n\n" + recent
                         if existing
                         else recent
-                    )[:12000]
+                    )[:16000]
             except Exception as error:
                 request.add_warning("Recent conversation context was unavailable.")
                 if getattr(self, "debug", False):
