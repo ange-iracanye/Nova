@@ -1,7 +1,7 @@
 const PRODUCTION_API_URL = "https://nova-api-i07q.onrender.com";
 const ORIGINAL_FETCH = window.fetch.bind(window);
 const AUTH_TIMEOUT_MS = 60000;
-const GET_DEDUP_WINDOW_MS = 5000;
+const GET_DEDUP_WINDOW_MS = 30000;
 const recentGets = new Map();
 
 function apiBase() {
@@ -92,13 +92,15 @@ window.fetch = async function novaProductionFetch(input, init = {}) {
     if (init.headers) new Headers(init.headers).forEach((value, key) => headers.set(key, value));
     const token = readDevelopmentSessionToken();
     const path = typeof url === "string" ? url : url?.url || "";
+    const isHealthRequest = /\/health$|\/ready$/.test(path);
     const isAuthRequest = /\/login$|\/register$|\/health$|\/ready$|\/auth\/session$|\/auth\/me$|\/auth\/logout$/.test(path);
     const isLoginOrRegister = /\/login$|\/register$/.test(path);
     if (token && !isAuthRequest && !headers.has("Authorization")) headers.set("Authorization", `Bearer ${token}`);
-    const requestInit = { ...init, headers, credentials: init.credentials || "include" };
+    const requestInit = { ...init, headers, credentials: isHealthRequest ? "omit" : (init.credentials || "include") };
     const method = String(requestInit.method || "GET").toUpperCase();
     const isConversationRead = method === "GET" && /^https:\/\/[^/]+\/v1\/conversations(?:\/[^/]+)?$/.test(String(url));
-    const dedupeKey = isConversationRead ? String(url) : "";
+    const isHealthRead = method === "GET" && /^https:\/\/[^/]+\/(?:health|ready)$/.test(String(url));
+    const dedupeKey = (isConversationRead || isHealthRead) ? String(url) : "";
     if (dedupeKey) {
         const cached = recentGets.get(dedupeKey);
         if (cached && Date.now() - cached.time < GET_DEDUP_WINDOW_MS) return (await cached.promise).clone();
