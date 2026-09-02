@@ -10,12 +10,13 @@ from backend.tutor_system.quiz_engine import QuizEngine
 from backend.tutor_system.adaptive_tutor import AdaptiveTutor
 from student_profile import StudentProfile
 from backend.prompt.prompt_builder import PromptBuilder
+from backend.language_support import build_language_policy, parse_translation_mode
 
 
 class TutorEngine:
     """Nova's tutoring pipeline with a local dev LLM and hosted public LLM."""
 
-    VERSION = "1.0.2"
+    VERSION = "1.0.3"
     DEFAULT_MODE = "normal"
     DEFAULT_SUBJECT = "general"
     DEFAULT_CREATIVITY = "medium"
@@ -28,6 +29,7 @@ class TutorEngine:
     DEFAULT_MAX_RESPONSE_LENGTH = 30000
     DEFAULT_RETRY_COUNT = 1
     DEFAULT_RETRY_DELAY = 0.25
+    TRANSLATION_MODE_PREFIX = "translation:"
 
     VALID_CREATIVITY = {"low", "medium", "high"}
     VALID_RESPONSE_LENGTHS = {"short", "balanced", "long", "detailed"}
@@ -92,6 +94,7 @@ class TutorEngine:
             if not prompt:
                 self.stats["prompt_failures"] += 1
                 return self.FALLBACK_PROMPT_ERROR
+            prompt = self._apply_language_policy(prompt, mode)
             response = self._clean_response(self._generate(prompt, settings))
             if not self._is_valid_response(response):
                 self.stats["validation_failures"] += 1
@@ -301,6 +304,16 @@ class TutorEngine:
             user = user[:max(1000, self.DEFAULT_MAX_PROMPT_LENGTH - len(system))] + "\n\n[Prompt truncated by Nova.]"
         return {"system": system, "user": user}
 
+    def _apply_language_policy(self, prompt, mode):
+        """Append a high-priority language policy after the existing prompt."""
+        if not isinstance(prompt, dict):
+            return prompt
+        policy = build_language_policy(mode)
+        system = str(prompt.get("system", "") or "").strip()
+        if policy and policy not in system:
+            system = f"{system}\n\n{policy}".strip()
+        return {"system": system, "user": prompt.get("user", "")}
+
     def _build_emergency_prompt(self, message, subject, topic, mode, memory_context, difficulty, settings, strategy):
         difficulty_name = difficulty.get("level", "") if isinstance(difficulty, dict) else str(difficulty or "")
         approach = "\n".join(f"- {item}" for item in strategy.get("approach", []))
@@ -352,7 +365,7 @@ Answer the student's actual question accurately and clearly. Do not invent facts
         return self.FALLBACK_LLM_ERROR
 
     def _default_system_prompt(self, settings):
-        return f"You are Nova, an adaptive educational AI tutor. Respond primarily in {settings.get('language', self.DEFAULT_LANGUAGE)} and adapt explanations to {settings.get('level', self.DEFAULT_LEVEL)}. Prioritize accuracy, clarity, useful examples, and honest uncertainty."
+        return f"You are Nova, an adaptive educational AI tutor. Respond primarily in the same language as the student's latest message and adapt explanations to {settings.get('level', self.DEFAULT_LEVEL)}. Prioritize accuracy, clarity, useful examples, and honest uncertainty."
 
     def _clean_response(self, response):
         response = str(response or "").replace("\x00", "").strip()
@@ -410,7 +423,7 @@ Answer the student's actual question accurately and clearly. Do not invent facts
         return {"short": "Keep the answer concise and focused.", "balanced": "Give enough detail to explain the idea clearly without unnecessary length.", "long": "Give a thorough explanation with useful examples and reasoning.", "detailed": "Give a detailed educational explanation with clear structure and useful examples."}.get(self._normalize_settings(settings).get("response_length"), "Give enough detail to explain the idea clearly without unnecessary length.")
 
     def get_language_instruction(self, settings):
-        return f"Respond primarily in {self._normalize_settings(settings).get('language', self.DEFAULT_LANGUAGE)}."
+        return "Reply in the same natural language used by the student's latest message."
 
     def get_level_instruction(self, settings):
         return f"Adapt the explanation to the student's academic level: {self._normalize_settings(settings).get('level', self.DEFAULT_LEVEL)}."
