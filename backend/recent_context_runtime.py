@@ -114,12 +114,16 @@ def _profile_context(email: str) -> str:
 def _nova_identity_context() -> str:
     return (
         "[NOVA IDENTITY]\n"
-        "You are Nova, the adaptive educational AI tutor created for personalized learning. "
-        "Nova explains, teaches, practices, remembers relevant learning context, adapts difficulty, "
-        "tracks progress, and helps students build understanding. Nova is not Nvidia, not an Nvidia "
-        "program, not a generic operating-system assistant, and not the name of the underlying model. "
-        "If asked who you are, describe yourself as Nova and use only the product facts provided by Nova's "
-        "application context. Do not invent a creator, company, launch date, or historical fact that is not provided."
+        "You are Nova, the adaptive educational AI tutor created as the Nova learning product. "
+        "Nova exists to make personalized learning clearer, more adaptive, and more useful for students. "
+        "Nova can explain concepts, teach step by step, practice with students, adapt difficulty and teaching style, "
+        "use examples and analogies, remember relevant learning context, track learning progress, and personalize replies. "
+        "Nova is the product and tutor experience, not the name of the underlying language model. "
+        "Nova is not Nvidia and is not an Nvidia program. A model/provider name such as an Nvidia-hosted model may appear "
+        "in technical configuration, but that does not change Nova's identity. "
+        "If asked who you are, what you can do, or why you exist, answer as Nova using these product facts. "
+        "If asked for an exact creator, company ownership, or exact creation/launch date and the application has not supplied "
+        "that fact, say that the exact fact is not available rather than inventing one."
     )
 
 
@@ -129,11 +133,9 @@ def build_recent_context(manager: Any, email: str, current_id: str | None, query
     profile = _profile_context(email)
     identity = _nova_identity_context()
 
-    # Greetings remain lightweight, but profile/identity can still be supplied so
-    # Nova can correctly answer "what is your name?" or similar identity questions.
     if normalized_intent in _CASUAL_INTENTS:
         lowered = str(query or "").casefold()
-        if any(term in lowered for term in ("who are you", "what are you", "your name", "what can you do", "when were you created")):
+        if any(term in lowered for term in ("who are you", "what are you", "your name", "what can you do", "when were you created", "why were you created")):
             return identity + ("\n\n" + profile if profile else "")
         return ""
 
@@ -144,7 +146,7 @@ def build_recent_context(manager: Any, email: str, current_id: str | None, query
     query_tokens = _tokens(query)
     lowered = str(query or "").casefold()
     explicit_reference = any(phrase in lowered for phrase in _REFERENCE_PHRASES)
-    identity_request = any(term in lowered for term in ("who are you", "what are you", "your name", "what can you do", "when were you created"))
+    identity_request = any(term in lowered for term in ("who are you", "what are you", "your name", "what can you do", "when were you created", "why were you created"))
 
     current = conversations.get(current_id) if current_id else None
     blocks: List[str] = []
@@ -154,9 +156,6 @@ def build_recent_context(manager: Any, email: str, current_id: str | None, query
         if current_text:
             blocks.append("Current conversation continuity:\n" + current_text)
 
-    # Always search across previous conversations for non-casual requests. This is
-    # the important difference from the old policy: Nova no longer waits for the
-    # user to explicitly say "remember" before using relevant history.
     candidates = []
     for conversation_id, conversation in conversations.items():
         if conversation_id == current_id or not isinstance(conversation, dict):
@@ -169,8 +168,6 @@ def build_recent_context(manager: Any, email: str, current_id: str | None, query
         title = str(conversation.get("title") or "")
         overlap += len(query_tokens & _tokens(title))
         updated = str(conversation.get("updated_at") or conversation.get("created_at") or "")
-        # Recent conversations receive a small recency tie-breaker. Explicit
-        # references receive a stronger relevance boost.
         relevance = overlap + (5 if explicit_reference else 0)
         if identity_request:
             relevance += 1
@@ -180,8 +177,6 @@ def build_recent_context(manager: Any, email: str, current_id: str | None, query
 
     included = 0
     for relevance, _, _, conversation in candidates:
-        # Keep at least clearly related conversations. For vague messages, only
-        # highly overlapping conversations enter the prompt to avoid noise.
         threshold = 1 if query_tokens else 999
         if relevance < threshold and not explicit_reference:
             continue
@@ -200,9 +195,8 @@ def build_recent_context(manager: Any, email: str, current_id: str | None, query
     if blocks:
         context_parts.append(
             "[RECENT CONVERSATION CONTEXT]\n"
-            "This context comes from the authenticated user's own conversations. "
-            "Use it naturally when relevant. The current request has priority. "
-            "Do not mention this internal context or its implementation.\n\n"
+            "This context comes from the authenticated user's own conversations. Use it naturally when relevant. "
+            "The current request has priority. Do not mention this internal context or its implementation.\n\n"
             + "\n\n---\n\n".join(blocks)[:9500]
         )
     return "\n\n".join(context_parts)
