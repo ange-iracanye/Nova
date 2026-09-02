@@ -1,0 +1,89 @@
+name: Nova V1 final integration
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  finalize:
+    if: ${{ !contains(github.event.head_commit.message, '[nova-finalize]') }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Patch settings language selector
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path('frontend/src/pages/Settings.jsx')
+          text = path.read_text(encoding='utf-8')
+
+          languages = '''[
+                  ["English", "English"],
+                  ["Spanish", "Spanish"],
+                  ["Chinese", "Chinese"],
+                  ["Hindi", "Hindi"],
+                  ["French", "French"],
+                  ["Arabic", "Arabic"],
+                  ["Portuguese", "Portuguese"],
+                  ["Russian", "Russian"],
+                  ["German", "German"],
+                  ["Japanese", "Japanese"],
+                  ["Korean", "Korean"],
+                  ["Italian", "Italian"],
+                  ["Turkish", "Turkish"],
+                  ["Dutch", "Dutch"],
+                  ["Polish", "Polish"],
+                  ["Ukrainian", "Ukrainian"],
+                  ["Vietnamese", "Vietnamese"],
+                  ["Thai", "Thai"],
+                  ["Indonesian", "Indonesian"],
+                  ["Swedish", "Swedish"],
+                  ["Greek", "Greek"],
+                  ["Czech", "Czech"],
+                  ["Romanian", "Romanian"],
+                  ["Hungarian", "Hungarian"]
+                                      ]'''
+
+          old = '''options=[
+                                        [
+                                            "English",
+                                            "English"
+                                        ],
+                                        [
+                                            "French",
+                                            "French"
+                                        ]
+                                    ]'''
+          if old in text:
+              text = text.replace(old, f'options={languages}', 1)
+
+          marker = 'import { applyNovaLanguage } from "../i18n";'
+          if marker not in text:
+              anchor = 'import {\n    useNavigate\n} from "react-router-dom";'
+              replacement = anchor + '\n\n' + marker
+              text = text.replace(anchor, replacement, 1)
+
+          old_update = '''                setSaved(false);\n\n                setError("");'''
+          new_update = '''                if (key === "language") {\n                    applyNovaLanguage(value);\n                }\n\n                setSaved(false);\n\n                setError("");'''
+          if old_update in text and 'if (key === "language")' not in text:
+              text = text.replace(old_update, new_update, 1)
+
+          text = text.replace('// NOVA_FINALIZE_LANGUAGE', '// NOVA_FINALIZE_LANGUAGE', 1)
+          path.write_text(text + ('\n// NOVA_FINALIZE_LANGUAGE\n' if '// NOVA_FINALIZE_LANGUAGE' not in text else ''), encoding='utf-8')
+          PY
+
+      - name: Commit final integration
+        run: |
+          git config user.name "nova-finalize[bot]"
+          git config user.email "nova-finalize[bot]@users.noreply.github.com"
+          git add frontend/src/pages/Settings.jsx
+          git diff --cached --quiet && exit 0
+          git commit -m "feat: finalize multilingual settings integration [nova-finalize]"
+          git push
