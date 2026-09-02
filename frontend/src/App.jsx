@@ -58,6 +58,11 @@ function AnalyticsShortcut() {
     return <button onClick={() => navigate("/analytics")} title="Nova Analytics" className="fixed bottom-5 right-5 z-50 flex items-center gap-2 rounded-2xl border border-sky-400/20 bg-[#0b1322]/95 px-4 py-3 text-xs font-semibold text-sky-300 shadow-2xl backdrop-blur-xl transition hover:border-sky-400/40 hover:bg-[#101c30]"><BarChart3 size={16}/> Analytics</button>;
 }
 
+function TranslationShortcut() {
+    const navigate = useNavigate();
+    return <button onClick={() => navigate("/translate")} title="Translation mode" className="fixed bottom-5 left-5 z-50 flex items-center gap-2 rounded-2xl border border-violet-400/20 bg-[#0b1322]/95 px-4 py-3 text-xs font-semibold text-violet-300 shadow-2xl backdrop-blur-xl transition hover:border-violet-400/40 hover:bg-[#101c30]"><Languages size={16}/> Translate</button>;
+}
+
 function AuthHomeButton() {
     const navigate = useNavigate();
     return <button type="button" onClick={() => navigate("/")} title="Back to Nova home" aria-label="Back to Nova home" className="fixed left-5 top-5 z-[100] flex items-center gap-2 rounded-xl border border-white/10 bg-slate-900/80 px-3.5 py-2.5 text-sm font-medium text-slate-300 shadow-xl backdrop-blur-xl transition hover:border-cyan-400/30 hover:bg-slate-800 hover:text-white"><HomeIcon size={16}/> Home</button>;
@@ -82,15 +87,10 @@ function AdaptiveRoute({ authenticated, demo, account }) {
     return user ? account : demo;
 }
 
-function TranslationShortcut() {
-    const navigate = useNavigate();
-    return <button onClick={() => navigate("/translate")} title="Translation mode" className="fixed bottom-5 left-5 z-50 flex items-center gap-2 rounded-2xl border border-violet-400/20 bg-[#0b1322]/95 px-4 py-3 text-xs font-semibold text-violet-300 shadow-2xl backdrop-blur-xl transition hover:border-violet-400/40 hover:bg-[#101c30]"><Languages size={16}/> Translate</button>;
-}
-
 function AppRoutes() {
     return <Suspense fallback={<PageLoader />}><Routes>
-        <Route path="/" element={<AdaptiveRoute demo={<DemoHome/>} account={<Home/>} />} />
-        <Route path="/chat" element={<AdaptiveRoute demo={<DemoChat/>} account={<Chat/>} />} />
+        <Route path="/" element={<><AdaptiveRoute demo={<DemoHome/>} account={<Home/>} /><TranslationShortcut/></>} />
+        <Route path="/chat" element={<><AdaptiveRoute demo={<DemoChat/>} account={<Chat/>} /><TranslationShortcut/></>} />
         <Route path="/translate" element={<TranslationMode/>} />
         <Route path="/settings" element={<AdaptiveRoute demo={<DemoSettings/>} account={<Settings/>} />} />
         <Route path="/dashboard" element={<AuthRedirect><><Dashboard/><AnalyticsShortcut/><TranslationShortcut/></></AuthRedirect>} />
