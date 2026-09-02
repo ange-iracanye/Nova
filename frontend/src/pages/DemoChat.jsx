@@ -18,7 +18,6 @@ async function createDemoSession() {
                 method: "POST",
                 headers: {
                     Accept: "application/json",
-                    "Cache-Control": "no-store",
                 },
                 cache: "no-store",
             });
