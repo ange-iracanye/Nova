@@ -1,6 +1,6 @@
 import { Suspense, lazy, useEffect, useMemo, useState } from "react";
 import { BrowserRouter, Navigate, Route, Routes, useLocation, useNavigate } from "react-router-dom";
-import { BarChart3, Home as HomeIcon, LoaderCircle } from "lucide-react";
+import { BarChart3, Home as HomeIcon, Languages, LoaderCircle } from "lucide-react";
 
 const Home = lazy(() => import("./pages/Home"));
 const DemoHome = lazy(() => import("./pages/DemoHome"));
@@ -15,6 +15,7 @@ const DemoSettings = lazy(() => import("./pages/DemoSettings"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 const Capabilities = lazy(() => import("./pages/Capabilities"));
 const AboutNova = lazy(() => import("./pages/AboutNova"));
+const TranslationMode = lazy(() => import("./pages/TranslationMode"));
 
 function readUser() {
     try {
@@ -69,6 +70,7 @@ function AdaptiveRoute({ authenticated, demo, account }) {
         const labels = {
             "/": user ? "Your learning space" : "Learn smarter",
             "/chat": "Learn",
+            "/translate": "Translation",
             "/dashboard": "Dashboard",
             "/analytics": "Analytics",
             "/settings": "Settings",
@@ -80,12 +82,18 @@ function AdaptiveRoute({ authenticated, demo, account }) {
     return user ? account : demo;
 }
 
+function TranslationShortcut() {
+    const navigate = useNavigate();
+    return <button onClick={() => navigate("/translate")} title="Translation mode" className="fixed bottom-5 left-5 z-50 flex items-center gap-2 rounded-2xl border border-violet-400/20 bg-[#0b1322]/95 px-4 py-3 text-xs font-semibold text-violet-300 shadow-2xl backdrop-blur-xl transition hover:border-violet-400/40 hover:bg-[#101c30]"><Languages size={16}/> Translate</button>;
+}
+
 function AppRoutes() {
     return <Suspense fallback={<PageLoader />}><Routes>
         <Route path="/" element={<AdaptiveRoute demo={<DemoHome/>} account={<Home/>} />} />
         <Route path="/chat" element={<AdaptiveRoute demo={<DemoChat/>} account={<Chat/>} />} />
+        <Route path="/translate" element={<TranslationMode/>} />
         <Route path="/settings" element={<AdaptiveRoute demo={<DemoSettings/>} account={<Settings/>} />} />
-        <Route path="/dashboard" element={<AuthRedirect><><Dashboard/><AnalyticsShortcut/></></AuthRedirect>} />
+        <Route path="/dashboard" element={<AuthRedirect><><Dashboard/><AnalyticsShortcut/><TranslationShortcut/></></AuthRedirect>} />
         <Route path="/analytics" element={<AuthRedirect><Analytics/></AuthRedirect>} />
         <Route path="/capabilities/:capability" element={<Capabilities/>} />
         <Route path="/about" element={<AboutNova/>} />
