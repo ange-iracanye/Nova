@@ -30,8 +30,6 @@ class FreeLLM:
     DEFAULT_MODEL = "nvidia/nemotron-3-ultra:free"
     FREE_ROUTER_MODEL = "openrouter/free"
 
-    # Provider/model metadata occasionally leaks into the generated text.
-    # It is never a valid Nova answer and must not reach the user interface.
     INTERNAL_RESPONSE_PATTERNS = (
         re.compile(r"^user\s+safety\s*:\s*(?:safe|unsafe|unknown)\s*$", re.I),
         re.compile(r"^assistant\s+safety\s*:\s*(?:safe|unsafe|unknown)\s*$", re.I),
@@ -179,6 +177,13 @@ class DemoNovaCore(_BaseNovaCore):
         # Do not construct MemoryManager or LearningMemory for demo sessions.
         self.memory = None
         self.learning_memory = None
+
+    def _validate_email(self, user_email) -> str:
+        """Allow the internal temporary identity used by public demo sessions."""
+        value = str(user_email or "").strip().lower()
+        if value.startswith("demo-") and "@" not in value:
+            return value
+        return super()._validate_email(value)
 
     def _stage_learning_memory(self, request) -> None:
         # The demo must not create or update long-term learning memory.
