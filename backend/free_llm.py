@@ -152,3 +152,39 @@ class FreeLLM:
 
         self.failed_requests += 1
         raise RuntimeError(f"Nova's free AI provider failed: {last_error}") from last_error
+
+
+# ============================================================
+# PUBLIC DEMO CORE
+# ============================================================
+#
+# The public demo uses the exact same NovaCore orchestration and the exact
+# same TutorEngine/NovaBrain/LLM stack as authenticated Nova. The only thing
+# removed is persistent memory. This subclass is installed before production
+# imports backend.api, so /demo/session receives this implementation when it
+# calls NovaCore(demo=True).
+#
+# Demo conversations remain in-memory through ConversationManager(persist=False)
+# and the demo-specific stages in NovaCore already skip long-term memory.
+# ============================================================
+
+from backend.core.nova_core import NovaCore as _BaseNovaCore
+import backend.core.nova_core as _nova_core_module
+
+
+class DemoNovaCore(_BaseNovaCore):
+    """NovaCore with the same brain/model but no memory subsystem."""
+
+    def _initialize_memory(self) -> None:
+        # Do not construct MemoryManager or LearningMemory for demo sessions.
+        self.memory = None
+        self.learning_memory = None
+
+    def _stage_learning_memory(self, request) -> None:
+        # The demo must not create or update long-term learning memory.
+        return
+
+
+# backend.api imports NovaCore directly from backend.core.nova_core.
+# Replace that exported class before production.py imports the API module.
+_nova_core_module.NovaCore = DemoNovaCore
