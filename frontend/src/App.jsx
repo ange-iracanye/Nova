@@ -1,6 +1,6 @@
 import { Suspense, lazy, useEffect, useMemo, useState } from "react";
 import { BrowserRouter, Navigate, Route, Routes, useLocation, useNavigate } from "react-router-dom";
-import { BarChart3, LoaderCircle } from "lucide-react";
+import { BarChart3, Home as HomeIcon, LoaderCircle } from "lucide-react";
 
 const Home = lazy(() => import("./pages/Home"));
 const DemoHome = lazy(() => import("./pages/DemoHome"));
@@ -57,6 +57,11 @@ function AnalyticsShortcut() {
     return <button onClick={() => navigate("/analytics")} title="Nova Analytics" className="fixed bottom-5 right-5 z-50 flex items-center gap-2 rounded-2xl border border-sky-400/20 bg-[#0b1322]/95 px-4 py-3 text-xs font-semibold text-sky-300 shadow-2xl backdrop-blur-xl transition hover:border-sky-400/40 hover:bg-[#101c30]"><BarChart3 size={16}/> Analytics</button>;
 }
 
+function AuthHomeButton() {
+    const navigate = useNavigate();
+    return <button type="button" onClick={() => navigate("/")} title="Back to Nova home" aria-label="Back to Nova home" className="fixed left-5 top-5 z-[100] flex items-center gap-2 rounded-xl border border-white/10 bg-slate-900/80 px-3.5 py-2.5 text-sm font-medium text-slate-300 shadow-xl backdrop-blur-xl transition hover:border-cyan-400/30 hover:bg-slate-800 hover:text-white"><HomeIcon size={16}/> Home</button>;
+}
+
 function AdaptiveRoute({ authenticated, demo, account }) {
     const user = useAuthState();
     const location = useLocation();
@@ -84,8 +89,8 @@ function AppRoutes() {
         <Route path="/analytics" element={<AuthRedirect><Analytics/></AuthRedirect>} />
         <Route path="/capabilities/:capability" element={<Capabilities/>} />
         <Route path="/about" element={<AboutNova/>} />
-        <Route path="/login" element={<Login/>} />
-        <Route path="/register" element={<Register/>} />
+        <Route path="/login" element={<><AuthHomeButton/><Login/></>} />
+        <Route path="/register" element={<><AuthHomeButton/><Register/></>} />
         <Route path="*" element={<NotFound/>} />
     </Routes></Suspense>;
 }
