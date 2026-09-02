@@ -5,7 +5,6 @@ import { BarChart3, Home as HomeIcon, Languages, LoaderCircle } from "lucide-rea
 const Home = lazy(() => import("./pages/Home"));
 const DemoHome = lazy(() => import("./pages/DemoHome"));
 const Chat = lazy(() => import("./pages/Chat"));
-const DemoChat = lazy(() => import("./pages/DemoChat"));
 const Dashboard = lazy(() => import("./pages/Dashboard"));
 const Analytics = lazy(() => import("./pages/Analytics"));
 const Login = lazy(() => import("./pages/Login"));
@@ -90,7 +89,7 @@ function AdaptiveRoute({ authenticated, demo, account }) {
 function AppRoutes() {
     return <Suspense fallback={<PageLoader />}><Routes>
         <Route path="/" element={<><AdaptiveRoute demo={<DemoHome/>} account={<Home/>} /><TranslationShortcut/></>} />
-        <Route path="/chat" element={<><AdaptiveRoute demo={<DemoChat/>} account={<Chat/>} /><TranslationShortcut/></>} />
+        <Route path="/chat" element={<Chat/>} />
         <Route path="/translate" element={<TranslationMode/>} />
         <Route path="/settings" element={<AdaptiveRoute demo={<DemoSettings/>} account={<Settings/>} />} />
         <Route path="/dashboard" element={<AuthRedirect><><Dashboard/><AnalyticsShortcut/><TranslationShortcut/></></AuthRedirect>} />
