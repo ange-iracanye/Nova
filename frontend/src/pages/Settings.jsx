@@ -10,6 +10,8 @@ import {
     useNavigate
 } from "react-router-dom";
 
+import { applyNovaLanguage } from "../i18n";
+
 import {
     ArrowLeft,
     User,
@@ -1182,6 +1184,10 @@ export default function Settings() {
                     }
                 );
 
+
+                if (key === "language") {
+                    applyNovaLanguage(value);
+                }
 
                 setSaved(false);
 
@@ -4555,3 +4561,4 @@ function InfoBox({
     );
 
 }
+// NOVA_FINALIZE_LANGUAGE
