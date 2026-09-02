@@ -6,18 +6,51 @@ import NovaLogo from "../components/NovaLogo";
 const API_URL = (import.meta.env.VITE_API_URL || "http://127.0.0.1:8000").replace(/\/+$/, "");
 const STARTERS = ["Explain photosynthesis simply", "Quiz me on algebra", "Why is the sky blue?", "Help me understand Newton's laws"];
 
+const DEMO_SESSION_ATTEMPTS = 3;
+const DEMO_SESSION_RETRY_DELAY = 1200;
+
 async function createDemoSession() {
-    const response = await fetch(`${API_URL}/demo/session`, { method: "POST", headers: { Accept: "application/json" } });
-    if (!response.ok) throw new Error("Nova demo is unavailable right now.");
-    const data = await response.json();
-    if (!data?.session_id) throw new Error("Nova demo did not return a session.");
-    return data.session_id;
+    let lastError = null;
+
+    for (let attempt = 1; attempt <= DEMO_SESSION_ATTEMPTS; attempt += 1) {
+        try {
+            const response = await fetch(`${API_URL}/demo/session`, {
+                method: "POST",
+                headers: {
+                    Accept: "application/json",
+                    "Cache-Control": "no-store",
+                },
+                cache: "no-store",
+            });
+
+            if (!response.ok) {
+                let detail = "Nova demo is unavailable right now.";
+                try {
+                    const data = await response.json();
+                    detail = data?.detail || data?.error?.message || detail;
+                } catch { /* keep the fallback message */ }
+                throw new Error(detail);
+            }
+
+            const data = await response.json();
+            if (!data?.session_id) throw new Error("Nova demo did not return a session.");
+            return data.session_id;
+        } catch (error) {
+            lastError = error;
+            if (attempt < DEMO_SESSION_ATTEMPTS) {
+                await new Promise(resolve => setTimeout(resolve, DEMO_SESSION_RETRY_DELAY * attempt));
+            }
+        }
+    }
+
+    throw lastError || new Error("Nova demo is unavailable right now.");
 }
 
 async function streamDemoAnswer(sessionId, message, onChunk) {
     const response = await fetch(`${API_URL}/demo/chat/stream`, {
         method: "POST",
         headers: { "Content-Type": "application/json", Accept: "text/plain" },
+        cache: "no-store",
         body: JSON.stringify({ session_id: sessionId, message })
     });
     if (!response.ok) {
