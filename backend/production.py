@@ -80,7 +80,10 @@ PUBLIC_PATHS = {"/", "/api", "/health", "/ready", "/register", "/login", "/auth/
 if ENABLE_DOCS:
     PUBLIC_PATHS.update({"/docs", "/redoc", "/openapi.json"})
 if ENABLE_DEMO:
-    PUBLIC_PATHS.add("/demo/session")
+    PUBLIC_PATHS.update({
+        "/demo/session",
+        "/demo/chat/stream",
+    })
 PUBLIC_PREFIXES = ("/demo/session/", "/demo/chat/") if ENABLE_DEMO else ()
 COOKIE_NAME = os.getenv("NOVA_SESSION_COOKIE", "nova_session")
 COOKIE_SAMESITE = os.getenv("NOVA_COOKIE_SAMESITE", "lax").lower()
