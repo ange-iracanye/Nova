@@ -60,3 +60,5 @@ export function applyNovaLanguage(value) {
 export function initializeNovaLanguage() {
   return applyNovaLanguage(readNovaLanguage().code);
 }
+
+// Nova V1 multilingual runtime: language preference is persisted globally.
