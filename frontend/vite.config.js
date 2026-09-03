@@ -3,12 +3,16 @@ import { defineConfig, loadEnv } from "vite";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 
+// Production always uses Nova's known live API endpoint. This prevents a stale
+// or incorrect Render VITE_API_URL value from being baked into the static bundle.
 const PRODUCTION_API_URL = "https://nova-api-i07q.onrender.com";
 
 export default defineConfig(({ mode }) => {
     const env = loadEnv(mode, process.cwd(), "VITE_");
     const configuredApiUrl = (env.VITE_API_URL || "").trim().replace(/\/$/, "");
-    const apiUrl = configuredApiUrl || (mode === "production" ? PRODUCTION_API_URL : "");
+    const apiUrl = mode === "production"
+        ? PRODUCTION_API_URL
+        : (configuredApiUrl || "http://127.0.0.1:8000");
 
     function productionApiEndpoint() {
         return {
@@ -49,43 +53,21 @@ export default defineConfig(({ mode }) => {
                 if (!id.endsWith("/src/pages/Chat.jsx")) return null;
                 let next = code;
 
-                // Production Chat must perform one health probe on mount, not a
-                // polling loop. Continuous health polling was amplifying Render
-                // edge/rate-limit failures and made genuine backend failures look
-                // like CORS failures in the browser.
-                //
-                // IMPORTANT: this template is evaluated by Vite itself. The
-                // frontend runtime variable is API_URL, but the Vite config's
-                // corresponding value is apiUrl. Referencing API_URL here causes
-                // the production build to crash with "API_URL is not defined".
                 next = next.replace(
                     /\/\* =======================================================\s*BACKEND CHECK\s*======================================================= \*\/[\s\S]*?\/\* =======================================================\s*DEMO SESSION\s*======================================================= \*\//,
                     `/* =======================================================\n     BACKEND CHECK\n     ======================================================= */\n\n  const checkBackend = useCallback(async () => {\n    try {\n      const r = await fetch(\`${apiUrl}/health\`, { cache: "no-store" });\n      if (mountedRef.current) setBackend(r.ok);\n    } catch {\n      if (mountedRef.current) setBackend(false);\n    }\n  }, []);\n\n  useEffect(() => {\n    checkBackend();\n  }, [checkBackend]);\n\n  /* =======================================================\n     DEMO SESSION\n     ======================================================= */`
                 );
 
-                // Fallback for older formatting if the full block replacement did
-                // not match. This deliberately removes only the interval itself.
                 next = next.replace(
                     /\n\s*const interval\s*=\s*setInterval\([\s\S]*?\);\s*\n\s*return \(\) => \{\s*\n\s*clearInterval\(interval\);\s*\n\s*\};/m,
                     ""
                 );
 
-                // Replace legacy conversation endpoints regardless of whitespace
-                // or line wrapping.
                 next = next.replace(/\$\{API_URL\}\/conversations\/\$\{encodeURIComponent\(\s*user\.email\s*\)\}/g, "${API_URL}/v1/conversations");
                 next = next.replace(/\$\{API_URL\}\/conversation\/\$\{encodeURIComponent\(\s*user\.email\s*\)\}\/\$\{encodeURIComponent\(id\)\}/g, "${API_URL}/v1/conversations/${encodeURIComponent(id)}");
                 next = next.replace(/\$\{API_URL\}\/conversation\/new/g, "${API_URL}/v1/conversations");
-
-                // Fix the nested dependency array that otherwise recreates the
-                // openConversation callback on every render.
-                next = next.replace(
-                    /\[\s*\[\s*demo\s*,\s*navigate\s*,\s*scrollBottom\s*,\s*mode\s*,?\s*\]\s*\]/g,
-                    "[demo, navigate, scrollBottom, mode]"
-                );
-
-                // Keep dashboard on the authenticated V1 endpoint.
+                next = next.replace(/\[\s*\[\s*demo\s*,\s*navigate\s*,\s*scrollBottom\s*,\s*mode\s*,?\s*\]\s*\]/g, "[demo, navigate, scrollBottom, mode]");
                 next = next.replace(/\$\{API_URL\}\/dashboard\?email=\$\{encodeURIComponent\(\s*currentUser\.email\s*\)\}/g, "${API_URL}/v1/dashboard");
-
                 next = next.replace(/previous\.slice\(0, index\)/g, "previous.slice(0, Math.max(0, index - 1))");
                 next = next.replace(/const \[sidebar, setSidebar\] = useState\(true\);/g, 'const [sidebar, setSidebar] = useState(() => typeof window !== "undefined" && window.innerWidth >= 768);');
 
