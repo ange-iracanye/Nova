@@ -6,7 +6,7 @@ import { initializeNovaLanguage } from "./i18n.js";
 
 const NOVA_CONFIG = {
     appName: "Nova AI",
-    version: "1.0.0",
+    version: "1.0.1",
     rootId: "root",
     loadingMessage: "Loading Nova...",
     loadingSubmessage: "Preparing your learning environment.",
@@ -14,13 +14,17 @@ const NOVA_CONFIG = {
     storageKeys: { theme: "nova_theme", lastRoute: "nova_last_route", session: "nova_session", initialized: "nova_initialized" }
 };
 
+// Keep the live production API in the application bundle itself. This is intentional:
+// the public static frontend must never depend on a stale/misconfigured Render env var.
+const PRODUCTION_API_BASE = "https://nova-api-i07q.onrender.com";
+const LOCAL_API_BASES = ["http://127.0.0.1:8000", "http://localhost:8000"];
+
 function getApiBase() {
+    if (import.meta.env.PROD) return PRODUCTION_API_BASE;
     const configured = (import.meta.env.VITE_API_URL || "").trim().replace(/\/+$/, "");
-    if (import.meta.env.PROD && !configured) throw new Error("Nova production API is not configured. Set VITE_API_URL before building the frontend.");
     return configured || "http://127.0.0.1:8000";
 }
 const API_BASE = getApiBase();
-const LOCAL_API_BASES = ["http://127.0.0.1:8000", "http://localhost:8000"];
 function readSessionToken() { try { const raw = localStorage.getItem(NOVA_CONFIG.storageKeys.session); if (!raw) return null; const parsed = JSON.parse(raw); return typeof parsed?.token === "string" && parsed.token.trim() ? parsed.token.trim() : null; } catch { return null; } }
 function normalizeApiUrl(rawUrl) { let url = String(rawUrl || ""); for (const localBase of LOCAL_API_BASES) { if (url === localBase || url.startsWith(`${localBase}/`)) { url = `${API_BASE}${url.slice(localBase.length)}`; break; } } return url; }
 function installNovaThinkingIndicator() { if (window.__novaThinkingIndicatorInstalled) return; const style = document.createElement("style"); style.textContent = `#nova-thinking-indicator{position:fixed;left:50%;bottom:92px;transform:translate(-50%,12px);z-index:9999;display:flex;align-items:center;gap:10px;padding:9px 14px;border:1px solid rgba(255,255,255,.10);border-radius:999px;background:rgba(7,10,17,.90);color:rgba(226,232,240,.86);box-shadow:0 12px 40px rgba(0,0,0,.35);backdrop-filter:blur(14px);font:600 12px/1.2 system-ui,sans-serif;letter-spacing:.02em;opacity:0;pointer-events:none;transition:opacity .18s ease,transform .18s ease}#nova-thinking-indicator.nova-thinking-visible{opacity:1;transform:translate(-50%,0)}#nova-thinking-indicator .nova-thinking-dots{display:inline-flex;gap:4px;align-items:center}#nova-thinking-indicator .nova-thinking-dot{width:5px;height:5px;border-radius:50%;background:currentColor;opacity:.35;animation:nova-thinking-bounce 1s infinite ease-in-out}#nova-thinking-indicator .nova-thinking-dot:nth-child(2){animation-delay:.14s}#nova-thinking-indicator .nova-thinking-dot:nth-child(3){animation-delay:.28s}@keyframes nova-thinking-bounce{0%,60%,100%{transform:translateY(0);opacity:.35}30%{transform:translateY(-4px);opacity:1}}@media(max-width:640px){#nova-thinking-indicator{bottom:78px}}`; document.head.appendChild(style); const indicator = document.createElement("div"); indicator.id="nova-thinking-indicator"; indicator.setAttribute("role","status"); indicator.setAttribute("aria-live","polite"); indicator.innerHTML=`<span>Nova is thinking</span><span class="nova-thinking-dots" aria-hidden="true"><span class="nova-thinking-dot"></span><span class="nova-thinking-dot"></span><span class="nova-thinking-dot"></span></span>`; document.body.appendChild(indicator); let pendingTimer=null; window.__novaShowThinking=()=>{if(pendingTimer)window.clearTimeout(pendingTimer);pendingTimer=window.setTimeout(()=>indicator.classList.add("nova-thinking-visible"),180)}; window.__novaHideThinking=()=>{if(pendingTimer){window.clearTimeout(pendingTimer);pendingTimer=null}indicator.classList.remove("nova-thinking-visible")}; window.__novaThinkingIndicatorInstalled=true; }
