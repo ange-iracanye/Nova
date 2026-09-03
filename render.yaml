@@ -4,7 +4,7 @@ services:
     runtime: python
     plan: free
     region: frankfurt
-    buildCommand: python -m pip install --upgrade pip && python -m pip install -r requirements-render.txt
+    buildCommand: rm -rf ~/.cache/pip && python -m pip install --upgrade pip --no-cache-dir && python -m pip install --no-cache-dir -r requirements-render.txt
     startCommand: python -m uvicorn backend.render_entry:app --host 0.0.0.0 --port $PORT --log-level info
     healthCheckPath: /health
     autoDeploy: true
