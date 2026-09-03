@@ -1,0 +1,225 @@
+name: Repair Nova settings and language integration
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  repair:
+    if: ${{ !contains(github.event.head_commit.message, '[settings-repair]') }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Patch settings persistence and language UI
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import re
+
+          # ---------------------------------------------------------
+          # Frontend settings: API envelope + complete language list.
+          # ---------------------------------------------------------
+          p = Path('frontend/src/pages/Settings.jsx')
+          s = p.read_text(encoding='utf-8')
+
+          s = s.replace(
+              'const normalized =\n                        sanitizeSettings(\n                            data\n                        );',
+              'const normalized =\n                        sanitizeSettings(\n                            data?.settings || data\n                        );'
+          )
+
+          s = s.replace(
+              'const normalized =\n                sanitizeSettings(\n                    data\n                );',
+              'const normalized =\n                sanitizeSettings(\n                    data?.settings || data\n                );'
+          )
+
+          language_options = '''[
+                                        ["English", "English"],
+                                        ["Spanish", "Spanish"],
+                                        ["Chinese", "Chinese"],
+                                        ["Hindi", "Hindi"],
+                                        ["French", "French"],
+                                        ["Arabic", "Arabic"],
+                                        ["Portuguese", "Portuguese"],
+                                        ["Russian", "Russian"],
+                                        ["German", "German"],
+                                        ["Japanese", "Japanese"],
+                                        ["Korean", "Korean"],
+                                        ["Italian", "Italian"],
+                                        ["Turkish", "Turkish"],
+                                        ["Dutch", "Dutch"],
+                                        ["Polish", "Polish"],
+                                        ["Ukrainian", "Ukrainian"],
+                                        ["Vietnamese", "Vietnamese"],
+                                        ["Thai", "Thai"],
+                                        ["Indonesian", "Indonesian"],
+                                        ["Swedish", "Swedish"],
+                                        ["Greek", "Greek"],
+                                        ["Czech", "Czech"],
+                                        ["Romanian", "Romanian"],
+                                        ["Hungarian", "Hungarian"]
+                                    ]'''
+
+          old_language_options = '''[
+                                        [
+                                            "English",
+                                            "English"
+                                        ],
+                                        [
+                                            "French",
+                                            "French"
+                                        ]
+                                    ]'''
+          if old_language_options in s:
+              s = s.replace(old_language_options, language_options, 1)
+          else:
+              raise SystemExit('Could not find the language selector options in Settings.jsx')
+
+          p.write_text(s, encoding='utf-8')
+
+          # ---------------------------------------------------------
+          # User settings backend: update/reset must use the same
+          # per-user path as get().
+          # ---------------------------------------------------------
+          p = Path('backend/user_settings.py')
+          s = p.read_text(encoding='utf-8')
+
+          if '_ORIGINAL_UPDATE = SettingsManager.update' not in s:
+              s = s.replace(
+                  '_ORIGINAL_GET = SettingsManager.get\n',
+                  '_ORIGINAL_GET = SettingsManager.get\n_ORIGINAL_UPDATE = SettingsManager.update\n_ORIGINAL_RESET = getattr(SettingsManager, "reset", None)\n',
+                  1
+              )
+
+          if 'def _update_user_scoped_settings' not in s:
+              anchor = 'SettingsManager.get = _get_user_scoped_settings\n'
+              block = '''\n\ndef _update_user_scoped_settings(self: SettingsManager, **values):\n    email = _current_user.get()\n    if not email:\n        return _ORIGINAL_UPDATE(self, **values)\n\n    scoped = SettingsManager(_path_for_user(email))\n    return _ORIGINAL_UPDATE(scoped, **values)\n\n\nSettingsManager.update = _update_user_scoped_settings\n'''
+              if anchor not in s:
+                  raise SystemExit('Could not find SettingsManager.get patch anchor')
+              s = s.replace(anchor, anchor + block, 1)
+
+          if '_reset_user_scoped_settings' not in s and '_ORIGINAL_RESET' in s:
+              anchor = 'SettingsManager.update = _update_user_scoped_settings\n'
+              block = '''\n\nif _ORIGINAL_RESET is not None:\n    def _reset_user_scoped_settings(self: SettingsManager):\n        email = _current_user.get()\n        if not email:\n            return _ORIGINAL_RESET(self)\n\n        scoped = SettingsManager(_path_for_user(email))\n        return _ORIGINAL_RESET(scoped)\n\n    SettingsManager.reset = _reset_user_scoped_settings\n'''
+              s = s.replace(anchor, anchor + block, 1)
+
+          p.write_text(s, encoding='utf-8')
+
+          # ---------------------------------------------------------
+          # NovaCore: establish the authenticated settings context for
+          # every chat request, then always restore the previous context.
+          # ---------------------------------------------------------
+          p = Path('backend/core/nova_core.py')
+          s = p.read_text(encoding='utf-8')
+
+          if 'from backend.user_settings import set_current_user, reset_current_user' not in s:
+              anchor = 'from backend.settings import SettingsManager\n'
+              if anchor not in s:
+                  raise SystemExit('Could not find NovaCore settings import anchor')
+              s = s.replace(
+                  anchor,
+                  anchor + 'from backend.user_settings import set_current_user, reset_current_user\n',
+                  1
+              )
+
+          if 'settings_context_token = set_current_user(user_email)' not in s:
+              anchor = '        self.last_error = None\n\n        self.total_requests += 1\n\n        try:\n'
+              replacement = '        self.last_error = None\n\n        settings_context_token = set_current_user(user_email)\n\n        self.total_requests += 1\n\n        try:\n'
+              if anchor not in s:
+                  raise SystemExit('Could not find NovaCore.process start anchor')
+              s = s.replace(anchor, replacement, 1)
+
+          if 'reset_current_user(settings_context_token)' not in s:
+              anchor = '        finally:\n\n            if request is not None:\n'
+              replacement = '        finally:\n\n            reset_current_user(settings_context_token)\n\n            if request is not None:\n'
+              if anchor not in s:
+                  raise SystemExit('Could not find NovaCore.process finally anchor')
+              s = s.replace(anchor, replacement, 1)
+
+          p.write_text(s, encoding='utf-8')
+
+          # ---------------------------------------------------------
+          # API settings routes: resolve the logged-in user before
+          # reading/writing settings, instead of using one global file.
+          # ---------------------------------------------------------
+          p = Path('backend/api.py')
+          s = p.read_text(encoding='utf-8')
+
+          if 'from backend.user_settings import set_current_user, reset_current_user' not in s:
+              anchor = 'from backend.settings import SettingsManager\n'
+              if anchor not in s:
+                  raise SystemExit('Could not find API settings import anchor')
+              s = s.replace(
+                  anchor,
+                  anchor + 'from backend.user_settings import set_current_user, reset_current_user\n',
+                  1
+              )
+
+          s = s.replace(
+              'def get_settings():\n\n    try:\n\n        result = settings_manager.get()',
+              'def get_settings(request: Request):\n\n    user_email = resolve_user_email(request)\n    settings_context_token = set_current_user(user_email)\n\n    try:\n\n        result = settings_manager.get()',
+              1
+          )
+          s = s.replace(
+              '    except Exception as error:\n\n        print(\n            f"[SETTINGS GET ERROR] {error}"',
+              '    except Exception as error:\n\n        print(\n            f"[SETTINGS GET ERROR] {error}"',
+              1
+          )
+          get_marker = '''        raise HTTPException(\n\n            status_code=500,\n\n            detail="Could not load settings."\n        )\n\n    if not isinstance(\n'''
+          get_repl = '''        raise HTTPException(\n\n            status_code=500,\n\n            detail="Could not load settings."\n        )\n    finally:\n        reset_current_user(settings_context_token)\n\n    if not isinstance(\n'''
+          if get_marker in s:
+              s = s.replace(get_marker, get_repl, 1)
+
+          s = s.replace(
+              'def update_settings(\n    request: SettingsRequest\n):\n\n    try:',
+              'def update_settings(\n    request: SettingsRequest,\n    http_request: Request\n):\n\n    user_email = resolve_user_email(http_request)\n    settings_context_token = set_current_user(user_email)\n\n    try:',
+              1
+          )
+          update_marker = '''        raise HTTPException(\n\n            status_code=500,\n\n            detail="Could not update settings."\n        )\n\n    return {\n\n        "success":\n'''
+          update_repl = '''        raise HTTPException(\n\n            status_code=500,\n\n            detail="Could not update settings."\n        )\n    finally:\n        reset_current_user(settings_context_token)\n\n    return {\n\n        "success":\n'''
+          if update_marker in s:
+              s = s.replace(update_marker, update_repl, 1)
+
+          s = s.replace(
+              'def reset_settings():\n\n    reset_function = getattr(',
+              'def reset_settings(request: Request):\n\n    user_email = resolve_user_email(request)\n    settings_context_token = set_current_user(user_email)\n\n    reset_function = getattr(',
+              1
+          )
+          reset_error_marker = '''        raise HTTPException(\n\n            status_code=500,\n\n            detail="Could not reset settings."\n        )\n\n    return {\n'''
+          reset_error_repl = '''        raise HTTPException(\n\n            status_code=500,\n\n            detail="Could not reset settings."\n        )\n    finally:\n        reset_current_user(settings_context_token)\n\n    return {\n'''
+          if reset_error_marker in s:
+              s = s.replace(reset_error_marker, reset_error_repl, 1)
+
+          p.write_text(s, encoding='utf-8')
+
+          # ---------------------------------------------------------
+          # i18n: the language catalog already contains 24 languages,
+          # but the UI dictionary only covered part of it. Add the
+          # missing UI dictionaries without disturbing existing ones.
+          # ---------------------------------------------------------
+          p = Path('frontend/src/i18n.js')
+          s = p.read_text(encoding='utf-8')
+          if 'nl: { Back:' not in s:
+              missing = '''  nl: { Back:"Terug", Settings:"Instellingen", Profile:"Profiel", Language:"Taal", Save:"Opslaan", Saved:"Opgeslagen", Cancel:"Annuleren", Reset:"Resetten", Search:"Zoeken", Loading:"Laden…", Chat:"Chat", Dashboard:"Dashboard", Progress:"Voortgang", Analytics:"Analyses", Capabilities:"Functies", About:"Over Nova", Send:"Versturen", New:"Nieuwe chat", Latest:"Ga naar nieuwste", Retry:"Opnieuw proberen", Regenerate:"Opnieuw genereren", Logout:"Uitloggen", Name:"Naam", Level:"Leerniveau", Teaching:"Onderwijsstijl", Difficulty:"Moeilijkheid", Length:"Antwoordlengte", Tone:"Toon", Custom:"Aangepaste instructies", Welcome:"Welkom bij Nova", LearnMore:"Meer informatie" },\n  pl: { Back:"Wstecz", Settings:"Ustawienia", Profile:"Profil", Language:"Język", Save:"Zapisz", Saved:"Zapisano", Cancel:"Anuluj", Reset:"Resetuj", Search:"Szukaj", Loading:"Ładowanie…", Chat:"Czat", Dashboard:"Panel", Progress:"Postęp", Analytics:"Analityka", Capabilities:"Funkcje", About:"O Nova", Send:"Wyślij", New:"Nowy czat", Latest:"Przejdź do najnowszych", Retry:"Spróbuj ponownie", Regenerate:"Wygeneruj ponownie", Logout:"Wyloguj", Name:"Imię", Level:"Poziom nauki", Teaching:"Styl nauczania", Difficulty:"Trudność", Length:"Długość odpowiedzi", Tone:"Ton", Custom:"Niestandardowe instrukcje", Welcome:"Witamy w Nova", LearnMore:"Dowiedz się więcej" },\n  uk: { Back:"Назад", Settings:"Налаштування", Profile:"Профіль", Language:"Мова", Save:"Зберегти", Saved:"Збережено", Cancel:"Скасувати", Reset:"Скинути", Search:"Пошук", Loading:"Завантаження…", Chat:"Чат", Dashboard:"Панель", Progress:"Прогрес", Analytics:"Аналітика", Capabilities:"Можливості", About:"Про Nova", Send:"Надіслати", New:"Новий чат", Latest:"До останнього", Retry:"Повторити", Regenerate:"Згенерувати знову", Logout:"Вийти", Name:"Ім’я", Level:"Рівень навчання", Teaching:"Стиль навчання", Difficulty:"Складність", Length:"Довжина відповіді", Tone:"Тон", Custom:"Власні інструкції", Welcome:"Ласкаво просимо до Nova", LearnMore:"Дізнатися більше" },\n  vi: { Back:"Quay lại", Settings:"Cài đặt", Profile:"Hồ sơ", Language:"Ngôn ngữ", Save:"Lưu", Saved:"Đã lưu", Cancel:"Hủy", Reset:"Đặt lại", Search:"Tìm kiếm", Loading:"Đang tải…", Chat:"Trò chuyện", Dashboard:"Bảng điều khiển", Progress:"Tiến độ", Analytics:"Phân tích", Capabilities:"Tính năng", About:"Giới thiệu Nova", Send:"Gửi", New:"Cuộc trò chuyện mới", Latest:"Đến mới nhất", Retry:"Thử lại", Regenerate:"Tạo lại", Logout:"Đăng xuất", Name:"Tên", Level:"Trình độ học tập", Teaching:"Phong cách giảng dạy", Difficulty:"Độ khó", Length:"Độ dài câu trả lời", Tone:"Giọng điệu", Custom:"Hướng dẫn tùy chỉnh", Welcome:"Chào mừng đến với Nova", LearnMore:"Tìm hiểu thêm" },\n  th: { Back:"ย้อนกลับ", Settings:"การตั้งค่า", Profile:"โปรไฟล์", Language:"ภาษา", Save:"บันทึก", Saved:"บันทึกแล้ว", Cancel:"ยกเลิก", Reset:"รีเซ็ต", Search:"ค้นหา", Loading:"กำลังโหลด…", Chat:"แชต", Dashboard:"แดชบอร์ด", Progress:"ความคืบหน้า", Analytics:"การวิเคราะห์", Capabilities:"ความสามารถ", About:"เกี่ยวกับ Nova", Send:"ส่ง", New:"แชตใหม่", Latest:"ไปยังล่าสุด", Retry:"ลองอีกครั้ง", Regenerate:"สร้างใหม่", Logout:"ออกจากระบบ", Name:"ชื่อ", Level:"ระดับการเรียนรู้", Teaching:"รูปแบบการสอน", Difficulty:"ความยาก", Length:"ความยาวคำตอบ", Tone:"น้ำเสียง", Custom:"คำสั่งกำหนดเอง", Welcome:"ยินดีต้อนรับสู่ Nova", LearnMore:"เรียนรู้เพิ่มเติม" },\n  id: { Back:"Kembali", Settings:"Pengaturan", Profile:"Profil", Language:"Bahasa", Save:"Simpan", Saved:"Tersimpan", Cancel:"Batal", Reset:"Atur ulang", Search:"Cari", Loading:"Memuat…", Chat:"Chat", Dashboard:"Dasbor", Progress:"Kemajuan", Analytics:"Analitik", Capabilities:"Fitur", About:"Tentang Nova", Send:"Kirim", New:"Chat baru", Latest:"Ke terbaru", Retry:"Coba lagi", Regenerate:"Buat ulang", Logout:"Keluar", Name:"Nama", Level:"Tingkat belajar", Teaching:"Gaya mengajar", Difficulty:"Kesulitan", Length:"Panjang jawaban", Tone:"Nada", Custom:"Instruksi khusus", Welcome:"Selamat datang di Nova", LearnMore:"Pelajari lebih lanjut" },\n  sv: { Back:"Tillbaka", Settings:"Inställningar", Profile:"Profil", Language:"Språk", Save:"Spara", Saved:"Sparat", Cancel:"Avbryt", Reset:"Återställ", Search:"Sök", Loading:"Laddar…", Chat:"Chatt", Dashboard:"Instrumentpanel", Progress:"Framsteg", Analytics:"Analys", Capabilities:"Funktioner", About:"Om Nova", Send:"Skicka", New:"Ny chatt", Latest:"Till senaste", Retry:"Försök igen", Regenerate:"Generera igen", Logout:"Logga ut", Name:"Namn", Level:"Inlärningsnivå", Teaching:"Undervisningsstil", Difficulty:"Svårighet", Length:"Svars­längd", Tone:"Ton", Custom:"Egna instruktioner", Welcome:"Välkommen till Nova", LearnMore:"Läs mer" },\n  el: { Back:"Πίσω", Settings:"Ρυθμίσεις", Profile:"Προφίλ", Language:"Γλώσσα", Save:"Αποθήκευση", Saved:"Αποθηκεύτηκε", Cancel:"Ακύρωση", Reset:"Επαναφορά", Search:"Αναζήτηση", Loading:"Φόρτωση…", Chat:"Συνομιλία", Dashboard:"Πίνακας", Progress:"Πρόοδος", Analytics:"Αναλύσεις", Capabilities:"Δυνατότητες", About:"Σχετικά με το Nova", Send:"Αποστολή", New:"Νέα συνομιλία", Latest:"Μετάβαση στο πιο πρόσφατο", Retry:"Επανάληψη", Regenerate:"Νέα δημιουργία", Logout:"Αποσύνδεση", Name:"Όνομα", Level:"Επίπεδο μάθησης", Teaching:"Στυλ διδασκαλίας", Difficulty:"Δυσκολία", Length:"Μήκος απάντησης", Tone:"Τόνος", Custom:"Προσαρμοσμένες οδηγίες", Welcome:"Καλώς ήρθατε στο Nova", LearnMore:"Μάθετε περισσότερα" },\n  cs: { Back:"Zpět", Settings:"Nastavení", Profile:"Profil", Language:"Jazyk", Save:"Uložit", Saved:"Uloženo", Cancel:"Zrušit", Reset:"Obnovit", Search:"Hledat", Loading:"Načítání…", Chat:"Chat", Dashboard:"Přehled", Progress:"Pokrok", Analytics:"Analýza", Capabilities:"Funkce", About:"O Nova", Send:"Odeslat", New:"Nový chat", Latest:"Přejít na nejnovější", Retry:"Zkusit znovu", Regenerate:"Vygenerovat znovu", Logout:"Odhlásit se", Name:"Jméno", Level:"Úroveň učení", Teaching:"Styl výuky", Difficulty:"Obtížnost", Length:"Délka odpovědi", Tone:"Tón", Custom:"Vlastní pokyny", Welcome:"Vítejte v Nova", LearnMore:"Zjistit více" },\n  ro: { Back:"Înapoi", Settings:"Setări", Profile:"Profil", Language:"Limbă", Save:"Salvează", Saved:"Salvat", Cancel:"Anulează", Reset:"Resetează", Search:"Caută", Loading:"Se încarcă…", Chat:"Chat", Dashboard:"Panou", Progress:"Progres", Analytics:"Analiză", Capabilities:"Funcții", About:"Despre Nova", Send:"Trimite", New:"Chat nou", Latest:"La cele mai recente", Retry:"Încearcă din nou", Regenerate:"Generează din nou", Logout:"Deconectare", Name:"Nume", Level:"Nivel de învățare", Teaching:"Stil de predare", Difficulty:"Dificultate", Length:"Lungimea răspunsului", Tone:"Ton", Custom:"Instrucțiuni personalizate", Welcome:"Bine ai venit la Nova", LearnMore:"Află mai multe" },\n  hu: { Back:"Vissza", Settings:"Beállítások", Profile:"Profil", Language:"Nyelv", Save:"Mentés", Saved:"Mentve", Cancel:"Mégse", Reset:"Visszaállítás", Search:"Keresés", Loading:"Betöltés…", Chat:"Csevegés", Dashboard:"Irányítópult", Progress:"Haladás", Analytics:"Elemzés", Capabilities:"Funkciók", About:"A Nováról", Send:"Küldés", New:"Új csevegés", Latest:"Legújabbhoz", Retry:"Újra", Regenerate:"Újragenerálás", Logout:"Kijelentkezés", Name:"Név", Level:"Tanulási szint", Teaching:"Tanítási stílus", Difficulty:"Nehézség", Length:"Válasz hossza", Tone:"Hangnem", Custom:"Egyéni utasítások", Welcome:"Üdvözlünk a Novában", LearnMore:"További információ" },\n'''
+              s = s.replace('const UI = {\n', 'const UI = {\n' + missing, 1)
+          p.write_text(s, encoding='utf-8')
+          PY
+
+      - name: Validate Python syntax
+        run: |
+          python -m py_compile backend/user_settings.py backend/core/nova_core.py backend/api.py
+
+      - name: Commit repairs and remove one-shot workflow
+        run: |
+          git config user.name "nova-settings-repair[bot]"
+          git config user.email "nova-settings-repair[bot]@users.noreply.github.com"
+          git rm .github/workflows/fix-settings.yml
+          git add frontend/src/pages/Settings.jsx frontend/src/i18n.js backend/user_settings.py backend/core/nova_core.py backend/api.py
+          git diff --cached --quiet && exit 0
+          git commit -m "fix: repair settings persistence and multilingual UI [settings-repair]"
+          git push
