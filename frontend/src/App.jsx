@@ -16,7 +16,13 @@ const Capabilities = lazy(() => import("./pages/Capabilities"));
 const AboutNova = lazy(() => import("./pages/AboutNova"));
 const TranslationMode = lazy(() => import("./pages/TranslationMode"));
 
-const NOVA_API_URL = (import.meta.env.VITE_API_URL || "http://127.0.0.1:8000").trim().replace(/\/+$/, "");
+// Keep the production API endpoint in the frontend source as well as main.jsx.
+// Some routes build their API URL directly, so relying only on the global fetch
+// compatibility layer is not sufficient in the production static bundle.
+const PRODUCTION_API_URL = "https://nova-api-i07q.onrender.com";
+const NOVA_API_URL = import.meta.env.PROD
+    ? PRODUCTION_API_URL
+    : (import.meta.env.VITE_API_URL || "http://127.0.0.1:8000").trim().replace(/\/+$/, "");
 
 function readUser() {
     try { const raw = localStorage.getItem("nova_user"); if (!raw) return null; const parsed = JSON.parse(raw); return parsed && typeof parsed === "object" ? parsed : null; }
