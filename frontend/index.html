@@ -2,43 +2,17 @@
 <html lang="en">
     <head>
         <meta charset="UTF-8" />
-
-        <meta
-            name="viewport"
-            content="width=device-width, initial-scale=1.0"
-        />
-
-        <meta
-            name="theme-color"
-            content="#050816"
-        />
-
-        <meta
-            name="description"
-            content="Nova AI, an adaptive educational tutor for students."
-        />
-
-        <link
-            rel="icon"
-            type="image/svg+xml"
-            href="/brand/nova-logo.svg"
-        />
-
-        <link
-            rel="apple-touch-icon"
-            href="/brand/nova-logo.svg"
-        />
-
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <meta name="theme-color" content="#050816" />
+        <meta name="description" content="Nova AI, an adaptive educational tutor for students." />
+        <link rel="icon" type="image/svg+xml" href="/brand/nova-logo.svg" />
+        <link rel="apple-touch-icon" href="/brand/nova-logo.svg" />
         <title>Nova AI</title>
     </head>
-
     <body>
         <div id="root"></div>
-
-        <!-- Build marker: production API compatibility bundle refresh 20260904-1745. -->
-        <script
-            type="module"
-            src="/src/main.jsx?nova-build=20260904-1745"
-        ></script>
+        <!-- Install the same-origin API bridge before React can issue requests. -->
+        <script type="module" src="/src/production-api.js?nova-build=20260904-1819"></script>
+        <script type="module" src="/src/main.jsx?nova-build=20260904-1819"></script>
     </body>
 </html>
