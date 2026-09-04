@@ -77,14 +77,21 @@ function installHomeContrastFix() {
     const style = document.createElement("style");
     style.id = "nova-home-contrast-fix";
     style.textContent = `
-        body.nova-app main a.bg-white,
-        body.nova-app main button.bg-white,
-        body.nova-app main a[class*="bg-white"]:not([class*="bg-white/"]) {
-            color: #22d3ee !important;
+        main a.bg-white,
+        main button.bg-white,
+        main a[class*="bg-white"]:not([class*="bg-white/"]) {
+            color: #0f172a !important;
+            -webkit-text-fill-color: #0f172a !important;
         }
-        body.nova-app main a.bg-white *,
-        body.nova-app main button.bg-white * {
-            color: #22d3ee !important;
+        main a.bg-white *,
+        main button.bg-white * {
+            color: #0f172a !important;
+            -webkit-text-fill-color: #0f172a !important;
+        }
+        main a.bg-white svg,
+        main button.bg-white svg {
+            color: #0f172a !important;
+            stroke: currentColor !important;
         }
     `;
     document.head.appendChild(style);
