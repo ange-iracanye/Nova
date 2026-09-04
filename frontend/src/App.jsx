@@ -1,4 +1,4 @@
-import { Suspense, lazy, useEffect, useMemo, useState } from "react";
+import { Suspense, lazy, useMemo, useState, useEffect } from "react";
 import { BrowserRouter, Navigate, Route, Routes, useLocation, useNavigate } from "react-router-dom";
 import { BarChart3, Home as HomeIcon, Languages, LoaderCircle } from "lucide-react";
 
@@ -16,9 +16,6 @@ const Capabilities = lazy(() => import("./pages/Capabilities"));
 const AboutNova = lazy(() => import("./pages/AboutNova"));
 const TranslationMode = lazy(() => import("./pages/TranslationMode"));
 
-// Keep the production API endpoint in the frontend source as well as main.jsx.
-// Some routes build their API URL directly, so relying only on the global fetch
-// compatibility layer is not sufficient in the production static bundle.
 const PRODUCTION_API_URL = "https://nova-api-i07q.onrender.com";
 const NOVA_API_URL = import.meta.env.PROD
     ? PRODUCTION_API_URL
@@ -42,7 +39,9 @@ function installApiCompatibility() {
     window.__novaApiCompatibilityInstalled = true;
     window.fetch = async (input, init = {}) => {
         let url = typeof input === "string" ? input : input?.url || "";
-        if (url.startsWith("http://127.0.0.1:8000") || url.startsWith("http://localhost:8000")) url = `${NOVA_API_URL}${url.replace(/^https?:\/\/(127\.0\.0\.1|localhost):8000/, "")}`;
+        if (url.startsWith("http://127.0.0.1:8000") || url.startsWith("http://localhost:8000")) {
+            url = `${NOVA_API_URL}${url.replace(/^https?:\/\/(127\.0\.0\.1|localhost):8000/, "")}`;
+        }
         const headers = new Headers(init.headers || (typeof input !== "string" ? input.headers : undefined) || {});
         const token = readSessionToken();
         if (token && !headers.has("Authorization") && !headers.has("X-Nova-Session")) headers.set("X-Nova-Session", token);
@@ -52,12 +51,18 @@ function installApiCompatibility() {
         if (response.ok && /^\/settings(?:\/reset)?$/.test(new URL(url, window.location.origin).pathname)) {
             try {
                 const payload = await response.clone().json();
-                if (payload?.settings && typeof payload.settings === "object") return new Response(JSON.stringify(payload.settings), { status: response.status, statusText: response.statusText, headers: response.headers });
+                if (payload?.settings && typeof payload.settings === "object") {
+                    return new Response(JSON.stringify(payload.settings), { status: response.status, statusText: response.statusText, headers: response.headers });
+                }
             } catch {}
         }
         return response;
     };
 }
+
+// Install before any lazy route can render and start an API request.
+installApiCompatibility();
+
 function useAuthState() {
     const [user, setUser] = useState(readUser);
     useEffect(() => { const sync = () => setUser(readUser()); window.addEventListener("storage", sync); window.addEventListener("nova-auth-changed", sync); window.addEventListener("nova:auth", sync); const timer = window.setInterval(sync, 1000); return () => { window.removeEventListener("storage", sync); window.removeEventListener("nova-auth-changed", sync); window.removeEventListener("nova:auth", sync); window.clearInterval(timer); }; }, []);
@@ -70,4 +75,4 @@ function TranslationShortcut() { const navigate = useNavigate(); return <button 
 function AuthHomeButton() { const navigate = useNavigate(); return <button type="button" onClick={() => navigate("/")} title="Back to Nova home" aria-label="Back to Nova home" className="fixed left-5 top-5 z-[100] flex items-center gap-2 rounded-xl border border-white/10 bg-slate-900/80 px-3.5 py-2.5 text-sm font-medium text-slate-300 shadow-xl backdrop-blur-xl transition hover:border-cyan-400/30 hover:bg-slate-800 hover:text-white"><HomeIcon size={16}/> Home</button>; }
 function AdaptiveRoute({ authenticated, demo, account }) { const user = useAuthState(); const location = useLocation(); useEffect(() => { const labels = { "/": user ? "Your learning space" : "Learn smarter", "/chat": "Learn", "/translate": "Translation", "/dashboard": "Dashboard", "/analytics": "Analytics", "/settings": "Settings", "/about": "About Nova" }; document.title = `Nova AI · ${labels[location.pathname] || "Explore"}`; }, [location.pathname, user]); if (authenticated) return user ? authenticated : demo; return user ? account : demo; }
 function AppRoutes() { return <Suspense fallback={<PageLoader />}><Routes><Route path="/" element={<><AdaptiveRoute demo={<DemoHome/>} account={<Home/>} /><TranslationShortcut/></>} /><Route path="/chat" element={<Chat/>} /><Route path="/translate" element={<TranslationMode/>} /><Route path="/settings" element={<AdaptiveRoute demo={<DemoSettings/>} account={<Settings/>} />} /><Route path="/dashboard" element={<AuthRedirect><><Dashboard/><AnalyticsShortcut/><TranslationShortcut/></></AuthRedirect>} /><Route path="/analytics" element={<AuthRedirect><Analytics/></AuthRedirect>} /><Route path="/capabilities/:capability" element={<Capabilities/>} /><Route path="/about" element={<AboutNova/>} /><Route path="/login" element={<><AuthHomeButton/><Login/></>} /><Route path="/register" element={<><AuthHomeButton/><Register/></>} /><Route path="*" element={<NotFound/>} /></Routes></Suspense>; }
-export default function App() { useEffect(() => { installApiCompatibility(); }, []); const locationKey = useMemo(() => window.location.pathname, []); return <BrowserRouter key={locationKey}><AppRoutes/></BrowserRouter>; }
+export default function App() { const locationKey = useMemo(() => window.location.pathname, []); return <BrowserRouter key={locationKey}><AppRoutes/></BrowserRouter>; }
