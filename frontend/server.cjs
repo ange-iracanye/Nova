@@ -25,7 +25,11 @@ const MIME_TYPES = {
 };
 
 function proxyApi(req, res) {
-    const target = new URL(req.url.replace(/^\/api(?=\/|$)/, "") || "/", API_ORIGIN);
+    const incoming = new URL(req.url, "http://nova-frontend.local");
+    const backendPath = incoming.pathname === "/api" || incoming.pathname === "/api/"
+        ? "/health"
+        : incoming.pathname.replace(/^\/api(?=\/|$)/, "") || "/";
+    const target = new URL(backendPath + incoming.search, API_ORIGIN);
     const headers = { ...req.headers, host: target.host };
     delete headers.connection;
     delete headers["content-length"];
@@ -42,8 +46,15 @@ function proxyApi(req, res) {
 
     request.on("error", error => {
         if (!res.headersSent) {
-            res.writeHead(502, { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" });
-            res.end(JSON.stringify({ success: false, error: "API proxy unavailable", detail: error.message }));
+            res.writeHead(502, {
+                "content-type": "application/json; charset=utf-8",
+                "cache-control": "no-store",
+            });
+            res.end(JSON.stringify({
+                success: false,
+                error: "API proxy unavailable",
+                detail: error.message,
+            }));
         } else {
             res.destroy(error);
         }
@@ -56,27 +67,34 @@ function serveFile(req, res) {
     let requested = decodeURIComponent(new URL(req.url, "http://localhost").pathname);
     if (requested === "/") requested = "/index.html";
     const candidate = path.normalize(path.join(DIST_DIR, requested));
-    const safeCandidate = candidate.startsWith(DIST_DIR + path.sep) ? candidate : path.join(DIST_DIR, "index.html");
+    const safeCandidate = candidate.startsWith(DIST_DIR + path.sep)
+        ? candidate
+        : path.join(DIST_DIR, "index.html");
 
     fs.stat(safeCandidate, (error, stats) => {
         if (!error && stats.isFile()) {
             const ext = path.extname(safeCandidate).toLowerCase();
             res.writeHead(200, {
                 "content-type": MIME_TYPES[ext] || "application/octet-stream",
-                "cache-control": ext === ".html" ? "no-store, max-age=0, must-revalidate" : "public, max-age=31536000, immutable",
+                "cache-control": ext === ".html"
+                    ? "no-store, max-age=0, must-revalidate"
+                    : "public, max-age=31536000, immutable",
             });
             fs.createReadStream(safeCandidate).pipe(res);
             return;
         }
 
         const index = path.join(DIST_DIR, "index.html");
-        res.writeHead(200, { "content-type": "text/html; charset=utf-8", "cache-control": "no-store, max-age=0, must-revalidate" });
+        res.writeHead(200, {
+            "content-type": "text/html; charset=utf-8",
+            "cache-control": "no-store, max-age=0, must-revalidate",
+        });
         fs.createReadStream(index).pipe(res);
     });
 }
 
 const server = http.createServer((req, res) => {
-    if (req.url.startsWith("/api") && (req.url === "/api" || req.url.startsWith("/api/"))) {
+    if (req.url === "/api" || req.url.startsWith("/api/")) {
         proxyApi(req, res);
         return;
     }
