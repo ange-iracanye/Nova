@@ -1,11 +1,8 @@
 const ORIGINAL_FETCH = window.fetch.bind(window);
 const API_HOST = "nova-api-i07q.onrender.com";
-const API_ORIGIN = `https://${API_HOST}`;
 
 function isApiPath(pathname) {
-    return pathname === "/" ||
-        pathname === "/api" ||
-        pathname.startsWith("/api/") ||
+    return pathname === "/" || pathname === "/api" || pathname.startsWith("/api/") ||
         pathname === "/health" || pathname === "/ready" || pathname === "/status" ||
         pathname === "/login" || pathname === "/register" || pathname.startsWith("/auth/") ||
         pathname === "/chat" || pathname.startsWith("/chat/") ||
@@ -29,23 +26,13 @@ function rewrite(input) {
 
     try {
         const url = new URL(raw, window.location.origin);
-
-        if (url.hostname === API_HOST) {
-            return url.toString();
-        }
-
-        if (url.origin !== window.location.origin || !isApiPath(url.pathname)) {
-            return raw;
-        }
+        if (url.hostname === API_HOST) return url.toString();
+        if (url.origin !== window.location.origin || !isApiPath(url.pathname)) return raw;
 
         let pathname = url.pathname;
-        if (pathname === "/api" || pathname === "/api/") {
-            pathname = "/health";
-        } else if (pathname.startsWith("/api/")) {
-            pathname = pathname.slice(4) || "/health";
-        } else if (pathname === "/") {
-            pathname = "/health";
-        }
+        if (pathname === "/api" || pathname === "/api/") pathname = "/health";
+        else if (pathname.startsWith("/api/")) pathname = pathname.slice(4) || "/health";
+        else if (pathname === "/") pathname = "/health";
 
         url.protocol = "https:";
         url.hostname = API_HOST;
@@ -82,45 +69,37 @@ function installLandingContrastFix() {
     document.head.appendChild(style);
 }
 
+function recoverStaleConversation(pathname) {
+    if (!/\/conversation\/[^/]+\/[0-9a-f-]{36}$/i.test(pathname) && !/\/v1\/conversations\/[0-9a-f-]{36}$/i.test(pathname)) return;
+    try { localStorage.removeItem("nova_current_conversation"); } catch {}
+    try {
+        if (sessionStorage.getItem("nova_stale_conversation_reloaded")) return;
+        sessionStorage.setItem("nova_stale_conversation_reloaded", "1");
+        window.location.reload();
+    } catch {}
+}
+
 window.fetch = function novaProductionFetch(input, init = {}) {
     const originalUrl = typeof input === "string" ? input : input?.url || "";
     const rewritten = rewrite(input);
 
-    if (rewritten === originalUrl || !rewritten) {
-        return ORIGINAL_FETCH(input, init);
-    }
+    if (rewritten === originalUrl || !rewritten) return ORIGINAL_FETCH(input, init);
 
     const headers = new Headers(input instanceof Request ? input.headers : undefined);
     if (init.headers) new Headers(init.headers).forEach((value, key) => headers.set(key, value));
 
-    const requestInit = {
-        ...init,
-        headers,
-        credentials: init.credentials || "include",
-    };
-
+    const requestInit = { ...init, headers, credentials: init.credentials || "include" };
     let requestInput = rewritten;
     if (input instanceof Request) {
-        try {
-            requestInput = new Request(rewritten, input);
-        } catch {
-            requestInput = rewritten;
-        }
+        try { requestInput = new Request(rewritten, input); } catch { requestInput = rewritten; }
     }
 
     const promise = ORIGINAL_FETCH(requestInput, requestInit);
-
     promise.then(response => {
         if (response.status === 404) {
-            try {
-                const pathname = new URL(rewritten, window.location.origin).pathname;
-                if (/\/conversation\/[^/]+\/[0-9a-f-]{36}$/i.test(pathname) || /\/v1\/conversations\/[0-9a-f-]{36}$/i.test(pathname)) {
-                    localStorage.removeItem("nova_current_conversation");
-                }
-            } catch {}
+            try { recoverStaleConversation(new URL(rewritten, window.location.origin).pathname); } catch {}
         }
     }).catch(() => {});
-
     return promise;
 };
 
