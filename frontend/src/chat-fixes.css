@@ -19,3 +19,23 @@
 .nova-chat-shell .bg-white a:hover {
     color: #0f172a !important;
 }
+
+/* Home-page white CTAs: keep the text visibly blue on the white surface. */
+main a.bg-white,
+main button.bg-white,
+main a[class*="bg-white"]:not([class*="bg-white/"]) {
+    color: #2563eb !important;
+    -webkit-text-fill-color: #2563eb !important;
+}
+
+main a.bg-white *,
+main button.bg-white * {
+    color: #2563eb !important;
+    -webkit-text-fill-color: #2563eb !important;
+}
+
+main a.bg-white svg,
+main button.bg-white svg {
+    color: #2563eb !important;
+    stroke: currentColor !important;
+}
