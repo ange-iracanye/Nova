@@ -1,12 +1,14 @@
 const ORIGINAL_FETCH = window.fetch.bind(window);
-const API_PREFIX = "/api";
 const API_HOST = "nova-api-i07q.onrender.com";
+const API_ORIGIN = `https://${API_HOST}`;
 
-function shouldProxy(pathname) {
+function isApiPath(pathname) {
     return pathname === "/" ||
+        pathname === "/api" ||
+        pathname.startsWith("/api/") ||
         pathname === "/health" || pathname === "/ready" || pathname === "/status" ||
         pathname === "/login" || pathname === "/register" || pathname.startsWith("/auth/") ||
-        pathname === "/chat" || pathname === "/chat/stream" || pathname.startsWith("/chat/") ||
+        pathname === "/chat" || pathname.startsWith("/chat/") ||
         pathname === "/dashboard" || pathname.startsWith("/dashboard/") ||
         pathname === "/settings" || pathname.startsWith("/settings/") ||
         pathname === "/conversations" || pathname.startsWith("/conversations/") ||
@@ -17,7 +19,7 @@ function shouldProxy(pathname) {
         pathname === "/demo/session" || pathname.startsWith("/demo/session/") ||
         pathname === "/demo/chat/stream" || pathname.startsWith("/demo/chat/") ||
         pathname === "/frontend/config" || pathname === "/frontend/ping" ||
-        pathname.startsWith("/v1/") ||
+        pathname === "/statistics" || pathname.startsWith("/v1/") ||
         /^\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}(?:\/.*)?$/i.test(pathname);
 }
 
@@ -29,46 +31,97 @@ function rewrite(input) {
         const url = new URL(raw, window.location.origin);
 
         if (url.hostname === API_HOST) {
-            url.pathname = `${API_PREFIX}${url.pathname === "/" ? "/health" : url.pathname}`;
             return url.toString();
         }
 
-        if (url.origin !== window.location.origin || url.pathname.startsWith(`${API_PREFIX}/`) || url.pathname === API_PREFIX) {
+        if (url.origin !== window.location.origin || !isApiPath(url.pathname)) {
             return raw;
         }
 
-        if (shouldProxy(url.pathname)) {
-            url.pathname = `${API_PREFIX}${url.pathname === "/" ? "/health" : url.pathname}`;
-            return url.toString();
+        let pathname = url.pathname;
+        if (pathname === "/api" || pathname === "/api/") {
+            pathname = "/health";
+        } else if (pathname.startsWith("/api/")) {
+            pathname = pathname.slice(4) || "/health";
+        } else if (pathname === "/") {
+            pathname = "/health";
         }
 
-        return raw;
+        url.protocol = "https:";
+        url.hostname = API_HOST;
+        url.port = "";
+        url.pathname = pathname;
+        return url.toString();
     } catch {
         return raw;
     }
 }
 
-window.fetch = function novaSameOriginFetch(input, init = {}) {
+function installLandingContrastFix() {
+    if (document.getElementById("nova-landing-contrast-fix")) return;
+    const style = document.createElement("style");
+    style.id = "nova-landing-contrast-fix";
+    style.textContent = `
+        main a.bg-white,
+        main button.bg-white,
+        main a[class*="bg-white"]:not([class*="bg-white/"]) {
+            color: #2563eb !important;
+            -webkit-text-fill-color: #2563eb !important;
+        }
+        main a.bg-white *,
+        main button.bg-white * {
+            color: #2563eb !important;
+            -webkit-text-fill-color: #2563eb !important;
+        }
+        main a.bg-white svg,
+        main button.bg-white svg {
+            color: #2563eb !important;
+            stroke: #2563eb !important;
+        }
+    `;
+    document.head.appendChild(style);
+}
+
+window.fetch = function novaProductionFetch(input, init = {}) {
+    const originalUrl = typeof input === "string" ? input : input?.url || "";
     const rewritten = rewrite(input);
 
-    if (rewritten === input) return ORIGINAL_FETCH(input, init);
+    if (rewritten === originalUrl || !rewritten) {
+        return ORIGINAL_FETCH(input, init);
+    }
 
+    const headers = new Headers(input instanceof Request ? input.headers : undefined);
+    if (init.headers) new Headers(init.headers).forEach((value, key) => headers.set(key, value));
+
+    const requestInit = {
+        ...init,
+        headers,
+        credentials: init.credentials || "include",
+    };
+
+    let requestInput = rewritten;
     if (input instanceof Request) {
         try {
-            return ORIGINAL_FETCH(
-                new Request(rewritten, input),
-                { ...init, credentials: init.credentials || "include" }
-            );
+            requestInput = new Request(rewritten, input);
         } catch {
-            return ORIGINAL_FETCH(
-                rewritten,
-                { ...init, credentials: init.credentials || "include" }
-            );
+            requestInput = rewritten;
         }
     }
 
-    return ORIGINAL_FETCH(
-        rewritten,
-        { ...init, credentials: init.credentials || "include" }
-    );
+    const promise = ORIGINAL_FETCH(requestInput, requestInit);
+
+    promise.then(response => {
+        if (response.status === 404) {
+            try {
+                const pathname = new URL(rewritten, window.location.origin).pathname;
+                if (/\/conversation\/[^/]+\/[0-9a-f-]{36}$/i.test(pathname) || /\/v1\/conversations\/[0-9a-f-]{36}$/i.test(pathname)) {
+                    localStorage.removeItem("nova_current_conversation");
+                }
+            } catch {}
+        }
+    }).catch(() => {});
+
+    return promise;
 };
+
+installLandingContrastFix();
