@@ -5,7 +5,7 @@ function isApiPath(pathname) {
     return pathname === "/" || pathname === "/api" || pathname.startsWith("/api/") ||
         pathname === "/health" || pathname === "/ready" || pathname === "/status" ||
         pathname === "/login" || pathname === "/register" || pathname.startsWith("/auth/") ||
-        pathname === "/chat" || pathname.startsWith("/chat/") ||
+        pathname === "/chat" || pathname === "/stream" || pathname.startsWith("/chat/") ||
         pathname === "/dashboard" || pathname.startsWith("/dashboard/") ||
         pathname === "/settings" || pathname.startsWith("/settings/") ||
         pathname === "/conversations" || pathname.startsWith("/conversations/") ||
@@ -18,6 +18,45 @@ function isApiPath(pathname) {
         pathname === "/frontend/config" || pathname === "/frontend/ping" ||
         pathname === "/statistics" || pathname.startsWith("/v1/") ||
         /^\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}(?:\/.*)?$/i.test(pathname);
+}
+
+function getStoredEmail() {
+    try {
+        const raw = localStorage.getItem("nova_user");
+        if (!raw) return "";
+        const user = JSON.parse(raw);
+        return typeof user?.email === "string" ? user.email.trim() : "";
+    } catch {
+        return "";
+    }
+}
+
+function rewriteLegacyRoute(pathname) {
+    const email = getStoredEmail();
+    const encodedEmail = email ? encodeURIComponent(email) : "";
+
+    // Older production bundles used /stream while the API exposes /chat/stream.
+    if (pathname === "/stream") return "/chat/stream";
+
+    // Older bundles requested the conversation collection without the email path segment.
+    if (pathname === "/conversations" && encodedEmail) {
+        return `/conversations/${encodedEmail}`;
+    }
+
+    // Older bundles stored only the conversation UUID in the URL. The current API scopes
+    // conversation reads/writes by email, so restore that missing segment client-side.
+    const match = pathname.match(/^\/conversation\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})(\/.*)?$/i);
+    if (match && encodedEmail) {
+        return `/conversation/${encodedEmail}/${match[1]}${match[2] || ""}`;
+    }
+
+    // A few legacy clients used the UUID directly as the route.
+    const uuidOnly = pathname.match(/^\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/i);
+    if (uuidOnly && encodedEmail) {
+        return `/conversation/${encodedEmail}/${uuidOnly[1]}`;
+    }
+
+    return pathname;
 }
 
 function rewrite(input) {
@@ -33,6 +72,8 @@ function rewrite(input) {
         if (pathname === "/api" || pathname === "/api/") pathname = "/health";
         else if (pathname.startsWith("/api/")) pathname = pathname.slice(4) || "/health";
         else if (pathname === "/") pathname = "/health";
+
+        pathname = rewriteLegacyRoute(pathname);
 
         url.protocol = "https:";
         url.hostname = API_HOST;
