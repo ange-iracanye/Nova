@@ -1,0 +1,21 @@
+/* Production readability fixes. */
+
+/* White CTA surfaces on the dark landing page must have visible labels. */
+main a.bg-white,
+main button.bg-white,
+main a[class*="bg-white"]:not([class*="bg-white/"]) {
+    color: #2563eb !important;
+    -webkit-text-fill-color: #2563eb !important;
+}
+
+main a.bg-white *,
+main button.bg-white * {
+    color: #2563eb !important;
+    -webkit-text-fill-color: #2563eb !important;
+}
+
+main a.bg-white svg,
+main button.bg-white svg {
+    color: #2563eb !important;
+    stroke: currentColor !important;
+}
