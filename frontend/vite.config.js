@@ -3,9 +3,9 @@ import { defineConfig, loadEnv } from "vite";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 
-// Production always uses Nova's known live API endpoint. This prevents a stale
-// or incorrect Render VITE_API_URL value from being baked into the static bundle.
-const PRODUCTION_API_URL = "https://nova-api-i07q.onrender.com";
+// Production uses a same-origin /api proxy so the browser never has to resolve
+// the Render backend hostname directly. This avoids client-side DNS failures.
+const PRODUCTION_API_URL = "/api";
 
 export default defineConfig(({ mode }) => {
     const env = loadEnv(mode, process.cwd(), "VITE_");
