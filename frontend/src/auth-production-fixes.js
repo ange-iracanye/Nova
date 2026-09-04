@@ -1,4 +1,4 @@
-const PRODUCTION_API_URL = "https://nova-api-i07q.onrender.com";
+const PRODUCTION_API_URL = "/api";
 const ORIGINAL_FETCH = window.fetch.bind(window);
 const AUTH_TIMEOUT_MS = 60000;
 const HEALTH_CACHE_MS = 30000;
@@ -18,24 +18,26 @@ function rewriteUrl(input) {
     else if (rewritten.startsWith("http://localhost:8000")) rewritten = rewritten.replace("http://localhost:8000", apiBase());
     try {
         const url = new URL(rewritten, window.location.origin);
-        const base = new URL(apiBase());
+        const base = new URL(apiBase(), window.location.origin);
         if (url.origin !== base.origin) return rewritten;
-        if (url.pathname === "/" && url.search === "") url.pathname = "/health";
+        if (url.pathname === base.pathname && url.search === "") url.pathname = `${base.pathname}/health`;
         const path = url.pathname;
-        const legacyList = path.match(/^\/conversations\/([^/]+)$/);
-        const legacyGet = path.match(/^\/conversation\/([^/]+)\/([^/]+)$/);
-        const legacyRename = path.match(/^\/conversation\/([^/]+)\/([^/]+)\/rename$/);
-        if (path === "/conversation/new") {
-            url.pathname = "/v1/conversations";
+        const apiPrefix = base.pathname === "/" ? "" : base.pathname;
+        const relativePath = path.startsWith(`${apiPrefix}/`) ? path.slice(apiPrefix.length) : path;
+        const legacyList = relativePath.match(/^\/conversations\/([^/]+)$/);
+        const legacyGet = relativePath.match(/^\/conversation\/([^/]+)\/([^/]+)$/);
+        const legacyRename = relativePath.match(/^\/conversation\/([^/]+)\/([^/]+)\/rename$/);
+        if (relativePath === "/conversation/new") {
+            url.pathname = `${apiPrefix}/v1/conversations`;
             url.search = "";
         } else if (legacyRename) {
-            url.pathname = `/v1/conversations/${encodeURIComponent(decodeURIComponent(legacyRename[2]))}`;
+            url.pathname = `${apiPrefix}/v1/conversations/${encodeURIComponent(decodeURIComponent(legacyRename[2]))}`;
             url.search = "";
         } else if (legacyGet) {
-            url.pathname = `/v1/conversations/${encodeURIComponent(decodeURIComponent(legacyGet[2]))}`;
+            url.pathname = `${apiPrefix}/v1/conversations/${encodeURIComponent(decodeURIComponent(legacyGet[2]))}`;
             url.search = "";
         } else if (legacyList) {
-            url.pathname = "/v1/conversations";
+            url.pathname = `${apiPrefix}/v1/conversations`;
             url.search = "";
         }
         return url.toString();
@@ -89,7 +91,7 @@ function installHomeContrastFix() {
 }
 
 function isCacheableGet(method, url) {
-    return method === "GET" && /^https:\/\/[^/]+\/(?:health|ready|v1\/conversations(?:\/[^/]+)?)$/.test(String(url));
+    return method === "GET" && /^https?:\/\/[^/]+\/(?:api\/)?(?:health|ready|v1\/conversations(?:\/[^/]+)?)$/.test(String(url));
 }
 
 function cacheTtl(url) {
@@ -112,9 +114,7 @@ window.fetch = async function novaProductionFetch(input, init = {}) {
     const cacheKey = cacheableGet ? String(url) : "";
     if (cacheKey) {
         const cached = successfulGetCache.get(cacheKey);
-        if (cached && Date.now() - cached.timestamp < cacheTtl(url)) {
-            return cached.response.clone();
-        }
+        if (cached && Date.now() - cached.timestamp < cacheTtl(url)) return cached.response.clone();
         if (cached) successfulGetCache.delete(cacheKey);
         const inFlight = recentGets.get(cacheKey);
         if (inFlight) {
@@ -132,9 +132,7 @@ window.fetch = async function novaProductionFetch(input, init = {}) {
     if (cacheKey) recentGets.set(cacheKey, request);
     try {
         const response = await request;
-        if (cacheKey && response.ok) {
-            successfulGetCache.set(cacheKey, { timestamp: Date.now(), response: response.clone() });
-        }
+        if (cacheKey && response.ok) successfulGetCache.set(cacheKey, { timestamp: Date.now(), response: response.clone() });
         if (isLoginOrRegister && response.ok) {
             try {
                 const data = await response.clone().json();
