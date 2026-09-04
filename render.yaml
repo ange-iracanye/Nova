@@ -52,4 +52,4 @@ services:
     numInstances: 1
     envVars:
       - key: VITE_API_URL
-        value: /api
+        value: https://nova-api-i07q.onrender.com
