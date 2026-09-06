@@ -12,6 +12,16 @@ def replace_once(path: str, old: str, new: str) -> None:
     p.write_text(text.replace(old, new, 1), encoding="utf-8")
 
 
+def regex_once(path: str, pattern: str, replacement: str) -> None:
+    p = Path(path)
+    text = p.read_text(encoding="utf-8")
+    matches = re.findall(pattern, text, flags=re.DOTALL)
+    print(f"PATCH {path}: regex matches={len(matches)}")
+    if len(matches) != 1:
+        raise SystemExit(f"{path}: expected exactly 1 regex match, found {len(matches)}")
+    p.write_text(re.sub(pattern, replacement, text, count=1, flags=re.DOTALL), encoding="utf-8")
+
+
 # API: scope settings endpoints to the authenticated/requested user.
 replace_once("backend/api.py", "from backend.settings import SettingsManager\n", "from backend.settings import SettingsManager\nfrom backend.user_settings import set_current_user, reset_current_user\n")
 replace_once("backend/api.py", 'class SettingsRequest(BaseModel):\n\n    model_config = ConfigDict(\n        extra="ignore"\n    )\n\n    name: str = ""\n', 'class SettingsRequest(BaseModel):\n\n    model_config = ConfigDict(\n        extra="ignore"\n    )\n\n    # Compatibility field for clients that identify the account by email.\n    email: Optional[str] = None\n\n    name: str = ""\n')
@@ -32,32 +42,48 @@ replace_once("backend/core/nova_core.py", "            if request is not None:\n
 # Install the compatibility scoping hook before long-lived managers are used.
 replace_once("backend/__init__.py", "try:\n    from backend.settings import SettingsManager as _NovaSettingsManager\n", "try:\n    import backend.user_settings  # noqa: F401\n    from backend.settings import SettingsManager as _NovaSettingsManager\n")
 
-# Frontend. Regex is deliberately whitespace-tolerant because formatting is not behavior.
-def regex_once(path: str, pattern: str, replacement: str) -> None:
-    p = Path(path)
-    text = p.read_text(encoding="utf-8")
-    matches = re.findall(pattern, text, flags=re.DOTALL)
-    print(f"PATCH {path}: regex matches={len(matches)}")
-    if len(matches) != 1:
-        raise SystemExit(f"{path}: expected exactly 1 regex match, found {len(matches)}")
-    p.write_text(re.sub(pattern, replacement, text, count=1, flags=re.DOTALL), encoding="utf-8")
-
-regex_once("frontend/src/pages/Settings.jsx", r'const API_URL\s*=\s*"http://127\.0\.0\.1:8000";', 'const API_URL =\n    "";')
+# Frontend: keep the existing UI intact while using the production API proxy,
+# identifying the current account, and unwrapping the API response envelope.
+regex_once("frontend/src/pages/Settings.jsx", r'const API_URL\s*=\s*"http://127\\.0\\.0\\.1:8000";', 'const API_URL =\n    "";')
 regex_once("frontend/src/pages/Settings.jsx", r'const response\s*=\s*await fetchWithTimeout\(\s*SETTINGS_ENDPOINT\s*\);', 'const settingsUrl =\n                        user?.email\n                            ? `${SETTINGS_ENDPOINT}?email=${encodeURIComponent(user.email)}`\n                            : SETTINGS_ENDPOINT;\n\n                    const response =\n                        await fetchWithTimeout(\n                            settingsUrl,\n                            {\n                                credentials: "include"\n                            }\n                        );')
-
-# Both API reads are wrapped in { success, settings }. Normalize each one.
 regex_once("frontend/src/pages/Settings.jsx", r'sanitizeSettings\(\s*data\s*\)', 'sanitizeSettings(\n                            data?.settings ||\n                            data\n                        )')
 regex_once("frontend/src/pages/Settings.jsx", r'const payload\s*=\s*sanitizeSettings\(\s*settings\s*\);\s*\n\s*try\s*\{', 'const payload =\n            sanitizeSettings(\n                settings\n            );\n\n        const requestPayload = {\n            ...payload,\n            ...(user?.email ? { email: user.email } : {})\n        };\n\n        try {')
 regex_once("frontend/src/pages/Settings.jsx", r'body:\s*JSON\.stringify\(\s*payload\s*\)', 'body:\n                            JSON.stringify(\n                                requestPayload\n                            ),\n\n                        credentials:\n                            "include"')
 regex_once("frontend/src/pages/Settings.jsx", r'const normalized\s*=\s*sanitizeSettings\(\s*data\s*\);', 'const normalized =\n                sanitizeSettings(\n                    data?.settings ||\n                    data\n                );')
+
+# Translation: expose every language already supported by Nova's translation
+# layer in the existing Settings control. No visual/UI structure is changed.
+replace_once(
+    "backend/settings.py",
+    '    ALLOWED_LANGUAGES = {\n        "English",\n        "French",\n    }',
+    '    ALLOWED_LANGUAGES = {\n        "English",\n        "French",\n        "Spanish",\n        "German",\n        "Italian",\n        "Portuguese",\n        "Dutch",\n        "Polish",\n        "Ukrainian",\n        "Russian",\n        "Czech",\n        "Romanian",\n        "Hungarian",\n        "Greek",\n        "Swedish",\n        "Turkish",\n        "Arabic",\n        "Hindi",\n        "Chinese",\n        "Japanese",\n        "Korean",\n        "Vietnamese",\n        "Thai",\n        "Indonesian",\n    }'
+)
+
+regex_once(
+    "frontend/src/pages/Settings.jsx",
+    r'language:\s*\[\s*"English",\s*"French"\s*\],',
+    'language: [\n        "English",\n        "French",\n        "Spanish",\n        "German",\n        "Italian",\n        "Portuguese",\n        "Dutch",\n        "Polish",\n        "Ukrainian",\n        "Russian",\n        "Czech",\n        "Romanian",\n        "Hungarian",\n        "Greek",\n        "Swedish",\n        "Turkish",\n        "Arabic",\n        "Hindi",\n        "Chinese",\n        "Japanese",\n        "Korean",\n        "Vietnamese",\n        "Thai",\n        "Indonesian"\n    ],'
+)
+
+# Apply the selected interface language immediately, including after loading
+# a previously saved preference. The existing i18n implementation owns the
+# actual translations and layout direction, so this adds no UI structure.
+replace_once(
+    "frontend/src/pages/Settings.jsx",
+    '    /* ========================================================\n       INITIALIZATION\n    ======================================================== */',
+    '    /* ========================================================\n       LIVE INTERFACE LANGUAGE\n    ======================================================== */\n\n    useEffect(\n        () => {\n\n            try {\n\n                applyNovaLanguage(\n                    settings.language\n                );\n\n            } catch (languageError) {\n\n                console.error(\n                    "Nova interface language error:",\n                    languageError\n                );\n\n            }\n\n        },\n        [\n            settings.language\n        ]\n    );\n\n\n    /* ========================================================\n       INITIALIZATION\n    ======================================================== */'
+)
 
 for required in (
     "backend/api.py",
     "backend/core/nova_core.py",
     "backend/__init__.py",
     "backend/user_settings.py",
+    "backend/settings.py",
+    "backend/language_support.py",
     "frontend/src/pages/Settings.jsx",
+    "frontend/src/i18n.js",
 ):
     Path(required).read_text(encoding="utf-8")
 
-print("Guarded user-settings patch applied successfully.")
+print("Guarded user-settings + translation patch applied successfully.")
