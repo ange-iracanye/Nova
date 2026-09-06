@@ -31,3 +31,4 @@ if count != 1:
     raise SystemExit("Expected exactly one existing Profile language selector block")
 path.write_text(text.replace(old, new, 1), encoding="utf-8")
 print("Profile language selector patched successfully.")
+# Guarded workflow trigger marker. No application behavior.
