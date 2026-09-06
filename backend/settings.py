@@ -50,6 +50,28 @@ class SettingsManager:
     ALLOWED_LANGUAGES = {
         "English",
         "French",
+        "Spanish",
+        "German",
+        "Italian",
+        "Portuguese",
+        "Dutch",
+        "Polish",
+        "Ukrainian",
+        "Russian",
+        "Czech",
+        "Romanian",
+        "Hungarian",
+        "Greek",
+        "Swedish",
+        "Turkish",
+        "Arabic",
+        "Hindi",
+        "Chinese",
+        "Japanese",
+        "Korean",
+        "Vietnamese",
+        "Thai",
+        "Indonesian",
     }
 
     ALLOWED_LEVELS = {

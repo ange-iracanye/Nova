@@ -115,7 +115,29 @@ const VALID_OPTIONS = {
 
     language: [
         "English",
-        "French"
+        "French",
+        "Spanish",
+        "German",
+        "Italian",
+        "Portuguese",
+        "Dutch",
+        "Polish",
+        "Ukrainian",
+        "Russian",
+        "Czech",
+        "Romanian",
+        "Hungarian",
+        "Greek",
+        "Swedish",
+        "Turkish",
+        "Arabic",
+        "Hindi",
+        "Chinese",
+        "Japanese",
+        "Korean",
+        "Vietnamese",
+        "Thai",
+        "Indonesian"
     ],
 
     level: [
@@ -1061,6 +1083,35 @@ export default function Settings() {
             },
             []
         );
+
+
+    /* ========================================================
+       LIVE INTERFACE LANGUAGE
+    ======================================================== */
+
+    useEffect(
+        () => {
+
+            try {
+
+                applyNovaLanguage(
+                    settings.language
+                );
+
+            } catch (languageError) {
+
+                console.error(
+                    "Nova interface language error:",
+                    languageError
+                );
+
+            }
+
+        },
+        [
+            settings.language
+        ]
+    );
 
 
     /* ========================================================
