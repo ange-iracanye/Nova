@@ -1,0 +1,31 @@
+name: Patch profile language selector
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: ${{ !startsWith(github.event.head_commit.message, '[nova-profile-language]') }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Apply profile language patch
+        run: python tools/patch_profile_languages.py
+      - name: Build frontend
+        working-directory: frontend
+        run: |
+          npm ci
+          npm run build
+      - name: Commit patch
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add frontend/src/pages/Settings.jsx
+          git diff --cached --check
+          git diff --cached --quiet && exit 0
+          git commit -m "[nova-profile-language] Expand Profile language selector"
+          git push
