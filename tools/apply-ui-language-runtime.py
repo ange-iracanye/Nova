@@ -10,6 +10,16 @@ if 'import "./uiLanguageRuntime.js";' not in text:
     text = text.replace(marker, replacement, 1)
     main.write_text(text, encoding='utf-8')
 
+i18n = Path('frontend/src/i18n.js')
+i18n_text = i18n.read_text(encoding='utf-8')
+marker = 'export function uiText(key) {'
+insert = 'if (typeof window !== "undefined") {\n  window.__novaUiTranslations = UI;\n}\n\n'
+if 'window.__novaUiTranslations = UI;' not in i18n_text:
+    if marker not in i18n_text:
+        raise SystemExit('Expected UI translation table marker was not found; refusing to patch.')
+    i18n_text = i18n_text.replace(marker, insert + marker, 1)
+    i18n.write_text(i18n_text, encoding='utf-8')
+
 runtime = Path('frontend/src/uiLanguageRuntime.js')
 if not runtime.exists():
     runtime.write_text(r'''import { applyNovaLanguage, normalizeLanguage } from "./i18n.js";
@@ -28,11 +38,14 @@ function getSourceText(value) {
     return SOURCE_BY_TRANSLATION.get(text) || text;
 }
 
+function translateKnownText(source, code) {
+    const table = window.__novaUiTranslations;
+    return table?.[code]?.[source] || table?.en?.[source] || source;
+}
+
 function translateElement(element) {
     if (!(element instanceof Element)) return;
-
-    const currentLanguage = normalizeLanguage(localStorage.getItem("nova_language") || "English");
-
+    const language = normalizeLanguage(localStorage.getItem("nova_language") || "English");
     const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT);
     const nodes = [];
     let node;
@@ -44,8 +57,8 @@ function translateElement(element) {
         const raw = textNode.nodeValue || "";
         const source = getSourceText(raw);
         if (!source) continue;
-        const translated = translateKnownText(source, currentLanguage.code);
-        if (translated && translated !== source) {
+        const translated = translateKnownText(source, language.code);
+        if (translated !== source) {
             remember(source, translated);
             textNode.nodeValue = raw.replace(raw.trim(), translated);
         }
@@ -57,21 +70,13 @@ function translateElement(element) {
             if (!item.hasAttribute(attribute)) continue;
             const raw = item.getAttribute(attribute) || "";
             const source = getSourceText(raw);
-            const translated = translateKnownText(source, currentLanguage.code);
-            if (translated && translated !== source) {
+            const translated = translateKnownText(source, language.code);
+            if (translated !== source) {
                 remember(source, translated);
                 item.setAttribute(attribute, translated);
             }
         }
     }
-}
-
-function translateKnownText(source, code) {
-    if (typeof window !== "undefined" && window.__novaUiTranslations) {
-        const table = window.__novaUiTranslations;
-        return table[code]?.[source] || table.en?.[source] || source;
-    }
-    return source;
 }
 
 function refresh() {
