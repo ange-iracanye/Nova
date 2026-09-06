@@ -44,7 +44,7 @@ replace_once("backend/__init__.py", "try:\n    from backend.settings import Sett
 
 # Frontend: keep the existing UI intact while using the production API proxy,
 # identifying the current account, and unwrapping the API response envelope.
-regex_once("frontend/src/pages/Settings.jsx", r'const API_URL\s*=\s*"http://127\\.0\\.0\\.1:8000";', 'const API_URL =\n    "";')
+regex_once("frontend/src/pages/Settings.jsx", r'const API_URL\s*=\s*"http://127\.0\.0\.1:8000";', 'const API_URL =\n    "";')
 regex_once("frontend/src/pages/Settings.jsx", r'const response\s*=\s*await fetchWithTimeout\(\s*SETTINGS_ENDPOINT\s*\);', 'const settingsUrl =\n                        user?.email\n                            ? `${SETTINGS_ENDPOINT}?email=${encodeURIComponent(user.email)}`\n                            : SETTINGS_ENDPOINT;\n\n                    const response =\n                        await fetchWithTimeout(\n                            settingsUrl,\n                            {\n                                credentials: "include"\n                            }\n                        );')
 regex_once("frontend/src/pages/Settings.jsx", r'sanitizeSettings\(\s*data\s*\)', 'sanitizeSettings(\n                            data?.settings ||\n                            data\n                        )')
 regex_once("frontend/src/pages/Settings.jsx", r'const payload\s*=\s*sanitizeSettings\(\s*settings\s*\);\s*\n\s*try\s*\{', 'const payload =\n            sanitizeSettings(\n                settings\n            );\n\n        const requestPayload = {\n            ...payload,\n            ...(user?.email ? { email: user.email } : {})\n        };\n\n        try {')
