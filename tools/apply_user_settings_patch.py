@@ -62,7 +62,7 @@ replace_once(
 replace_once(
     "backend/api.py",
     '        raise HTTPException(\n\n            status_code=500,\n\n            detail="Could not reset settings."\n        )\n\n    return {\n',
-    '        raise HTTPException(\n\n            status_code=500,\n\n            detail="Could not reset settings."\n        )\n\n    finally:\n\n        reset_current_user(settings_token)\n\n    return {\n',
+    '        raise HTTPException(\n\n            status_code=500,\n\n            detail="Could not reset settings."\n        )\n\n    reset_current_user(settings_token)\n\n    return {\n',
 )
 
 
@@ -111,24 +111,6 @@ replace_once(
 
 replace_once(
     "frontend/src/pages/Settings.jsx",
-    "function readLocalSettings() {\n",
-    "function getLocalSettingsKey() {\n\n    const currentUser = getStoredUser();\n\n    const email = safeString(\n        currentUser?.email\n    ).trim().toLowerCase();\n\n    return email\n        ? `${LOCAL_SETTINGS_KEY}:${email}`\n        : LOCAL_SETTINGS_KEY;\n\n}\n\n\nfunction readLocalSettings() {\n",
-)
-
-replace_once(
-    "frontend/src/pages/Settings.jsx",
-    "                LOCAL_SETTINGS_KEY\n            );",
-    "                getLocalSettingsKey()\n            );",
-)
-
-replace_once(
-    "frontend/src/pages/Settings.jsx",
-    "            LOCAL_SETTINGS_KEY,\n\n            JSON.stringify({",
-    "            getLocalSettingsKey(),\n\n            JSON.stringify({",
-)
-
-replace_once(
-    "frontend/src/pages/Settings.jsx",
     "                    const response =\n                        await fetchWithTimeout(\n                            SETTINGS_ENDPOINT\n                        );",
     "                    const settingsUrl =\n                        user?.email\n                            ? `${SETTINGS_ENDPOINT}?email=${encodeURIComponent(user.email)}`\n                            : SETTINGS_ENDPOINT;\n\n                    const response =\n                        await fetchWithTimeout(\n                            settingsUrl,\n                            {\n                                credentials: \"include\"\n                            }\n                        );",
 )
@@ -151,7 +133,12 @@ replace_once(
     "                        body:\n                            JSON.stringify(\n                                requestPayload\n                            ),\n\n                        credentials:\n                            \"include\"",
 )
 
-# Verify the exact files are readable after the guarded edits.
+replace_once(
+    "frontend/src/pages/Settings.jsx",
+    "            const normalized =\n                sanitizeSettings(\n                    data\n                );",
+    "            const normalized =\n                sanitizeSettings(\n                    data?.settings ||\n                    data\n                );",
+)
+
 for required in (
     "backend/api.py",
     "backend/core/nova_core.py",
