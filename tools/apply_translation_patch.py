@@ -63,3 +63,4 @@ for required in (
     Path(required).read_text(encoding="utf-8")
 
 print("Translation settings patch applied successfully.")
+# Guarded workflow trigger marker. No application behavior.
