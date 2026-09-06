@@ -103,4 +103,5 @@ if (typeof window !== "undefined" && !window.__novaUiLanguageRuntimeInstalled) {
 }
 ''', encoding='utf-8')
 
+# Guarded trigger marker. No application behavior.
 print('UI language runtime scaffold installed.')
