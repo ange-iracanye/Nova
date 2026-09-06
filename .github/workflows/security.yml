@@ -46,7 +46,7 @@ jobs:
           python-version: "3.11"
 
       - name: Install pip-audit
-        run: python -m pip install --upgrade pip pip-audit
+        run: python -m pip install --upgrade --no-cache-dir pip pip-audit
 
       - name: Audit Python dependencies
         run: pip-audit -r requirements.txt --progress-spinner off
