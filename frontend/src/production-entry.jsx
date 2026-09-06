@@ -2,4 +2,5 @@
 // the React application captures window.fetch for credentials and API calls.
 import "./production-api.js";
 import "./uiLanguageRuntime.js";
+import "./uiLanguageReloadBridge.js";
 import "./main.jsx";
