@@ -35,3 +35,5 @@ jobs:
           git diff --cached --quiet && exit 0
           git commit -m "[nova-settings-patch] Make user settings persistent and active"
           git push
+
+      # Guarded installer: this workflow is temporary and will be removed after validation.
