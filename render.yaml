@@ -18,6 +18,8 @@ services:
         value: data/sessions.sqlite3
       - key: NOVA_ALLOWED_ORIGINS
         value: https://nova-frontend-i76e.onrender.com
+      - key: NOVA_PUBLIC_FRONTEND_URL
+        value: https://nova-frontend-i76e.onrender.com
       - key: NOVA_ENABLE_SEMANTIC_MEMORY
         value: "false"
       - key: NOVA_ENABLE_DOCS
@@ -38,6 +40,20 @@ services:
         sync: false
       - key: NOVA_DATABASE_URL
         sync: false
+      - key: NOVA_SMTP_HOST
+        sync: false
+      - key: NOVA_SMTP_PORT
+        sync: false
+      - key: NOVA_SMTP_USER
+        sync: false
+      - key: NOVA_SMTP_PASSWORD
+        sync: false
+      - key: NOVA_SMTP_FROM
+        sync: false
+      - key: NOVA_SMTP_STARTTLS
+        value: "true"
+      - key: NOVA_SMTP_SSL
+        value: "false"
       - key: PYTHON_VERSION
         value: 3.11.9
 
