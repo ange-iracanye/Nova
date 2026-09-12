@@ -1,0 +1,44 @@
+name: Validate UI language runtime
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    name: Validate UI translation runtime
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm install --no-audit --no-fund
+
+      - name: Validate translation modules
+        run: |
+          test -f frontend/src/i18n.js
+          test -f frontend/src/uiLanguageRuntime.js
+          test -f frontend/src/uiLanguageReloadBridge.js
+          grep -q "applyNovaLanguage" frontend/src/i18n.js
+          grep -q "normalizeLanguage" frontend/src/uiLanguageRuntime.js
+          grep -q "readNovaLanguage" frontend/src/uiLanguageRuntime.js
+
+      - name: Build frontend
+        working-directory: frontend
+        run: npm run build
+
+      - name: Guard against self-modifying workflow regressions
+        run: |
+          ! grep -nE "git push|git commit|contents:[[:space:]]*write" .github/workflows/apply-ui-language-runtime.yml
