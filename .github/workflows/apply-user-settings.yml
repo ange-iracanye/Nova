@@ -1,0 +1,44 @@
+name: Validate user settings
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    name: Validate settings integration
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Validate backend settings code
+        run: |
+          python -m py_compile backend/api.py backend/core/nova_core.py backend/user_settings.py backend/__init__.py backend/settings.py
+          test -f backend/user_settings.py
+
+      - name: Validate frontend settings source
+        run: |
+          test -f frontend/src/pages/Settings.jsx
+          grep -q "nova_language" frontend/src/i18n.js
+          grep -q "applyNovaLanguage" frontend/src/pages/Settings.jsx
+
+      - name: Build frontend
+        working-directory: frontend
+        run: |
+          npm install --no-audit --no-fund
+          npm run build
+
+      - name: Guard against self-modifying workflow regressions
+        run: |
+          ! grep -R -nE "git push|git commit|permissions:[[:space:]]*$|contents:[[:space:]]*write" .github/workflows/apply-user-settings.yml
