@@ -14,6 +14,10 @@ const DemoSettings = lazy(() => import("./pages/DemoSettings"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 const Capabilities = lazy(() => import("./pages/Capabilities"));
 const AboutNova = lazy(() => import("./pages/AboutNova"));
+const AccountSecurity = lazy(() => import("./pages/AccountSecurity"));
+const ForgotPassword = lazy(() => import("./pages/ForgotPassword"));
+const ResetPassword = lazy(() => import("./pages/ResetPassword"));
+const VerifyEmail = lazy(() => import("./pages/VerifyEmail"));
 
 const PRODUCTION_API_URL = "https://nova-api-i07q.onrender.com";
 const NOVA_API_URL = import.meta.env.PROD
@@ -43,23 +47,20 @@ function installApiCompatibility() {
         }
         const headers = new Headers(init.headers || (typeof input !== "string" ? input.headers : undefined) || {});
         const token = readSessionToken();
-        if (token && !headers.has("Authorization") && !headers.has("X-Nova-Session")) headers.set("X-Nova-Session", token);
+        if (token && !headers.has("Authorization") && !headers.has("X-Nova-Session")) headers.set("Authorization", `Bearer ${token}`);
         const nextInit = { ...init, headers };
         if (url.startsWith(NOVA_API_URL)) nextInit.credentials = "include";
         const response = await originalFetch(url, nextInit);
         if (response.ok && /^\/settings(?:\/reset)?$/.test(new URL(url, window.location.origin).pathname)) {
             try {
                 const payload = await response.clone().json();
-                if (payload?.settings && typeof payload.settings === "object") {
-                    return new Response(JSON.stringify(payload.settings), { status: response.status, statusText: response.statusText, headers: response.headers });
-                }
+                if (payload?.settings && typeof payload.settings === "object") return new Response(JSON.stringify(payload.settings), { status: response.status, statusText: response.statusText, headers: response.headers });
             } catch {}
         }
         return response;
     };
 }
 
-// Install before any lazy route can render and start an API request.
 installApiCompatibility();
 
 function useAuthState() {
@@ -71,6 +72,6 @@ function PageLoader() { return <div className="flex min-h-screen items-center ju
 function AuthRedirect({ children }) { const user = useAuthState(); return user ? children : <Navigate to="/login" replace />; }
 function AnalyticsShortcut() { const navigate = useNavigate(); return <button onClick={() => navigate("/analytics")} title="Nova Analytics" className="fixed bottom-5 right-5 z-50 flex items-center gap-2 rounded-2xl border border-sky-400/20 bg-[#0b1322]/95 px-4 py-3 text-xs font-semibold text-sky-300 shadow-2xl backdrop-blur-xl transition hover:border-sky-400/40 hover:bg-[#101c30]"><BarChart3 size={16}/> Analytics</button>; }
 function AuthHomeButton() { const navigate = useNavigate(); return <button type="button" onClick={() => navigate("/")} title="Back to Nova home" aria-label="Back to Nova home" className="fixed left-5 top-5 z-[100] flex items-center gap-2 rounded-xl border border-white/10 bg-slate-900/80 px-3.5 py-2.5 text-sm font-medium text-slate-300 shadow-xl backdrop-blur-xl transition hover:border-cyan-400/30 hover:bg-slate-800 hover:text-white"><HomeIcon size={16}/> Home</button>; }
-function AdaptiveRoute({ authenticated, demo, account }) { const user = useAuthState(); const location = useLocation(); useEffect(() => { const labels = { "/": user ? "Your learning space" : "Learn smarter", "/chat": "Learn", "/dashboard": "Dashboard", "/analytics": "Analytics", "/settings": "Settings", "/about": "About Nova" }; document.title = `Nova AI · ${labels[location.pathname] || "Explore"}`; }, [location.pathname, user]); if (authenticated) return user ? authenticated : demo; return user ? account : demo; }
-function AppRoutes() { return <Suspense fallback={<PageLoader />}><Routes><Route path="/" element={<AdaptiveRoute demo={<DemoHome/>} account={<Home/>} />} /><Route path="/chat" element={<Chat/>} /><Route path="/settings" element={<AdaptiveRoute demo={<DemoSettings/>} account={<Settings/>} />} /><Route path="/dashboard" element={<AuthRedirect><><Dashboard/><AnalyticsShortcut/></></AuthRedirect>} /><Route path="/analytics" element={<AuthRedirect><Analytics/></AuthRedirect>} /><Route path="/capabilities/:capability" element={<Capabilities/>} /><Route path="/about" element={<AboutNova/>} /><Route path="/login" element={<><AuthHomeButton/><Login/></>} /><Route path="/register" element={<><AuthHomeButton/><Register/></>} /><Route path="*" element={<NotFound/>} /></Routes></Suspense>; }
+function AdaptiveRoute({ authenticated, demo, account }) { const user = useAuthState(); const location = useLocation(); useEffect(() => { const labels = { "/": user ? "Your learning space" : "Learn smarter", "/chat": "Learn", "/dashboard": "Dashboard", "/analytics": "Analytics", "/settings": "Settings", "/account-security": "Account security", "/about": "About Nova" }; document.title = `Nova AI · ${labels[location.pathname] || "Explore"}`; }, [location.pathname, user]); if (authenticated) return user ? authenticated : demo; return user ? account : demo; }
+function AppRoutes() { return <Suspense fallback={<PageLoader />}><Routes><Route path="/" element={<AdaptiveRoute demo={<DemoHome/>} account={<Home/>} />} /><Route path="/chat" element={<Chat/>} /><Route path="/settings" element={<AdaptiveRoute demo={<DemoSettings/>} account={<Settings/>} />} /><Route path="/dashboard" element={<AuthRedirect><><Dashboard/><AnalyticsShortcut/></></AuthRedirect>} /><Route path="/analytics" element={<AuthRedirect><Analytics/></AuthRedirect>} /><Route path="/account-security" element={<AuthRedirect><AccountSecurity/></AuthRedirect>} /><Route path="/forgot-password" element={<ForgotPassword/>} /><Route path="/reset-password" element={<ResetPassword/>} /><Route path="/verify-email" element={<VerifyEmail/>} /><Route path="/capabilities/:capability" element={<Capabilities/>} /><Route path="/about" element={<AboutNova/>} /><Route path="/login" element={<><AuthHomeButton/><Login/></>} /><Route path="/register" element={<><AuthHomeButton/><Register/></>} /><Route path="*" element={<NotFound/>} /></Routes></Suspense>; }
 export default function App() { const locationKey = useMemo(() => window.location.pathname, []); return <BrowserRouter key={locationKey}><AppRoutes/></BrowserRouter>; }
