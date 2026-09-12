@@ -65,7 +65,17 @@ installApiCompatibility();
 
 function useAuthState() {
     const [user, setUser] = useState(readUser);
-    useEffect(() => { const sync = () => setUser(readUser()); window.addEventListener("storage", sync); window.addEventListener("nova-auth-changed", sync); window.addEventListener("nova:auth", sync); const timer = window.setInterval(sync, 1000); return () => { window.removeEventListener("storage", sync); window.removeEventListener("nova-auth-changed", sync); window.removeEventListener("nova:auth", sync); window.clearInterval(timer); }; }, []);
+    useEffect(() => {
+        const sync = () => setUser(readUser());
+        window.addEventListener("storage", sync);
+        window.addEventListener("nova-auth-changed", sync);
+        window.addEventListener("nova:auth", sync);
+        return () => {
+            window.removeEventListener("storage", sync);
+            window.removeEventListener("nova-auth-changed", sync);
+            window.removeEventListener("nova:auth", sync);
+        };
+    }, []);
     return user;
 }
 function PageLoader() { return <div className="flex min-h-screen items-center justify-center bg-[#070a13] text-white"><div className="flex flex-col items-center gap-4"><div className="flex h-14 w-14 items-center justify-center rounded-2xl border border-white/10 bg-white/[.04]"><LoaderCircle className="animate-spin text-cyan-300" size={25}/></div><span className="text-xs text-slate-500">Loading Nova...</span></div></div>; }
