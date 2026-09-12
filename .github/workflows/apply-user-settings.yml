@@ -22,6 +22,13 @@ jobs:
         with:
           python-version: "3.11"
 
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
       - name: Validate backend settings code
         run: |
           python -m py_compile backend/api.py backend/core/nova_core.py backend/user_settings.py backend/__init__.py backend/settings.py
@@ -36,9 +43,21 @@ jobs:
       - name: Build frontend
         working-directory: frontend
         run: |
-          npm install --no-audit --no-fund
+          npm ci --no-audit --no-fund
           npm run build
 
       - name: Guard against self-modifying workflow regressions
         run: |
-          ! grep -R -nE "git push|git commit|permissions:[[:space:]]*$|contents:[[:space:]]*write" .github/workflows/apply-user-settings.yml
+          python - <<'PY'
+          from pathlib import Path
+          source = Path('.github/workflows/apply-user-settings.yml').read_text(encoding='utf-8')
+          guard = source.index('      - name: Guard against self-modifying workflow regressions')
+          executable = source[:guard]
+          forbidden = ('git push', 'git commit', 'contents: write')
+          found = [item for item in forbidden if item in executable]
+          if found:
+              raise SystemExit(f'Forbidden workflow behavior found: {found}')
+          if 'contents: read' not in executable:
+              raise SystemExit('Workflow must keep contents: read permission')
+          print('Workflow is read-only and non-self-modifying')
+          PY
