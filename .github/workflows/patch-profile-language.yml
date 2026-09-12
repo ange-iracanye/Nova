@@ -1,0 +1,53 @@
+name: Validate profile language selector
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    name: Validate profile language support
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm install --no-audit --no-fund
+
+      - name: Validate language selector source
+        run: |
+          test -f frontend/src/pages/Settings.jsx
+          test -f frontend/src/i18n.js
+          python - <<'PY'
+          from pathlib import Path
+          source = Path('frontend/src/i18n.js').read_text(encoding='utf-8')
+          required = {
+              'en', 'fr', 'es', 'de', 'it', 'pt', 'nl', 'pl', 'uk', 'ru',
+              'cs', 'ro', 'hu', 'el', 'sv', 'tr', 'ar', 'hi', 'zh', 'ja',
+              'ko', 'vi', 'th', 'id'
+          }
+          missing = [code for code in required if f'code: "{code}"' not in source]
+          if missing:
+              raise SystemExit(f'Missing language codes: {missing}')
+          print('All Nova language codes are present')
+          PY
+
+      - name: Build frontend
+        working-directory: frontend
+        run: npm run build
+
+      - name: Guard against self-modifying workflow regressions
+        run: |
+          ! grep -nE "git push|git commit|contents:[[:space:]]*write" .github/workflows/patch-profile-language.yml
