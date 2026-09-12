@@ -1,944 +1,303 @@
-import json
+from __future__ import annotations
+
 import hashlib
-from pathlib import Path
-from datetime import datetime
-
+import json
+import math
 import os
+import re
+from datetime import datetime, timezone
+from pathlib import Path
 
-from backend.memory_system.memory_search import MemorySearch
+from backend.memory_system.conversation_manager import ConversationManager
 from backend.memory_system.memory_extractor import MemoryExtractor
+from backend.memory_system.memory_search import MemorySearch
 
 
 class MemoryManager:
+    """Persistent user memory plus retrieval across every saved conversation.
 
-    def __init__(
-        self,
-        embedder=None,
-        base_path="data/memory/users"
-    ):
+    Long-term memories remain in semantic_memory.json. Conversation history is
+    retrieved directly from the durable ConversationManager so every saved
+    conversation can participate in answering a new question without dumping
+    the user's entire history into the prompt.
+    """
 
+    def __init__(self, embedder=None, base_path="data/memory/users"):
         print("Loading Nova Memory System...")
-
         self.base_path = Path(base_path)
-
-        self.base_path.mkdir(
-            parents=True,
-            exist_ok=True
-        )
-
+        self.base_path.mkdir(parents=True, exist_ok=True)
         self.extractor = MemoryExtractor()
-
         self.embedder = embedder
-
-        self.search_engine = MemorySearch(
-            embedder
-        )
-
+        self.search_engine = MemorySearch(embedder)
+        self.conversations = ConversationManager(persist=True)
         print("Nova Memory System ready.")
 
-    # =====================================
-    # USER DIRECTORY
-    # =====================================
-
     def user_id(self, email):
-
-        email = (
-            email
-            .strip()
-            .lower()
-        )
-
-        return hashlib.sha256(
-            email.encode("utf-8")
-        ).hexdigest()
+        return hashlib.sha256(email.strip().lower().encode("utf-8")).hexdigest()
 
     def user_file(self, email):
-
-        uid = self.user_id(email)
-
-        return (
-            self.base_path
-            / uid
-            / "semantic_memory.json"
-        )
-
-    # =====================================
-    # DEFAULT
-    # =====================================
+        return self.base_path / self.user_id(email) / "semantic_memory.json"
 
     def default_memory(self):
-
         return {
-            "version": 2,
+            "version": 3,
             "memories": [],
             "facts": [],
             "preferences": [],
             "goals": [],
             "learning": [],
             "episodes": [],
-            "statistics": {
-                "total_memories": 0,
-                "total_episodes": 0,
-                "last_updated": None
-            }
+            "statistics": {"total_memories": 0, "total_episodes": 0, "last_updated": None},
         }
-
-    # =====================================
-    # LOAD
-    # =====================================
 
     def load(self, email):
-
         file = self.user_file(email)
-
-        file.parent.mkdir(
-            parents=True,
-            exist_ok=True
-        )
-
+        file.parent.mkdir(parents=True, exist_ok=True)
         if not file.exists():
-
             memory = self.default_memory()
-
-            self._write(
-                file,
-                memory
-            )
-
+            self._write(file, memory)
             return memory
-
         try:
-
-            memory = json.loads(
-                file.read_text(
-                    encoding="utf-8"
-                )
-            )
-
+            memory = json.loads(file.read_text(encoding="utf-8"))
         except Exception:
-
             memory = self.default_memory()
-
+        if not isinstance(memory, dict):
+            memory = self.default_memory()
+        for key in ("memories", "facts", "preferences", "goals", "learning", "episodes"):
+            if not isinstance(memory.get(key), list):
+                memory[key] = []
+        if not isinstance(memory.get("statistics"), dict):
+            memory["statistics"] = self.default_memory()["statistics"]
         return memory
-
-    # =====================================
-    # WRITE
-    # =====================================
 
     def _write(self, file, data):
-
         temporary = file.with_suffix(".tmp")
-
-        temporary.write_text(
-            json.dumps(
-                data,
-                indent=4,
-                ensure_ascii=False
-            ),
-            encoding="utf-8"
-        )
-
+        temporary.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
         temporary.replace(file)
 
-    # =====================================
-    # EMBEDDINGS
-    # =====================================
-
     def _load_embedder(self):
-
         if self.embedder is not None:
             return
-
-        # The public Render instance has 512 MB RAM. Loading the
-        # SentenceTransformer/Torch stack for every first chat request
-        # can exhaust that limit and make Render return HTTP 503 while
-        # restarting the process. Public V1 therefore uses the existing
-        # keyword/recency/importance memory retrieval unless semantic
-        # embeddings are explicitly enabled. Local development keeps the
-        # previous behavior by default.
         production = os.getenv("NOVA_ENV", "development").strip().lower() == "production"
-        enabled = os.getenv(
-            "NOVA_ENABLE_SEMANTIC_MEMORY",
-            "false" if production else "true",
-        ).strip().lower() in {"1", "true", "yes", "on"}
+        enabled = os.getenv("NOVA_ENABLE_SEMANTIC_MEMORY", "false" if production else "true").strip().lower() in {"1", "true", "yes", "on"}
         if not enabled:
             return
-
-        model_path = Path("data/model")
-
         try:
             from sentence_transformers import SentenceTransformer
-
-            self.embedder = SentenceTransformer(
-                str(model_path)
-            )
-
-            self.search_engine.embedder = (
-                self.embedder
-            )
-
-            print(
-                "Nova Memory Embeddings ready."
-            )
-
+            self.embedder = SentenceTransformer(str(Path("data/model")))
+            self.search_engine.embedder = self.embedder
+            print("Nova Memory Embeddings ready.")
         except Exception as error:
-
-            print(
-                "Memory embeddings unavailable:",
-                error
-            )
-
+            print("Memory embeddings unavailable:", error)
             self.embedder = None
 
-    # =====================================
-    # EMBED
-    # =====================================
-
     def _embed(self, text):
-
         self._load_embedder()
-
         if self.embedder is None:
             return None
-
         try:
-
-            vector = self.embedder.encode(
-                text,
-                normalize_embeddings=True
-            )
-
-            if hasattr(vector, "tolist"):
-                return vector.tolist()
-
-            return list(vector)
-
+            vector = self.embedder.encode(text, normalize_embeddings=True)
+            return vector.tolist() if hasattr(vector, "tolist") else list(vector)
         except Exception as error:
-
-            print(
-                "Memory embedding failed:",
-                error
-            )
-
+            print("Memory embedding failed:", error)
             return None
 
-    # =====================================
-    # ADD MEMORY
-    # =====================================
-
-    def add_memory(
-        self,
-        email,
-        text,
-        memory_type="episode",
-        subject=None,
-        conversation_id=None,
-        importance=0.5,
-        confidence=0.8,
-        metadata=None,
-        formatted_text=None
-    ):
-
+    def add_memory(self, email, text, memory_type="episode", subject=None,
+                   conversation_id=None, importance=0.5, confidence=0.8,
+                   metadata=None, formatted_text=None):
         if not text:
             return None
-
         data = self.load(email)
-
         now = datetime.now().isoformat()
-
-        # =================================
-        # NORMALIZE CONFIDENCE
-        # =================================
-
         try:
-
-            confidence = float(
-                confidence
-            )
-
+            confidence = float(confidence)
         except (TypeError, ValueError):
-
             confidence = 0.8
-
         if confidence > 1:
-
             confidence /= 100
-
-        confidence = max(
-            0.0,
-            min(
-                1.0,
-                confidence
-            )
-        )
-
-        # =================================
-        # SEARCHABLE TEXT
-        # =================================
-
-        if formatted_text is not None:
-
-            search_text = formatted_text.strip()
-
-        else:
-
-            search_text = (
-                f"Subject: {subject or ''}\n"
-                f"User: {text}\n"
-                f"Nova:"
-            ).strip()
-
-        # =================================
-        # EMBEDDING
-        # =================================
-
-        embedding = self.search_engine.embed(
-            search_text
-        )
-
-        if embedding is None:
-
-            embedding = self._embed(
-                search_text
-            )
-
-        # =================================
-        # MEMORY OBJECT
-        # =================================
-
+        confidence = max(0.0, min(1.0, confidence))
+        search_text = (formatted_text or f"Subject: {subject or ''}\nUser: {text}\nNova:").strip()
+        embedding = self.search_engine.embed(search_text) or self._embed(search_text)
         memory = {
-
-            "id": hashlib.sha256(
-                (
-                    email
-                    + now
-                    + text
-                ).encode("utf-8")
-            ).hexdigest(),
-
+            "id": hashlib.sha256((email + now + text).encode("utf-8")).hexdigest(),
             "type": memory_type,
-
             "text": search_text,
-
             "subject": subject,
-
             "conversation_id": conversation_id,
-
             "importance": importance,
-
             "confidence": confidence,
-
             "created_at": now,
-
             "last_recalled": None,
-
             "recall_count": 0,
-
             "metadata": metadata or {},
-
-            "embedding": embedding
+            "embedding": embedding,
         }
-
-        # =================================
-        # AVOID EXACT DUPLICATES
-        # =================================
-
-        normalized = (
-            search_text
-            .strip()
-            .lower()
-        )
-
+        normalized = search_text.lower().strip()
         for existing in data["memories"]:
-
-            existing_text = (
-                existing.get("text", "")
-                .strip()
-                .lower()
-            )
-
-            if existing_text == normalized:
-
-                existing["recall_count"] = (
-                    existing.get(
-                        "recall_count",
-                        0
-                    ) + 1
-                )
-
+            if str(existing.get("text", "")).lower().strip() == normalized:
+                existing["recall_count"] = existing.get("recall_count", 0) + 1
                 existing["last_recalled"] = now
-
-                self._write(
-                    self.user_file(email),
-                    data
-                )
-
+                self._write(self.user_file(email), data)
                 return existing
-
-        # =================================
-        # STORE MEMORY
-        # =================================
-
-        data["memories"].append(
-            memory
-        )
-
-        # =================================
-        # CATEGORIZE
-        # =================================
-
-        if memory_type == "fact":
-
-            data["facts"].append(
-                memory["id"]
-            )
-
-        elif memory_type == "preference":
-
-            data["preferences"].append(
-                memory["id"]
-            )
-
-        elif memory_type == "goal":
-
-            data["goals"].append(
-                memory["id"]
-            )
-
-        elif memory_type == "learning":
-
-            data["learning"].append(
-                memory["id"]
-            )
-
-        elif memory_type == "episode":
-
-            data["episodes"].append(
-                memory["id"]
-            )
-
-            data["statistics"][
-                "total_episodes"
-            ] = len(
-                data["episodes"]
-            )
-
-        # =================================
-        # STATISTICS
-        # =================================
-
-        data["statistics"][
-            "total_memories"
-        ] = len(
-            data["memories"]
-        )
-
-        data["statistics"][
-            "last_updated"
-        ] = now
-
-        self._write(
-            self.user_file(email),
-            data
-        )
-
+        data["memories"].append(memory)
+        category = {"fact": "facts", "preference": "preferences", "goal": "goals", "learning": "learning", "episode": "episodes"}.get(memory_type)
+        if category:
+            data[category].append(memory["id"])
+        data["statistics"]["total_memories"] = len(data["memories"])
+        data["statistics"]["total_episodes"] = len(data["episodes"])
+        data["statistics"]["last_updated"] = now
+        self._write(self.user_file(email), data)
         return memory
 
-    # =====================================
-    # RECORD CONVERSATION
-    # =====================================
+    def remember(self, email, user_message, assistant_message, subject=None,
+                 confidence=None, conversation_id=None):
+        try:
+            confidence = 0.7 if confidence is None else float(confidence)
+        except (TypeError, ValueError):
+            confidence = 0.7
+        if confidence > 1:
+            confidence /= 100
+        confidence = max(0.0, min(1.0, confidence))
+        search_text = f"Subject: {subject or ''}\nUser: {user_message}\nNova: {assistant_message}".strip()
+        self.add_memory(email, user_message, "episode", subject, conversation_id,
+                        importance=0.45, confidence=confidence, formatted_text=search_text)
+        for item in self.extractor.extract(user_message, subject=subject, conversation_id=conversation_id):
+            kind = item.get("type", "preference")
+            final_type = "fact" if kind == "explicit_memory" else kind if kind in {"fact", "goal", "learning", "preference"} else "preference"
+            self.add_memory(email, item.get("text", ""), final_type, subject, conversation_id,
+                            importance=item.get("importance", 1.0 if final_type == "fact" else 0.8),
+                            confidence=item.get("confidence", 0.8))
 
-    def remember(
-        self,
-        email,
-        user_message,
-        assistant_message,
-        subject=None,
-        confidence=None,
-        conversation_id=None
-    ):
-
-        # =================================
-        # NORMALIZE CONFIDENCE
-        # =================================
-
-        if confidence is None:
-
-            memory_confidence = 0.7
-
-        else:
-
-            try:
-
-                memory_confidence = float(
-                    confidence
-                )
-
-            except (TypeError, ValueError):
-
-                memory_confidence = 0.7
-
-        if memory_confidence > 1:
-
-            memory_confidence /= 100
-
-        memory_confidence = max(
-            0.0,
-            min(
-                1.0,
-                memory_confidence
-            )
-        )
-
-        # =================================
-        # COMPLETE EPISODE
-        # =================================
-
-        search_text = (
-            f"Subject: {subject or ''}\n"
-            f"User: {user_message}\n"
-            f"Nova: {assistant_message}"
-        ).strip()
-
-        self.add_memory(
-
-            email,
-
-            user_message,
-
-            memory_type="episode",
-
-            subject=subject,
-
-            conversation_id=conversation_id,
-
-            importance=0.45,
-
-            confidence=memory_confidence,
-
-            formatted_text=search_text
-        )
-
-        # =================================
-        # EXPLICIT / LONG-TERM MEMORIES
-        # =================================
-
-        extracted = self.extractor.extract(
-            user_message,
-            subject=subject,
-            conversation_id=conversation_id
-        )
-
-        for item in extracted:
-
-            memory_type = item.get(
-                "type",
-                "preference"
-            )
-
-            if memory_type == "explicit_memory":
-
-                final_type = "fact"
-                importance = 1.0
-
-            elif memory_type == "fact":
-
-                final_type = "fact"
-
-                importance = item.get(
-                    "importance",
-                    0.8
-                )
-
-            elif memory_type == "goal":
-
-                final_type = "goal"
-
-                importance = item.get(
-                    "importance",
-                    0.85
-                )
-
-            elif memory_type == "learning":
-
-                final_type = "learning"
-
-                importance = item.get(
-                    "importance",
-                    0.8
-                )
-
-            else:
-
-                final_type = "preference"
-
-                importance = item.get(
-                    "importance",
-                    0.75
-                )
-
-            self.add_memory(
-
-                email,
-
-                item["text"],
-
-                memory_type=final_type,
-
-                subject=subject,
-
-                conversation_id=conversation_id,
-
-                importance=importance,
-
-                confidence=item.get(
-                    "confidence",
-                    0.8
-                )
-            )
-
-    # =====================================
-    # SEARCH
-    # =====================================
-
-    def search(
-        self,
-        email,
-        query,
-        limit=8,
-        subject=None
-    ):
-
+    def search(self, email, query, limit=8, subject=None):
         data = self.load(email)
-
         memories = data["memories"]
-
-        # =================================
-        # SUBJECT FILTER
-        # =================================
-
         if subject:
-
-            subject_memories = [
-
-                memory
-
-                for memory in memories
-
-                if (
-                    memory.get("subject")
-                    == subject
-                    or
-                    memory.get("type")
-                    in (
-                        "fact",
-                        "preference",
-                        "goal"
-                    )
-                )
-            ]
-
-        else:
-
-            subject_memories = memories
-
-        # =================================
-        # SEMANTIC SEARCH
-        # =================================
-
-        results = self.search_engine.search(
-            subject_memories,
-            query,
-            limit=limit
-        )
-
-        # =================================
-        # UPDATE RECALL STATISTICS
-        # =================================
-
-        now = datetime.now().isoformat()
-
-        changed = False
-
-        for result in results:
-
-            memory = result["memory"]
-
-            memory["recall_count"] = (
-                memory.get(
-                    "recall_count",
-                    0
-                ) + 1
-            )
-
-            memory["last_recalled"] = now
-
-            changed = True
-
-        if changed:
-
-            self._write(
-                self.user_file(email),
-                data
-            )
-
+            memories = [m for m in memories if m.get("subject") == subject or m.get("type") in {"fact", "preference", "goal"}]
+        results = self.search_engine.search(memories, query, limit=limit)
+        if results:
+            now = datetime.now().isoformat()
+            for result in results:
+                memory = result["memory"]
+                memory["recall_count"] = memory.get("recall_count", 0) + 1
+                memory["last_recalled"] = now
+            self._write(self.user_file(email), data)
         return results
 
-    # =====================================
-    # BUILD CONTEXT
-    # =====================================
+    @staticmethod
+    def _tokens(text):
+        return set(re.findall(r"\b\w+\b", str(text or "").lower()))
 
-    def build_context(
-        self,
-        email,
-        query,
-        subject=None,
-        limit=8,
-        max_characters=12000
-    ):
+    @classmethod
+    def _keyword_score(cls, query, text):
+        q = cls._tokens(query)
+        if not q:
+            return 0.0
+        return len(q & cls._tokens(text)) / len(q)
 
-        results = self.search(
-            email,
-            query,
-            limit=limit,
-            subject=subject
-        )
+    @staticmethod
+    def _conversation_text(conversation):
+        return "\n".join(f"{m.get('role', 'user').title()}: {m.get('text', '')}" for m in conversation.get("messages", []) if isinstance(m, dict))
 
-        if not results:
+    def _conversation_context(self, email, query, max_characters):
+        conversations = self.conversations.list(email)
+        if not conversations:
+            return ""
 
-            return (
-                "No relevant long-term memory."
-            )
-
+        ordered = list(conversations.values())
+        ordered.sort(key=lambda c: c.get("updated_at", "") if isinstance(c, dict) else "", reverse=True)
+        current = ordered[0] if ordered else None
         sections = []
 
-        # =================================
-        # FACTS
-        # =================================
+        if current:
+            messages = [m for m in current.get("messages", []) if isinstance(m, dict)]
+            if messages:
+                sections.append("CURRENT CONVERSATION (highest priority):")
+                recent = messages[-12:]
+                for message in recent:
+                    role = "User" if message.get("role") == "user" else "Nova"
+                    sections.append(f"{role}: {str(message.get('text', '')).strip()}")
 
-        facts = [
+        candidates = []
+        for conversation in ordered[1:]:
+            if not isinstance(conversation, dict):
+                continue
+            messages = [m for m in conversation.get("messages", []) if isinstance(m, dict)]
+            if not messages:
+                continue
+            text = self._conversation_text(conversation)
+            relevance = self._keyword_score(query, text)
+            if relevance <= 0:
+                continue
+            updated = conversation.get("updated_at", "")
+            candidates.append((relevance, updated, conversation, messages))
+        candidates.sort(key=lambda item: (item[0], item[1]), reverse=True)
 
-            result["memory"]
+        for relevance, _, conversation, messages in candidates[:6]:
+            sections.append(f"\nRELEVANT PREVIOUS CONVERSATION ({relevance:.2f} relevance):")
+            # Prefer turns matching the question, while keeping a neighboring turn for context.
+            scores = [(self._keyword_score(query, m.get("text", "")), i) for i, m in enumerate(messages)]
+            scores.sort(reverse=True)
+            chosen = set()
+            for score, index in scores[:3]:
+                if score > 0:
+                    chosen.add(index)
+                    if index > 0:
+                        chosen.add(index - 1)
+            for index in sorted(chosen):
+                message = messages[index]
+                role = "User" if message.get("role") == "user" else "Nova"
+                sections.append(f"{role}: {str(message.get('text', '')).strip()}")
 
-            for result in results
-
-            if result["memory"].get("type")
-            == "fact"
-        ]
-
-        if facts:
-
-            sections.append(
-                "LONG-TERM FACTS:"
-            )
-
-            for memory in facts:
-
-                sections.append(
-                    f"- {memory['text']}"
-                )
-
-        # =================================
-        # PREFERENCES
-        # =================================
-
-        preferences = [
-
-            result["memory"]
-
-            for result in results
-
-            if result["memory"].get("type")
-            == "preference"
-        ]
-
-        if preferences:
-
-            sections.append(
-                "\nSTUDENT PREFERENCES:"
-            )
-
-            for memory in preferences:
-
-                sections.append(
-                    f"- {memory['text']}"
-                )
-
-        # =================================
-        # GOALS
-        # =================================
-
-        goals = [
-
-            result["memory"]
-
-            for result in results
-
-            if result["memory"].get("type")
-            == "goal"
-        ]
-
-        if goals:
-
-            sections.append(
-                "\nSTUDENT GOALS:"
-            )
-
-            for memory in goals:
-
-                sections.append(
-                    f"- {memory['text']}"
-                )
-
-        # =================================
-        # LEARNING
-        # =================================
-
-        learning = [
-
-            result["memory"]
-
-            for result in results
-
-            if result["memory"].get("type")
-            == "learning"
-        ]
-
-        if learning:
-
-            sections.append(
-                "\nLEARNING HISTORY:"
-            )
-
-            for memory in learning:
-
-                sections.append(
-                    f"- {memory['text']}"
-                )
-
-        # =================================
-        # EPISODES
-        # =================================
-
-        episodes = [
-
-            result["memory"]
-
-            for result in results
-
-            if result["memory"].get("type")
-            == "episode"
-        ]
-
-        if episodes:
-
-            sections.append(
-                "\nRELEVANT PREVIOUS DISCUSSIONS:"
-            )
-
-            for memory in episodes:
-
-                sections.append(
-                    "\n" + memory["text"]
-                )
-
-        context = "\n".join(
-            sections
-        )
-
-        # =================================
-        # CONTEXT PROTECTION
-        # =================================
-
+        context = "\n".join(sections).strip()
         if len(context) > max_characters:
-
-            context = (
-                context[:max_characters]
-                + "\n[Memory context truncated]"
-            )
-
+            context = context[:max_characters].rstrip() + "\n[Conversation memory context truncated]"
         return context
 
-    # =====================================
-    # FULL MEMORY
-    # =====================================
+    def build_context(self, email, query, subject=None, limit=8, max_characters=12000):
+        sections = []
+        results = self.search(email, query, limit=limit, subject=subject)
+        if results:
+            grouped = {
+                "fact": ("LONG-TERM FACTS:", []),
+                "preference": ("STUDENT PREFERENCES:", []),
+                "goal": ("STUDENT GOALS:", []),
+                "learning": ("LEARNING HISTORY:", []),
+                "episode": ("RELEVANT PREVIOUS DISCUSSIONS:", []),
+            }
+            for result in results:
+                memory = result["memory"]
+                kind = memory.get("type", "episode")
+                if kind in grouped:
+                    grouped[kind][1].append(memory.get("text", ""))
+            for _, (heading, items) in grouped.items():
+                if items:
+                    sections.append(heading)
+                    sections.extend(f"- {item}" for item in items)
+
+        conversation_context = self._conversation_context(email, query, max_characters)
+        if conversation_context:
+            sections.append(conversation_context)
+        if not sections:
+            return "No relevant long-term memory or previous conversation context."
+        context = "\n".join(sections)
+        if len(context) > max_characters:
+            context = context[:max_characters].rstrip() + "\n[Memory context truncated]"
+        return context
 
     def get_all(self, email):
-
         return self.load(email)
 
-    # =====================================
-    # DELETE MEMORY
-    # =====================================
-
-    def delete_memory(
-        self,
-        email,
-        memory_id
-    ):
-
+    def delete_memory(self, email, memory_id):
         data = self.load(email)
-
-        original = len(
-            data["memories"]
-        )
-
-        data["memories"] = [
-
-            memory
-
-            for memory in data["memories"]
-
-            if memory["id"] != memory_id
-        ]
-
+        original = len(data["memories"])
+        data["memories"] = [m for m in data["memories"] if m.get("id") != memory_id]
         if len(data["memories"]) == original:
-
             return False
-
-        valid_ids = {
-
-            memory["id"]
-
-            for memory in data["memories"]
-        }
-
-        for key in (
-            "facts",
-            "preferences",
-            "goals",
-            "learning",
-            "episodes"
-        ):
-
-            data[key] = [
-
-                stored_id
-
-                for stored_id in data[key]
-
-                if stored_id in valid_ids
-            ]
-
-        data["statistics"][
-            "total_memories"
-        ] = len(
-            data["memories"]
-        )
-
-        data["statistics"][
-            "total_episodes"
-        ] = len(
-            data["episodes"]
-        )
-
-        data["statistics"][
-            "last_updated"
-        ] = datetime.now().isoformat()
-
-        self._write(
-            self.user_file(email),
-            data
-        )
-
+        valid = {m.get("id") for m in data["memories"]}
+        for key in ("facts", "preferences", "goals", "learning", "episodes"):
+            data[key] = [item for item in data[key] if item in valid]
+        data["statistics"]["total_memories"] = len(data["memories"])
+        data["statistics"]["total_episodes"] = len(data["episodes"])
+        data["statistics"]["last_updated"] = datetime.now().isoformat()
+        self._write(self.user_file(email), data)
         return True
