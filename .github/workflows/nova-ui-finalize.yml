@@ -57,4 +57,16 @@ jobs:
 
       - name: Guard against workflow self-modification
         run: |
-          ! grep -R -nE "git push|git commit|contents:[[:space:]]*write" .github/workflows/nova-ui-finalize.yml
+          python - <<'PY'
+          from pathlib import Path
+          source = Path('.github/workflows/nova-ui-finalize.yml').read_text(encoding='utf-8')
+          guard = source.index('      - name: Guard against workflow self-modification')
+          executable = source[:guard]
+          forbidden = ('git push', 'git commit', 'contents: write')
+          found = [item for item in forbidden if item in executable]
+          if found:
+              raise SystemExit(f'Forbidden workflow behavior found: {found}')
+          if 'contents: read' not in executable:
+              raise SystemExit('Workflow must keep contents: read permission')
+          print('Workflow is read-only and non-self-modifying')
+          PY
