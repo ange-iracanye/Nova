@@ -6,7 +6,11 @@ import json
 import os
 from typing import Any, Awaitable, Callable
 
+from fastapi import Request
+
+from backend import api
 from backend.boot import app as boot_app
+from backend.user_context import clear_active_user, set_active_user
 
 PUBLIC_FRONTEND_ORIGIN = "https://nova-frontend-i76e.onrender.com"
 
@@ -19,14 +23,7 @@ def _allowed_origins() -> set[str]:
 
 
 def _origin(scope: dict[str, Any]) -> str:
-    return next(
-        (
-            value.decode("latin-1")
-            for name, value in scope.get("headers", [])
-            if name.lower() == b"origin"
-        ),
-        "",
-    ).rstrip("/")
+    return next((value.decode("latin-1") for name, value in scope.get("headers", []) if name.lower() == b"origin"), "").rstrip("/")
 
 
 def _origin_is_allowed(origin: str) -> bool:
@@ -52,7 +49,6 @@ def _cors_headers(scope: dict[str, Any]) -> list[tuple[bytes, bytes]]:
 
 
 def _with_cors(headers: list[tuple[bytes, bytes]], cors: list[tuple[bytes, bytes]]) -> list[tuple[bytes, bytes]]:
-    """Replace conflicting CORS headers instead of leaving two origins behind."""
     if not cors:
         return headers
     cors_names = {name.lower() for name, _ in cors}
@@ -63,11 +59,7 @@ def _with_cors(headers: list[tuple[bytes, bytes]], cors: list[tuple[bytes, bytes
 
 async def _send_fast_json(send: Callable[..., Awaitable[Any]], status: int, payload: dict[str, Any], scope: dict[str, Any]) -> None:
     body = json.dumps(payload, separators=(",", ":")).encode("utf-8")
-    headers = [
-        (b"content-type", b"application/json; charset=utf-8"),
-        (b"content-length", str(len(body)).encode("ascii")),
-        (b"cache-control", b"no-store"),
-    ]
+    headers = [(b"content-type", b"application/json; charset=utf-8"), (b"content-length", str(len(body)).encode("ascii")), (b"cache-control", b"no-store")]
     headers.extend(_cors_headers(scope))
     await send({"type": "http.response.start", "status": status, "headers": headers})
     await send({"type": "http.response.body", "body": body})
@@ -80,6 +72,16 @@ async def _send_options(send: Callable[..., Awaitable[Any]], scope: dict[str, An
     await send({"type": "http.response.body", "body": b""})
 
 
+def _set_request_user(scope: dict[str, Any], receive: Callable[..., Awaitable[Any]]) -> None:
+    """Bind the authenticated request to legacy request-local profile storage."""
+    try:
+        session = api.get_auth_session(Request(scope, receive))
+        email = session.get("email") if isinstance(session, dict) else None
+        set_active_user(email)
+    except Exception:
+        clear_active_user()
+
+
 async def _forward_with_rewrite(scope: dict[str, Any], receive: Callable[..., Awaitable[Any]], send: Callable[..., Awaitable[Any]]) -> None:
     """Forward requests to boot.app while forcing one correct CORS origin."""
     path = str(scope.get("path", ""))
@@ -88,15 +90,18 @@ async def _forward_with_rewrite(scope: dict[str, Any], receive: Callable[..., Aw
         scope["path"] = "/v1/dashboard"
         scope["raw_path"] = b"/v1/dashboard"
 
+    _set_request_user(scope, receive)
     cors = _cors_headers(scope)
 
     async def cors_send(message: dict[str, Any]) -> None:
         if message.get("type") == "http.response.start" and cors:
-            headers = _with_cors(list(message.get("headers", [])), cors)
-            message = {**message, "headers": headers}
+            message = {**message, "headers": _with_cors(list(message.get("headers", [])), cors)}
         await send(message)
 
-    await boot_app(scope, receive, cors_send)
+    try:
+        await boot_app(scope, receive, cors_send)
+    finally:
+        clear_active_user()
 
 
 async def app(scope: dict[str, Any], receive: Callable[..., Awaitable[Any]], send: Callable[..., Awaitable[Any]]) -> None:
@@ -148,10 +153,7 @@ async def app(scope: dict[str, Any], receive: Callable[..., Awaitable[Any]], sen
             new_body = json.dumps(payload, separators=(",", ":")).encode("utf-8")
             for message in messages:
                 if message.get("type") == "http.response.start":
-                    message["headers"] = [
-                        (name, str(len(new_body)).encode("ascii") if name.lower() == b"content-length" else value)
-                        for name, value in message.get("headers", [])
-                    ]
+                    message["headers"] = [(name, str(len(new_body)).encode("ascii") if name.lower() == b"content-length" else value) for name, value in message.get("headers", [])]
                     break
             for message in messages:
                 if message.get("type") == "http.response.body":
