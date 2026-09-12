@@ -43,4 +43,16 @@ jobs:
 
       - name: Guard against self-modifying workflow regressions
         run: |
-          ! grep -nE "git push|git commit|contents:[[:space:]]*write" .github/workflows/apply-ui-language-runtime.yml
+          python - <<'PY'
+          from pathlib import Path
+          source = Path('.github/workflows/apply-ui-language-runtime.yml').read_text(encoding='utf-8')
+          guard = source.index('      - name: Guard against self-modifying workflow regressions')
+          executable = source[:guard]
+          forbidden = ('git push', 'git commit', 'contents: write')
+          found = [item for item in forbidden if item in executable]
+          if found:
+              raise SystemExit(f'Forbidden workflow behavior found: {found}')
+          if 'contents: read' not in executable:
+              raise SystemExit('Workflow must keep contents: read permission')
+          print('Workflow is read-only and non-self-modifying')
+          PY
