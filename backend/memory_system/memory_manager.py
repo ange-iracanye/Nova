@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import hashlib
 import json
-import math
 import os
 import re
 from datetime import datetime, timezone
@@ -14,13 +13,7 @@ from backend.memory_system.memory_search import MemorySearch
 
 
 class MemoryManager:
-    """Persistent user memory plus retrieval across every saved conversation.
-
-    Long-term memories remain in semantic_memory.json. Conversation history is
-    retrieved directly from the durable ConversationManager so every saved
-    conversation can participate in answering a new question without dumping
-    the user's entire history into the prompt.
-    """
+    """Persistent user memory plus retrieval across every saved conversation."""
 
     def __init__(self, embedder=None, base_path="data/memory/users"):
         print("Loading Nova Memory System...")
@@ -198,6 +191,19 @@ class MemoryManager:
     def _conversation_text(conversation):
         return "\n".join(f"{m.get('role', 'user').title()}: {m.get('text', '')}" for m in conversation.get("messages", []) if isinstance(m, dict))
 
+    @staticmethod
+    def _format_date(value):
+        """Return an unambiguous human-readable timestamp for the model."""
+        if not value:
+            return "unknown date"
+        try:
+            parsed = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+            if parsed.tzinfo is None:
+                parsed = parsed.replace(tzinfo=timezone.utc)
+            return parsed.astimezone(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+        except (TypeError, ValueError):
+            return str(value)
+
     def _conversation_context(self, email, query, max_characters):
         conversations = self.conversations.list(email)
         if not conversations:
@@ -206,16 +212,23 @@ class MemoryManager:
         ordered = list(conversations.values())
         ordered.sort(key=lambda c: c.get("updated_at", "") if isinstance(c, dict) else "", reverse=True)
         current = ordered[0] if ordered else None
-        sections = []
+        sections = [
+            "MEMORY DATE RULE: Conversation timestamps below are authoritative metadata. "
+            "Use them to answer questions about when the user previously talked to Nova. "
+            "Do not claim that you cannot know a date when a relevant timestamp is present."
+        ]
 
         if current:
             messages = [m for m in current.get("messages", []) if isinstance(m, dict)]
             if messages:
-                sections.append("CURRENT CONVERSATION (highest priority):")
+                sections.append(
+                    f"CURRENT CONVERSATION (highest priority; updated {self._format_date(current.get('updated_at'))}):"
+                )
                 recent = messages[-12:]
                 for message in recent:
                     role = "User" if message.get("role") == "user" else "Nova"
-                    sections.append(f"{role}: {str(message.get('text', '')).strip()}")
+                    timestamp = self._format_date(message.get("timestamp"))
+                    sections.append(f"[{timestamp}] {role}: {str(message.get('text', '')).strip()}")
 
         candidates = []
         for conversation in ordered[1:]:
@@ -233,8 +246,10 @@ class MemoryManager:
         candidates.sort(key=lambda item: (item[0], item[1]), reverse=True)
 
         for relevance, _, conversation, messages in candidates[:6]:
-            sections.append(f"\nRELEVANT PREVIOUS CONVERSATION ({relevance:.2f} relevance):")
-            # Prefer turns matching the question, while keeping a neighboring turn for context.
+            sections.append(
+                f"\nRELEVANT PREVIOUS CONVERSATION ({relevance:.2f} relevance; "
+                f"updated {self._format_date(conversation.get('updated_at'))}):"
+            )
             scores = [(self._keyword_score(query, m.get("text", "")), i) for i, m in enumerate(messages)]
             scores.sort(reverse=True)
             chosen = set()
@@ -246,7 +261,8 @@ class MemoryManager:
             for index in sorted(chosen):
                 message = messages[index]
                 role = "User" if message.get("role") == "user" else "Nova"
-                sections.append(f"{role}: {str(message.get('text', '')).strip()}")
+                timestamp = self._format_date(message.get("timestamp"))
+                sections.append(f"[{timestamp}] {role}: {str(message.get('text', '')).strip()}")
 
         context = "\n".join(sections).strip()
         if len(context) > max_characters:
