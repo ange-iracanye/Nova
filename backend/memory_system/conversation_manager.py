@@ -16,6 +16,7 @@ class ConversationManager:
         self.persist = persist
         self.file = Path(os.getenv("NOVA_CONVERSATIONS_FILE", "data/memory/conversations.json"))
         self.data = {"users": {}}
+        self._file_signature = None
 
         if self.persist:
             self.file.parent.mkdir(parents=True, exist_ok=True)
@@ -24,9 +25,19 @@ class ConversationManager:
                 if not self.file.exists():
                     self.save()
 
+    def _signature_locked(self):
+        if not self.persist or not self.file.exists():
+            return None
+        try:
+            stat = self.file.stat()
+            return (stat.st_mtime_ns, stat.st_size)
+        except OSError:
+            return None
+
     def _reload_locked(self) -> None:
         if not self.persist or not self.file.exists():
             self.data = {"users": {}}
+            self._file_signature = None
             return
         try:
             loaded = json.loads(self.file.read_text(encoding="utf-8"))
@@ -35,6 +46,11 @@ class ConversationManager:
             self.data = {"users": {}}
         if not isinstance(self.data.get("users"), dict):
             self.data["users"] = {}
+        self._file_signature = self._signature_locked()
+
+    def _ensure_fresh_locked(self) -> None:
+        if self.persist and self._signature_locked() != self._file_signature:
+            self._reload_locked()
 
     def save(self):
         if not self.persist:
@@ -43,10 +59,11 @@ class ConversationManager:
             self.file.parent.mkdir(parents=True, exist_ok=True)
             temporary = self.file.with_suffix(self.file.suffix + ".tmp")
             temporary.write_text(
-                json.dumps(self.data, indent=4, ensure_ascii=False),
+                json.dumps(self.data, ensure_ascii=False, separators=(",", ":")),
                 encoding="utf-8",
             )
             temporary.replace(self.file)
+            self._file_signature = self._signature_locked()
 
     def _user(self, email):
         email = email.strip().lower()
@@ -60,7 +77,7 @@ class ConversationManager:
 
     def create(self, email):
         with _DATA_LOCK:
-            self._reload_locked()
+            self._ensure_fresh_locked()
             user = self._user(email)
             cid = str(uuid.uuid4())
             now = datetime.now().isoformat()
@@ -76,7 +93,7 @@ class ConversationManager:
 
     def list(self, email):
         with _DATA_LOCK:
-            self._reload_locked()
+            self._ensure_fresh_locked()
             user = self._user(email)
             conversations = user["conversations"]
             return dict(
@@ -89,7 +106,7 @@ class ConversationManager:
 
     def add_message(self, email, cid, role, text):
         with _DATA_LOCK:
-            self._reload_locked()
+            self._ensure_fresh_locked()
             user = self._user(email)
             if cid not in user["conversations"]:
                 return False
@@ -120,13 +137,13 @@ class ConversationManager:
 
     def get(self, email, cid):
         with _DATA_LOCK:
-            self._reload_locked()
+            self._ensure_fresh_locked()
             user = self._user(email)
             return user["conversations"].get(cid)
 
     def rename(self, email, cid, title):
         with _DATA_LOCK:
-            self._reload_locked()
+            self._ensure_fresh_locked()
             user = self._user(email)
             if cid not in user["conversations"]:
                 return False
@@ -143,7 +160,7 @@ class ConversationManager:
 
     def delete(self, email, cid):
         with _DATA_LOCK:
-            self._reload_locked()
+            self._ensure_fresh_locked()
             user = self._user(email)
             if cid not in user["conversations"]:
                 return False
