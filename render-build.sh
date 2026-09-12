@@ -1,13 +1,16 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Nova's Render build is deliberately isolated from any inherited pip state.
-# This prevents stale/corrupted wheels, constraints, hash policies, and custom
-# indexes from changing the production dependency resolution.
+# Nova's Render build is deliberately isolated from inherited pip state.
+# Render can inject pip configuration/constraint files outside the repository.
+# The production dependency file intentionally contains no hashes, so force
+# pip into normal index-based resolution and never reuse a stale wheel cache.
 rm -rf /root/.cache/pip /opt/render/.cache/pip /opt/render/project/.cache/pip ~/.cache/pip /tmp/pip-* || true
-unset PIP_CONSTRAINT PIP_REQUIRE_HASHES PIP_CONFIG_FILE PIP_EXTRA_INDEX_URL PIP_INDEX_URL PIP_FIND_LINKS || true
+unset PIP_CONSTRAINT PIP_REQUIRE_HASHES PIP_CONFIG_FILE PIP_EXTRA_INDEX_URL PIP_INDEX_URL PIP_FIND_LINKS PIP_TRUSTED_HOST PIP_NO_INDEX || true
 export PIP_NO_CACHE_DIR=1
 export PIP_DISABLE_PIP_VERSION_CHECK=1
+export PIP_REQUIRE_HASHES=0
+export PIP_CONFIG_FILE=/dev/null
 
 python --version
 python -m pip --version
@@ -18,7 +21,7 @@ case "$(python -c 'import sys; print(f"{sys.version_info.major}.{sys.version_inf
 esac
 
 printf '%s\n' 'Installing Nova production dependencies from requirements-render.txt'
-python -m pip --isolated install --upgrade pip --no-cache-dir --disable-pip-version-check --index-url https://pypi.org/simple
+python -m pip --isolated install --upgrade pip --no-cache-dir --disable-pip-version-check --index-url https://pypi.org/simple --no-input
 python -m pip --isolated install --no-cache-dir --disable-pip-version-check --index-url https://pypi.org/simple --no-input --force-reinstall -r ./requirements-render.txt
 
 printf '%s\n' 'Verifying Nova production dependency consistency'
