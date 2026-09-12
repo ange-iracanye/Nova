@@ -57,8 +57,6 @@ def _remove_database_user(email: str) -> bool:
     if not auth.DATABASE_URL:
         return False
     if not auth._ensure_database():
-        # Authentication already marked the database unavailable. Do not call
-        # _connect() again and turn an otherwise safe local cleanup into a 500.
         return False
     try:
         with auth._connect() as conn:
@@ -126,3 +124,14 @@ def delete_user_data(email: str, session_store: Any = None) -> dict[str, Any]:
             raise RuntimeError("Nova could not safely remove persisted conversation data.") from error
 
     return deleted
+
+
+# Account-security routes are registered here because this module is imported by
+# the production application before its middleware is installed. The production
+# middleware therefore protects the authenticated endpoints normally.
+try:
+    from backend import api as _api
+    from backend.account_security import register_routes as _register_security_routes
+    _register_security_routes(_api.app)
+except Exception as _security_boot_error:
+    print(f"[Nova account security] route registration deferred: {_security_boot_error}", flush=True)
