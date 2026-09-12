@@ -1,0 +1,58 @@
+name: Nova UI finalization checks
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  finalize:
+    name: Final UI integrity checks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm install --no-audit --no-fund
+
+      - name: Check production entry order
+        run: |
+          test -f frontend/src/production-entry.jsx
+          python - <<'PY'
+          from pathlib import Path
+          source = Path('frontend/src/production-entry.jsx').read_text(encoding='utf-8')
+          required = [
+              'import "./production-api.js";',
+              'import "./uiLanguageRuntime.js";',
+              'import "./uiLanguageReloadBridge.js";',
+              'import "./main.jsx";',
+          ]
+          positions = []
+          for item in required:
+              position = source.find(item)
+              if position < 0:
+                  raise SystemExit(f'Missing production entry import: {item}')
+              positions.append(position)
+          if positions != sorted(positions):
+              raise SystemExit('Production entry import order is invalid')
+          print('Production entry order is valid')
+          PY
+
+      - name: Build final production bundle
+        working-directory: frontend
+        run: npm run build
+
+      - name: Guard against workflow self-modification
+        run: |
+          ! grep -R -nE "git push|git commit|contents:[[:space:]]*write" .github/workflows/nova-ui-finalize.yml
