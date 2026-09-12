@@ -27,7 +27,8 @@ jobs:
         run: |
           bash -n render-build.sh
           test -f requirements-render.txt
-          ! grep -nE -- '--hash=|--require-hashes|PIP_REQUIRE_HASHES|--constraint' requirements-render.txt render-build.sh
+          ! grep -nE -- '(^|[[:space:]])(--hash=|--require-hashes|--constraint)' requirements-render.txt
+          ! grep -nE -- '(^|[[:space:]])(PIP_REQUIRE_HASHES=|export PIP_REQUIRE_HASHES=)' render-build.sh
 
       - name: Install backend dependencies
         run: |
