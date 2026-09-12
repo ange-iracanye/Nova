@@ -9,6 +9,12 @@ from backend import api
 
 router = APIRouter(prefix="/v1", tags=["Production V1"])
 
+# ConversationManager now keeps its data in memory and refreshes only when the
+# backing file changes. Reusing one instance removes a full JSON file load from
+# every conversation request while preserving persistence and external-change
+# detection.
+_CONVERSATION_MANAGER = ConversationManager(persist=True)
+
 class RenameRequest(BaseModel):
     title: str = Field(..., min_length=1, max_length=200)
 
@@ -19,7 +25,7 @@ def _email(request: Request) -> str:
     if not email: raise HTTPException(status_code=401, detail="A valid Nova session is required.")
     return email
 
-def _manager() -> ConversationManager: return ConversationManager(persist=True)
+def _manager() -> ConversationManager: return _CONVERSATION_MANAGER
 
 def _items(email: str) -> list[dict[str, Any]]:
     data = _manager().list(email)
@@ -124,6 +130,13 @@ def legacy_delete_conversation(request: Request, email: str, conversation_id: st
     if not _manager().delete(authenticated_email, conversation_id): raise HTTPException(status_code=404, detail="Conversation not found.")
     return {"success": True, "deleted": True}
 
+def _real_usage_metrics_fallback(email: str, conversations: list[dict[str, Any]]) -> int:
+    return sum(
+        sum(1 for message in (item.get("messages") if isinstance(item.get("messages"), list) else [])
+            if isinstance(message, dict) and message.get("role") == "user")
+        for item in conversations
+    )
+
 @router.get("/dashboard")
 def dashboard(request: Request):
     email = _email(request)
@@ -137,5 +150,5 @@ def dashboard(request: Request):
     except Exception as error:
         print(f"[V1 DASHBOARD] primary dashboard builder failed: {type(error).__name__}: {error}", flush=True)
     conversations = _items(email)[:50]
-    question_count = sum(sum(1 for message in (item.get("messages") if isinstance(item.get("messages"), list) else []) if isinstance(message, dict) and message.get("role") == "user") for item in conversations)
+    question_count = _real_usage_metrics_fallback(email, conversations)
     return {"success": True, "student": {"email": email}, "stats": {"questions": question_count, "total_subjects": 0, "total_topics": 0, "study_attempts": 0, "correct_answers": 0, "wrong_answers": 0, "total_answers": 0, "overall_mastery": 0, "average_confidence": 0, "memory_count": 0, "conversation_count": len(conversations), "understanding_attempts": 0, "accuracy": 0}, "subjects": {}, "knowledge_map": {}, "knowledge_subjects": [], "progress": {}, "understanding": {}, "difficulty": {"easy": 0, "medium": 0, "hard": 0}, "strengths": [], "weaknesses": [], "session": {"subject": "None", "topic": "None", "mode": "None", "score": 0}, "learning_graph": {"subjects": {}}, "recent_conversations": _items_for_recent(email)}
