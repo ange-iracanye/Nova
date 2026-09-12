@@ -37,7 +37,7 @@ export default defineConfig(({ mode }) => {
             enforce: "post",
             transform(code, id) {
                 if (!id.endsWith("/src/components/CodeBlock.jsx")) return null;
-                let next = code.replace(/import\s*\{\s*codeToHtml\s*\}\s*from\s*[\"']shiki[\"'];?\s*/m, "");
+                let next = code.replace(/import\s*\{\s*codeToHtml\s*\}\s*from\s*["']shiki["'];?\s*/m, "");
                 next = next.replace(/\bcodeToHtml\s*\(/g, "(await import(\"shiki\")).codeToHtml(");
                 return next === code ? null : { code: next, map: null };
             },
