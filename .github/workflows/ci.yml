@@ -29,6 +29,8 @@ jobs:
           test -f requirements-render.txt
           ! grep -nE -- '(^|[[:space:]])(--hash=|--require-hashes|--constraint)' requirements-render.txt
           ! grep -nE -- '(^|[[:space:]])(PIP_REQUIRE_HASHES=|export PIP_REQUIRE_HASHES=)' render-build.sh
+          ! grep -nE -- '(^|[[:space:]])(PIP_CONSTRAINT=|export PIP_CONSTRAINT=)' render-build.sh
+          ! grep -nE -- '(^|[[:space:]])(PIP_CONFIG_FILE=|export PIP_CONFIG_FILE=)' render-build.sh
 
       - name: Install backend dependencies
         run: |
@@ -57,9 +59,11 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
 
       - name: Install dependencies
-        run: npm install --no-audit --no-fund
+        run: npm ci --no-audit --no-fund
 
       - name: Lint
         run: npm run lint
