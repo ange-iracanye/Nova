@@ -31,6 +31,17 @@ function getStoredEmail() {
     }
 }
 
+function getStoredSessionToken() {
+    try {
+        const raw = localStorage.getItem("nova_session");
+        if (!raw) return "";
+        const session = JSON.parse(raw);
+        return typeof session?.token === "string" ? session.token.trim() : "";
+    } catch {
+        return "";
+    }
+}
+
 function rewriteLegacyRoute(pathname) {
     const email = getStoredEmail();
     const encodedEmail = email ? encodeURIComponent(email) : "";
@@ -129,6 +140,14 @@ window.fetch = function novaProductionFetch(input, init = {}) {
     const headers = new Headers(input instanceof Request ? input.headers : undefined);
     if (init.headers) new Headers(init.headers).forEach((value, key) => headers.set(key, value));
 
+    // Keep the real session token explicit on cross-origin API calls. This makes
+    // authenticated requests independent of third-party cookie behavior and also
+    // lets older sessions recover even when the browser did not retain the cookie.
+    const sessionToken = getStoredSessionToken();
+    if (sessionToken && !headers.has("X-Nova-Session") && !headers.has("Authorization")) {
+        headers.set("X-Nova-Session", sessionToken);
+    }
+
     const requestInit = { ...init, headers, credentials: init.credentials || "include" };
     let requestInput = rewritten;
     if (input instanceof Request) {
@@ -137,6 +156,14 @@ window.fetch = function novaProductionFetch(input, init = {}) {
 
     const promise = ORIGINAL_FETCH(requestInput, requestInit);
     promise.then(response => {
+        if (response.status === 401) {
+            // A stale local token must not leave the UI looking authenticated forever.
+            // Clear only the token, not the user profile, so the app can explain the
+            // session problem and the user can sign in again without losing preferences.
+            try {
+                localStorage.removeItem("nova_session");
+            } catch {}
+        }
         if (response.status === 404) {
             try { recoverStaleConversation(new URL(rewritten, window.location.origin).pathname); } catch {}
         }
