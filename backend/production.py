@@ -76,14 +76,14 @@ api.app.add_middleware(
 
 ENABLE_DOCS = os.getenv("NOVA_ENABLE_DOCS", "false" if IS_PRODUCTION else "true").lower() == "true"
 ENABLE_DEMO = os.getenv("NOVA_ENABLE_DEMO", "false" if IS_PRODUCTION else "true").lower() == "true"
-PUBLIC_PATHS = {"/", "/api", "/health", "/ready", "/register", "/login", "/auth/session", "/auth/logout"}
+PUBLIC_PATHS = {
+    "/", "/api", "/health", "/ready", "/register", "/login", "/auth/session", "/auth/logout",
+    "/auth/verify-email", "/auth/forgot-password", "/auth/reset-password", "/auth/confirm-email-change",
+}
 if ENABLE_DOCS:
     PUBLIC_PATHS.update({"/docs", "/redoc", "/openapi.json"})
 if ENABLE_DEMO:
-    PUBLIC_PATHS.update({
-        "/demo/session",
-        "/demo/chat/stream",
-    })
+    PUBLIC_PATHS.update({"/demo/session", "/demo/chat/stream"})
 PUBLIC_PREFIXES = ("/demo/session/", "/demo/chat/") if ENABLE_DEMO else ()
 COOKIE_NAME = os.getenv("NOVA_SESSION_COOKIE", "nova_session")
 COOKIE_SAMESITE = os.getenv("NOVA_COOKIE_SAMESITE", "lax").lower()
@@ -157,15 +157,7 @@ async def _set_login_cookie(response: Response) -> Response:
         token = None
     if not (isinstance(token, str) and token):
         return response
-    response.set_cookie(
-        key=COOKIE_NAME,
-        value=token,
-        max_age=7 * 24 * 60 * 60,
-        httponly=True,
-        secure=IS_PRODUCTION,
-        samesite=COOKIE_SAMESITE,
-        path="/",
-    )
+    response.set_cookie(key=COOKIE_NAME, value=token, max_age=7 * 24 * 60 * 60, httponly=True, secure=IS_PRODUCTION, samesite=COOKIE_SAMESITE, path="/")
     return response
 
 
