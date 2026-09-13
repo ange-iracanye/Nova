@@ -5,6 +5,7 @@ import {
   Palette, Search, Settings2, Sparkles, UserCircle, X, Zap
 } from "lucide-react";
 import "../styles/novaExperience.css";
+import "../styles/novaCinematicPlus.css";
 
 const EXCLUDED = new Set(["/", "/chat", "/analytics"]);
 
@@ -107,9 +108,7 @@ export default function NovaExperience() {
     };
   }, [enhanced, paletteOpen, filtered, activeIndex, navigate]);
 
-  useEffect(() => {
-    setActiveIndex(0);
-  }, [query, paletteOpen]);
+  useEffect(() => { setActiveIndex(0); }, [query, paletteOpen]);
 
   useEffect(() => {
     if (!enhanced) return undefined;
