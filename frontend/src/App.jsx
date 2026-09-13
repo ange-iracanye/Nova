@@ -1,6 +1,7 @@
 import { Suspense, lazy, useMemo, useState, useEffect } from "react";
 import { BrowserRouter, Navigate, Route, Routes, useLocation, useNavigate } from "react-router-dom";
 import { BarChart3, Home as HomeIcon, LoaderCircle, UserCircle } from "lucide-react";
+import NovaExperience from "./components/NovaExperience";
 
 const Home = lazy(() => import("./pages/Home"));
 const DemoHome = lazy(() => import("./pages/DemoHome"));
@@ -161,4 +162,4 @@ function AppRoutes() {
         <Route path="*" element={<NotFound/>} />
     </Routes></Suspense>;
 }
-export default function App() { const locationKey = useMemo(() => window.location.pathname, []); return <BrowserRouter key={locationKey}><ThemeRuntime/><AppRoutes/></BrowserRouter>; }
+export default function App() { const locationKey = useMemo(() => window.location.pathname, []); return <BrowserRouter key={locationKey}><ThemeRuntime/><NovaExperience/><AppRoutes/></BrowserRouter>; }
