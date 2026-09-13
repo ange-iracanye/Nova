@@ -86,15 +86,7 @@ def _remove_sessions(email: str, session_store: Any) -> int:
 def delete_user_data(email: str, session_store: Any = None) -> dict[str, Any]:
     """Delete all user-owned application data currently persisted by Nova V1."""
     normalized = _normalize_email(email)
-    deleted: dict[str, Any] = {
-        "account": False,
-        "sessions": 0,
-        "memory": False,
-        "conversations": False,
-        "settings": False,
-        "legacy_local_account": False,
-    }
-
+    deleted: dict[str, Any] = {"account": False, "sessions": 0, "memory": False, "conversations": False, "settings": False, "legacy_local_account": False}
     db_deleted = _remove_database_user(normalized)
     local_deleted = _remove_local_user(normalized)
     deleted["account"] = db_deleted or local_deleted
@@ -122,7 +114,6 @@ def delete_user_data(email: str, session_store: Any = None) -> dict[str, Any]:
                 deleted["conversations"] = True
         except (OSError, ValueError) as error:
             raise RuntimeError("Nova could not safely remove persisted conversation data.") from error
-
     return deleted
 
 
@@ -133,5 +124,18 @@ try:
     from backend import api as _api
     from backend.account_security import register_routes as _register_security_routes
     _register_security_routes(_api.app)
+
+    @_api.app.post("/auth/delete-account", tags=["Authentication"])
+    async def delete_account(request: Any):
+        session = _api.get_auth_session(request)
+        if not session:
+            from fastapi.responses import JSONResponse
+            return JSONResponse(status_code=401, content={"success": False, "error": {"code": "NOT_AUTHENTICATED", "message": "A valid Nova session is required."}})
+        try:
+            result = delete_user_data(session["email"])
+            return {"success": True, "account_deleted": True, "deleted": result}
+        except Exception as error:
+            from fastapi.responses import JSONResponse
+            return JSONResponse(status_code=500, content={"success": False, "error": {"code": "ACCOUNT_DELETE_FAILED", "message": str(error)}})
 except Exception as _security_boot_error:
     print(f"[Nova account security] route registration deferred: {_security_boot_error}", flush=True)
