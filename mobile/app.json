@@ -1,0 +1,15 @@
+{
+  "expo": {
+    "name": "Nova AI",
+    "slug": "nova-ai",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "dark",
+    "scheme": "nova",
+    "newArchEnabled": true,
+    "ios": { "supportsTablet": true, "bundleIdentifier": "ai.nova.tutor" },
+    "android": { "package": "ai.nova.tutor", "adaptiveIcon": { "backgroundColor": "#070b12" } },
+    "plugins": ["expo-secure-store"],
+    "extra": { "apiUrl": "https://nova-api-i07q.onrender.com" }
+  }
+}
