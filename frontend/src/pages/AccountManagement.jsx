@@ -1,98 +1,38 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, Check, ImagePlus, LogOut, Palette, RotateCcw, Shield, Sparkles, Trash2, User, X } from "lucide-react";
+import { ArrowLeft, Check, ImagePlus, LogOut, Palette, RotateCcw, Shield, Sparkles, Trash2, X } from "lucide-react";
 
 const API = "https://nova-api-i07q.onrender.com";
 const KEY = "nova_profile_preferences";
-const DEFAULTS = {
-  displayName: "",
-  avatar: "",
-  theme: "midnight",
-  accent: "cyan",
-  density: "comfortable",
-  fontSize: "medium",
-  animations: true,
-  reduceMotion: false,
-  rounded: true,
-  glow: true,
-};
-
+const DEFAULTS = { displayName: "", avatar: "", theme: "midnight", accent: "cyan", density: "comfortable", fontSize: "medium", animations: true, reduceMotion: false, rounded: true, glow: true };
 function read() { try { return { ...DEFAULTS, ...(JSON.parse(localStorage.getItem(KEY) || "{}") || {}) }; } catch { return { ...DEFAULTS }; } }
 function user() { try { return JSON.parse(localStorage.getItem("nova_user") || "null"); } catch { return null; } }
 function save(value) { try { localStorage.setItem(KEY, JSON.stringify(value)); window.dispatchEvent(new Event("nova-profile-changed")); } catch {} }
 function token() { try { const s = JSON.parse(localStorage.getItem("nova_session") || "{}"); return s?.token || ""; } catch { return ""; } }
-
-const themes = [
-  ["midnight", "Midnight", "#07101f"], ["obsidian", "Obsidian", "#0c0b12"], ["aurora", "Aurora", "#071817"], ["paper", "Paper", "#f4f6fb"]
-];
+const themes = [["midnight", "Midnight"], ["obsidian", "Obsidian"], ["aurora", "Aurora"], ["paper", "Paper"]];
 const accents = [["cyan", "Cyan", "#22d3ee"], ["violet", "Violet", "#a78bfa"], ["blue", "Blue", "#60a5fa"], ["emerald", "Emerald", "#34d399"], ["rose", "Rose", "#fb7185"], ["amber", "Amber", "#fbbf24"]];
 
 export default function AccountManagement() {
-  const navigate = useNavigate();
-  const [profile, setProfile] = useState(read);
-  const [currentUser, setCurrentUser] = useState(user);
-  const [saved, setSaved] = useState(false);
-  const [message, setMessage] = useState("");
-  const [error, setError] = useState("");
-  const [deleting, setDeleting] = useState(false);
-
+  const navigate = useNavigate(); const [profile, setProfile] = useState(read); const [currentUser, setCurrentUser] = useState(user); const [saved, setSaved] = useState(false); const [message, setMessage] = useState(""); const [error, setError] = useState(""); const [deleting, setDeleting] = useState(false);
   useEffect(() => { setCurrentUser(user()); }, []);
-  const email = currentUser?.email || "";
-  const initials = useMemo(() => (profile.displayName || email.split("@")[0] || "N").slice(0, 2).toUpperCase(), [profile.displayName, email]);
+  const email = currentUser?.email || ""; const initials = useMemo(() => (profile.displayName || email.split("@")[0] || "N").slice(0, 2).toUpperCase(), [profile.displayName, email]);
   const update = (key, value) => { const next = { ...profile, [key]: value }; setProfile(next); save(next); setSaved(true); setTimeout(() => setSaved(false), 1800); };
-
-  function avatarChange(e) {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    if (!file.type.startsWith("image/") || file.size > 2_000_000) { setError("Choose an image under 2 MB."); return; }
-    const reader = new FileReader();
-    reader.onload = () => update("avatar", String(reader.result || ""));
-    reader.readAsDataURL(file);
-  }
-
-  function logout() {
-    localStorage.removeItem("nova_session"); localStorage.removeItem("nova_user");
-    window.dispatchEvent(new Event("nova-auth-changed")); navigate("/login", { replace: true });
-  }
-
-  async function deleteAccount() {
-    if (!window.confirm("Delete your Nova account and its stored application data? This cannot be undone.")) return;
-    setDeleting(true); setError("");
-    try {
-      const response = await fetch(`${API}/auth/delete-account`, { method: "POST", credentials: "include", headers: { Accept: "application/json", "Content-Type": "application/json", ...(token() ? { Authorization: `Bearer ${token()}` } : {}) }, body: JSON.stringify({}) });
-      const data = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(data?.error?.message || data?.message || `Delete failed (HTTP ${response.status}).`);
-      localStorage.removeItem("nova_session"); localStorage.removeItem("nova_user"); localStorage.removeItem("nova_settings"); localStorage.removeItem(KEY);
-      window.dispatchEvent(new Event("nova-auth-changed")); navigate("/", { replace: true });
-    } catch (err) { setError(err?.message || "Nova could not delete the account."); }
-    finally { setDeleting(false); }
-  }
-
+  function avatarChange(e) { const file = e.target.files?.[0]; if (!file) return; if (!file.type.startsWith("image/") || file.size > 2_000_000) { setError("Choose an image under 2 MB."); return; } const reader = new FileReader(); reader.onload = () => update("avatar", String(reader.result || "")); reader.readAsDataURL(file); }
+  function logout() { localStorage.removeItem("nova_session"); localStorage.removeItem("nova_user"); window.dispatchEvent(new Event("nova-auth-changed")); navigate("/login", { replace: true }); }
+  async function deleteAccount() { if (!window.confirm("Delete your Nova account and its stored application data? This cannot be undone.")) return; setDeleting(true); setError(""); try { const response = await fetch(`${API}/auth/delete-account`, { method: "POST", credentials: "include", headers: { Accept: "application/json", "Content-Type": "application/json", ...(token() ? { Authorization: `Bearer ${token()}` } : {}) }, body: JSON.stringify({}) }); const data = await response.json().catch(() => ({})); if (!response.ok) throw new Error(data?.error?.message || data?.message || `Delete failed (HTTP ${response.status}).`); localStorage.removeItem("nova_session"); localStorage.removeItem("nova_user"); localStorage.removeItem("nova_settings"); localStorage.removeItem(KEY); window.dispatchEvent(new Event("nova-auth-changed")); navigate("/", { replace: true }); } catch (err) { setError(err?.message || "Nova could not delete the account."); } finally { setDeleting(false); } }
   function resetAppearance() { const next = { ...DEFAULTS, displayName: profile.displayName, avatar: profile.avatar }; setProfile(next); save(next); setMessage("Appearance restored to Nova defaults."); setTimeout(() => setMessage(""), 2200); }
-
-  return <main className={`min-h-screen ${profile.theme === "paper" ? "bg-[#f4f6fb] text-slate-950" : "bg-[#070b12] text-white"} overflow-hidden`}>
-    <div className="pointer-events-none fixed inset-0"><div className="absolute -left-32 -top-32 h-96 w-96 rounded-full bg-cyan-500/[.09] blur-[120px] animate-pulse"/><div className="absolute -right-32 top-1/3 h-96 w-96 rounded-full bg-violet-500/[.08] blur-[120px] animate-pulse"/></div>
+  return <main className={`min-h-screen ${profile.theme === "paper" ? "bg-[#f4f6fb] text-slate-950" : "bg-[#070b12] text-white"} overflow-hidden`}><div className="pointer-events-none fixed inset-0"><div className="absolute -left-32 -top-32 h-96 w-96 rounded-full bg-cyan-500/[.09] blur-[120px] animate-pulse"/><div className="absolute -right-32 top-1/3 h-96 w-96 rounded-full bg-violet-500/[.08] blur-[120px] animate-pulse"/></div>
     <header className="sticky top-0 z-40 border-b border-white/10 bg-black/20 backdrop-blur-2xl"><div className="mx-auto flex max-w-6xl items-center justify-between px-5 py-4"><button onClick={() => navigate("/settings")} className="flex items-center gap-2 text-slate-400 transition hover:text-white"><ArrowLeft size={17}/> Settings</button><div className="flex items-center gap-2 text-sm font-semibold"><Sparkles size={17} className="text-cyan-400"/> Account & personalization</div><button onClick={logout} className="flex items-center gap-2 rounded-xl border border-white/10 px-3 py-2 text-xs text-slate-400 transition hover:border-red-400/30 hover:text-red-300"><LogOut size={15}/> Log out</button></div></header>
-
     <div className="relative z-10 mx-auto max-w-6xl px-5 py-10 pb-20">
       <section className="mb-8 rounded-[2rem] border border-white/10 bg-white/[.04] p-6 shadow-2xl backdrop-blur-xl md:p-8"><div className="flex flex-col gap-6 md:flex-row md:items-center"><div className="relative shrink-0"><div className="flex h-28 w-28 items-center justify-center overflow-hidden rounded-[2rem] border border-white/10 bg-gradient-to-br from-cyan-400/20 to-violet-500/20 text-3xl font-bold text-cyan-200 shadow-2xl">{profile.avatar ? <img src={profile.avatar} alt="Profile" className="h-full w-full object-cover"/> : initials}</div><label className="absolute -bottom-2 -right-2 flex h-10 w-10 cursor-pointer items-center justify-center rounded-xl border border-white/10 bg-slate-900 text-cyan-300 shadow-xl transition hover:scale-105"><ImagePlus size={17}/><input type="file" accept="image/*" onChange={avatarChange} className="hidden"/></label></div><div className="min-w-0 flex-1"><div className="text-xs font-semibold uppercase tracking-[.2em] text-cyan-400">Your Nova identity</div><h1 className="mt-2 text-3xl font-bold tracking-tight md:text-5xl">Make Nova feel like yours.</h1><p className="mt-3 max-w-2xl text-sm leading-6 text-slate-400">Personalize your profile, visual experience, motion, density and account controls. Changes apply instantly on this device.</p><div className="mt-5 flex flex-wrap gap-2"><span className="rounded-full border border-white/10 bg-white/[.04] px-3 py-1.5 text-xs text-slate-400">{email || "Account"}</span>{saved && <span className="flex items-center gap-1 rounded-full border border-emerald-400/20 bg-emerald-400/10 px-3 py-1.5 text-xs text-emerald-300"><Check size={13}/> Saved instantly</span>}</div></div></div></section>
-
-      <div className="grid gap-6 lg:grid-cols-3">
-        <section className="rounded-3xl border border-white/10 bg-white/[.035] p-6 lg:col-span-2"><SectionIcon icon={<User size={18}/>} title="Profile" subtitle="How Nova identifies you in the interface."/><label className="mt-6 block text-sm font-medium text-slate-200">Display name</label><input value={profile.displayName} onChange={e => update("displayName", e.target.value.slice(0, 80))} placeholder={email.split("@")[0] || "Your name"} className="mt-2 w-full rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-white outline-none transition focus:border-cyan-400/50"/><p className="mt-2 text-xs text-slate-600">Your existing learning settings remain intact. This is your interface identity.</p><div className="mt-7 rounded-2xl border border-white/10 bg-black/10 p-4"><div className="flex items-center justify-between gap-4"><div><div className="text-sm font-semibold">Profile picture</div><div className="mt-1 text-xs text-slate-500">Upload a JPG, PNG, WebP or similar image up to 2 MB.</div></div><label className="cursor-pointer rounded-xl border border-cyan-400/20 bg-cyan-400/10 px-3 py-2 text-xs font-semibold text-cyan-300">Change<input type="file" accept="image/*" onChange={avatarChange} className="hidden"/></label></div></div></section>
-
-        <section className="rounded-3xl border border-white/10 bg-white/[.035] p-6"><SectionIcon icon={<Palette size={18}/>} title="Accent" subtitle="Choose Nova's energy."/><div className="mt-5 grid grid-cols-3 gap-2">{accents.map(([key, name, color]) => <button key={key} onClick={() => update("accent", key)} title={name} className={`group rounded-2xl border p-3 transition hover:-translate-y-0.5 ${profile.accent === key ? "border-white/30 bg-white/10" : "border-white/5 bg-black/10"}`}><span className="mx-auto block h-7 w-7 rounded-full shadow-lg" style={{ background: color }}/><span className="mt-2 block text-[10px] text-slate-500">{name}</span></button>)}</div></section>
-      </div>
-
-      <section className="mt-6 rounded-3xl border border-white/10 bg-white/[.035] p-6"><SectionIcon icon={<Sparkles size={18}/>} title="Visual experience" subtitle="The controls that make Nova look and behave the way you prefer."/><div className="mt-6 grid gap-6 md:grid-cols-2"><Choice title="Theme" value={profile.theme} options={themes.map(([key,name]) => [key,name])} onChange={v => update("theme", v)}/><Choice title="Interface density" value={profile.density} options={[["comfortable","Comfortable"],["compact","Compact"],["spacious","Spacious"]]} onChange={v => update("density", v)}/><Choice title="Text size" value={profile.fontSize} options={[["small","Small"],["medium","Medium"],["large","Large"]]} onChange={v => update("fontSize", v)}/><div className="space-y-3"><Toggle label="Animations" description="Use Nova's transitions, animated surfaces and micro-interactions." checked={profile.animations} onChange={v => update("animations", v)}/><Toggle label="Reduce motion" description="Prefer calmer transitions and fewer animated effects." checked={profile.reduceMotion} onChange={v => update("reduceMotion", v)}/><Toggle label="Soft glow" description="Keep the ambient light effects around important surfaces." checked={profile.glow} onChange={v => update("glow", v)}/><Toggle label="Rounded surfaces" description="Use the softer card and button geometry." checked={profile.rounded} onChange={v => update("rounded", v)}/></div></div></section>
-
+      <div className="grid gap-6 lg:grid-cols-3"><section className="rounded-3xl border border-white/10 bg-white/[.035] p-6 lg:col-span-2"><SectionIcon icon={<Sparkles size={18}/>} title="Profile" subtitle="How Nova identifies you in the interface."/><label className="mt-6 block text-sm font-medium text-slate-200">Display name</label><input value={profile.displayName} onChange={e => update("displayName", e.target.value.slice(0, 80))} placeholder={email.split("@")[0] || "Your name"} className="mt-2 w-full rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-white outline-none transition focus:border-cyan-400/50"/><p className="mt-2 text-xs text-slate-600">Your existing learning settings remain intact. This is your interface identity.</p><div className="mt-7 rounded-2xl border border-white/10 bg-black/10 p-4"><div className="flex items-center justify-between gap-4"><div><div className="text-sm font-semibold">Profile picture</div><div className="mt-1 text-xs text-slate-500">Upload a JPG, PNG, WebP or similar image up to 2 MB.</div></div><label className="cursor-pointer rounded-xl border border-cyan-400/20 bg-cyan-400/10 px-3 py-2 text-xs font-semibold text-cyan-300">Change<input type="file" accept="image/*" onChange={avatarChange} className="hidden"/></label></div></div></section><section className="rounded-3xl border border-white/10 bg-white/[.035] p-6"><SectionIcon icon={<Palette size={18}/>} title="Accent" subtitle="Choose Nova's energy."/><div className="mt-5 grid grid-cols-3 gap-2">{accents.map(([key, name, color]) => <button key={key} onClick={() => update("accent", key)} title={name} className={`group rounded-2xl border p-3 transition hover:-translate-y-0.5 ${profile.accent === key ? "border-white/30 bg-white/10" : "border-white/5 bg-black/10"}`}><span className="mx-auto block h-7 w-7 rounded-full shadow-lg" style={{ background: color }}/><span className="mt-2 block text-[10px] text-slate-500">{name}</span></button>)}</div></section></div>
+      <section className="mt-6 rounded-3xl border border-white/10 bg-white/[.035] p-6"><SectionIcon icon={<Sparkles size={18}/>} title="Visual experience" subtitle="The controls that make Nova look and behave the way you prefer."/><div className="mt-6 grid gap-6 md:grid-cols-2"><Choice title="Theme" value={profile.theme} options={themes} onChange={v => update("theme", v)}/><Choice title="Interface density" value={profile.density} options={[["comfortable","Comfortable"],["compact","Compact"],["spacious","Spacious"]]} onChange={v => update("density", v)}/><Choice title="Text size" value={profile.fontSize} options={[["small","Small"],["medium","Medium"],["large","Large"]]} onChange={v => update("fontSize", v)}/><div className="space-y-3"><Toggle label="Animations" description="Use Nova's transitions, animated surfaces and micro-interactions." checked={profile.animations} onChange={v => update("animations", v)}/><Toggle label="Reduce motion" description="Prefer calmer transitions and fewer animated effects." checked={profile.reduceMotion} onChange={v => update("reduceMotion", v)}/><Toggle label="Soft glow" description="Keep the ambient light effects around important surfaces." checked={profile.glow} onChange={v => update("glow", v)}/><Toggle label="Rounded surfaces" description="Use the softer card and button geometry." checked={profile.rounded} onChange={v => update("rounded", v)}/></div></div></section>
       <section className="mt-6 rounded-3xl border border-white/10 bg-white/[.035] p-6"><SectionIcon icon={<Shield size={18}/>} title="Security & account" subtitle="The serious buttons live down here, where they cannot be pressed accidentally."/><div className="mt-5 grid gap-3 md:grid-cols-3"><button onClick={() => navigate("/account-security")} className="rounded-2xl border border-white/10 bg-white/[.025] p-4 text-left transition hover:border-cyan-400/20 hover:bg-white/[.05]"><div className="text-sm font-semibold">Security center</div><div className="mt-1 text-xs text-slate-500">Password, email verification and email changes.</div></button><button onClick={logout} className="flex items-start gap-3 rounded-2xl border border-white/10 bg-white/[.025] p-4 text-left transition hover:border-amber-400/20"><LogOut size={17} className="mt-0.5 text-amber-300"/><div><div className="text-sm font-semibold">Log out</div><div className="mt-1 text-xs text-slate-500">End this browser session.</div></div></button><button onClick={deleteAccount} disabled={deleting} className="flex items-start gap-3 rounded-2xl border border-red-500/20 bg-red-500/[.035] p-4 text-left transition hover:bg-red-500/[.07] disabled:opacity-50"><Trash2 size={17} className="mt-0.5 text-red-300"/><div><div className="text-sm font-semibold text-red-200">{deleting ? "Deleting…" : "Delete account"}</div><div className="mt-1 text-xs text-red-300/50">Permanently remove your Nova account data.</div></div></button></div></section>
-
       {(error || message) && <div className={`mt-6 flex items-center gap-3 rounded-2xl border p-4 text-sm ${error ? "border-red-400/20 bg-red-400/10 text-red-200" : "border-emerald-400/20 bg-emerald-400/10 text-emerald-200"}`}>{error ? <X size={17}/> : <Check size={17}/>}<span>{error || message}</span><button onClick={() => { setError(""); setMessage(""); }} className="ml-auto"><X size={15}/></button></div>}
       <div className="mt-6 flex justify-end"><button onClick={resetAppearance} className="flex items-center gap-2 rounded-xl border border-white/10 px-4 py-2.5 text-xs text-slate-400 transition hover:text-white"><RotateCcw size={14}/> Restore appearance defaults</button></div>
     </div>
   </main>;
 }
-
 function SectionIcon({ icon, title, subtitle }) { return <div className="flex items-start gap-3"><div className="flex h-9 w-9 items-center justify-center rounded-xl border border-cyan-400/10 bg-cyan-400/10 text-cyan-300">{icon}</div><div><h2 className="text-lg font-semibold">{title}</h2><p className="mt-1 text-xs leading-5 text-slate-500">{subtitle}</p></div></div>; }
 function Choice({ title, value, options, onChange }) { return <div><div className="mb-3 text-sm font-semibold">{title}</div><div className="grid gap-2">{options.map(([key,name]) => <button key={key} onClick={() => onChange(key)} className={`flex items-center justify-between rounded-2xl border px-4 py-3 text-left text-sm transition ${value === key ? "border-cyan-400/30 bg-cyan-400/10 text-cyan-200" : "border-white/7 bg-black/10 text-slate-400 hover:bg-white/[.04]"}`}><span>{name}</span>{value === key && <Check size={15}/>}</button>)}</div></div>; }
 function Toggle({ label, description, checked, onChange }) { return <button onClick={() => onChange(!checked)} className="flex w-full items-center justify-between gap-4 rounded-2xl border border-white/7 bg-black/10 p-4 text-left transition hover:bg-white/[.04]"><div><div className="text-sm font-medium">{label}</div><div className="mt-1 text-xs leading-5 text-slate-600">{description}</div></div><span className={`relative h-7 w-12 shrink-0 rounded-full p-1 transition ${checked ? "bg-cyan-500" : "bg-slate-700"}`}><span className={`block h-5 w-5 rounded-full bg-white transition-transform ${checked ? "translate-x-5" : ""}`}/></span></button>; }
