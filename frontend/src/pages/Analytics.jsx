@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { ArrowLeft, BarChart3, CalendarDays, Clock3, Globe2, MessageSquare, RefreshCw, Route as RouteIcon, Sparkles, TrendingUp, Users, Zap } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 
@@ -63,9 +63,8 @@ export default function Analytics() {
   const maxRoute = Math.max(1, ...routes.map(item => Number(item.count || 0)));
   const busiestHour = data?.peak_hour;
   const busiestDay = data?.peak_day;
-  const active = Number(data?.active_month || 0);
   const registered = Number(data?.registered_users || 0);
-  const adoption = registered ? Math.round(active / registered * 100) : 0;
+  const adoption = registered ? Math.round(Number(data?.active_month || 0) / registered * 100) : 0;
   const weekdayNames = ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"];
   const periodStart = daily[0]?.date;
   const periodEnd = daily[daily.length - 1]?.date;
