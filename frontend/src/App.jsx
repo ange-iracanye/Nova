@@ -1,6 +1,6 @@
 import { Suspense, lazy, useMemo, useState, useEffect } from "react";
 import { BrowserRouter, Navigate, Route, Routes, useLocation, useNavigate } from "react-router-dom";
-import { BarChart3, Home as HomeIcon, LoaderCircle } from "lucide-react";
+import { BarChart3, Home as HomeIcon, LoaderCircle, Palette, UserCircle } from "lucide-react";
 
 const Home = lazy(() => import("./pages/Home"));
 const DemoHome = lazy(() => import("./pages/DemoHome"));
@@ -15,6 +15,7 @@ const NotFound = lazy(() => import("./pages/NotFound"));
 const Capabilities = lazy(() => import("./pages/Capabilities"));
 const AboutNova = lazy(() => import("./pages/AboutNova"));
 const AccountSecurity = lazy(() => import("./pages/AccountSecurity"));
+const AccountManagement = lazy(() => import("./pages/AccountManagement"));
 const ForgotPassword = lazy(() => import("./pages/ForgotPassword"));
 const ResetPassword = lazy(() => import("./pages/ResetPassword"));
 const VerifyEmail = lazy(() => import("./pages/VerifyEmail"));
@@ -60,8 +61,35 @@ function installApiCompatibility() {
         return response;
     };
 }
-
 installApiCompatibility();
+
+const PROFILE_KEY = "nova_profile_preferences";
+function readProfile() { try { return JSON.parse(localStorage.getItem(PROFILE_KEY) || "{}") || {}; } catch { return {}; } }
+function applyProfileRuntime(profile) {
+    const root = document.documentElement;
+    const theme = profile.theme || "midnight";
+    const accent = profile.accent || "cyan";
+    const colors = { cyan: "#22d3ee", violet: "#a78bfa", blue: "#60a5fa", emerald: "#34d399", rose: "#fb7185", amber: "#fbbf24" };
+    root.dataset.novaTheme = theme;
+    root.dataset.novaAccent = accent;
+    root.style.setProperty("--nova-accent", colors[accent] || colors.cyan);
+    root.style.setProperty("--nova-font-scale", profile.fontSize === "small" ? "0.94" : profile.fontSize === "large" ? "1.06" : "1");
+    root.style.setProperty("--nova-radius", profile.rounded === false ? "0.75rem" : "1.25rem");
+    root.classList.toggle("nova-reduce-motion", profile.reduceMotion === true || profile.animations === false);
+    root.classList.toggle("nova-no-glow", profile.glow === false);
+    root.classList.toggle("nova-compact", profile.density === "compact");
+    root.classList.toggle("nova-spacious", profile.density === "spacious");
+}
+function ThemeRuntime() {
+    useEffect(() => {
+        const sync = () => applyProfileRuntime(readProfile());
+        sync();
+        window.addEventListener("nova-profile-changed", sync);
+        window.addEventListener("storage", sync);
+        return () => { window.removeEventListener("nova-profile-changed", sync); window.removeEventListener("storage", sync); };
+    }, []);
+    return null;
+}
 
 function useAuthState() {
     const [user, setUser] = useState(readUser);
@@ -94,6 +122,10 @@ function AnalyticsShortcut() {
     if (!allowed) return null;
     return <button onClick={() => navigate("/analytics")} title="Nova Analytics" className="fixed bottom-5 right-5 z-50 flex items-center gap-2 rounded-2xl border border-sky-400/20 bg-[#0b1322]/95 px-4 py-3 text-xs font-semibold text-sky-300 shadow-2xl backdrop-blur-xl transition hover:-translate-y-0.5 hover:border-sky-400/40 hover:bg-[#101c30]"><BarChart3 size={16}/> Analytics</button>;
 }
+function AccountShortcut() {
+    const navigate = useNavigate();
+    return <button onClick={() => navigate("/account")} title="Account & personalization" className="fixed bottom-5 left-5 z-50 flex items-center gap-2 rounded-2xl border border-white/10 bg-[#0b1322]/95 px-4 py-3 text-xs font-semibold text-slate-300 shadow-2xl backdrop-blur-xl transition hover:-translate-y-0.5 hover:border-cyan-400/30 hover:text-white"><UserCircle size={16}/> Account</button>;
+}
 function AnalyticsGuard() {
     const [state, setState] = useState("checking");
     useEffect(() => {
@@ -109,6 +141,24 @@ function AnalyticsGuard() {
     return <Analytics/>;
 }
 function AuthHomeButton() { const navigate = useNavigate(); return <button type="button" onClick={() => navigate("/")} title="Back to Nova home" aria-label="Back to Nova home" className="fixed left-5 top-5 z-[100] flex items-center gap-2 rounded-xl border border-white/10 bg-slate-900/80 px-3.5 py-2.5 text-sm font-medium text-slate-300 shadow-xl backdrop-blur-xl transition hover:border-cyan-400/30 hover:bg-slate-800 hover:text-white"><HomeIcon size={16}/> Home</button>; }
-function AdaptiveRoute({ authenticated, demo, account }) { const user = useAuthState(); const location = useLocation(); useEffect(() => { const labels = { "/": user ? "Your learning space" : "Learn smarter", "/chat": "Learn", "/dashboard": "Dashboard", "/analytics": "Analytics", "/settings": "Settings", "/account-security": "Account security", "/about": "About Nova" }; document.title = `Nova AI · ${labels[location.pathname] || "Explore"}`; }, [location.pathname, user]); if (authenticated) return user ? authenticated : demo; return user ? account : demo; }
-function AppRoutes() { return <Suspense fallback={<PageLoader />}><Routes><Route path="/" element={<AdaptiveRoute demo={<DemoHome/>} account={<Home/>} />} /><Route path="/chat" element={<Chat/>} /><Route path="/settings" element={<AdaptiveRoute demo={<DemoSettings/>} account={<Settings/>} />} /><Route path="/dashboard" element={<AuthRedirect><><Dashboard/><AnalyticsShortcut/></></AuthRedirect>} /><Route path="/analytics" element={<AuthRedirect><AnalyticsGuard/></AuthRedirect>} /><Route path="/account-security" element={<AuthRedirect><AccountSecurity/></AuthRedirect>} /><Route path="/forgot-password" element={<ForgotPassword/>} /><Route path="/reset-password" element={<ResetPassword/>} /><Route path="/verify-email" element={<VerifyEmail/>} /><Route path="/capabilities/:capability" element={<Capabilities/>} /><Route path="/about" element={<AboutNova/>} /><Route path="/login" element={<><AuthHomeButton/><Login/></>} /><Route path="/register" element={<><AuthHomeButton/><Register/></>} /><Route path="*" element={<NotFound/>} /></Routes></Suspense>; }
-export default function App() { const locationKey = useMemo(() => window.location.pathname, []); return <BrowserRouter key={locationKey}><AppRoutes/></BrowserRouter>; }
+function AdaptiveRoute({ authenticated, demo, account }) { const user = useAuthState(); const location = useLocation(); useEffect(() => { const labels = { "/": user ? "Your learning space" : "Learn smarter", "/chat": "Learn", "/dashboard": "Dashboard", "/analytics": "Analytics", "/settings": "Settings", "/account": "Account", "/account-security": "Account security", "/about": "About Nova" }; document.title = `Nova AI · ${labels[location.pathname] || "Explore"}`; }, [location.pathname, user]); if (authenticated) return user ? authenticated : demo; return user ? account : demo; }
+function AppRoutes() {
+    return <Suspense fallback={<PageLoader />}><Routes>
+        <Route path="/" element={<AdaptiveRoute demo={<DemoHome/>} account={<Home/>} />} />
+        <Route path="/chat" element={<Chat/>} />
+        <Route path="/settings" element={<AdaptiveRoute demo={<DemoSettings/>} account={<><Settings/><AccountShortcut/></>} />} />
+        <Route path="/dashboard" element={<AuthRedirect><><Dashboard/><AccountShortcut/><AnalyticsShortcut/></></AuthRedirect>} />
+        <Route path="/analytics" element={<AuthRedirect><AnalyticsGuard/></AuthRedirect>} />
+        <Route path="/account" element={<AuthRedirect><AccountManagement/></AuthRedirect>} />
+        <Route path="/account-security" element={<AuthRedirect><AccountSecurity/></AuthRedirect>} />
+        <Route path="/forgot-password" element={<ForgotPassword/>} />
+        <Route path="/reset-password" element={<ResetPassword/>} />
+        <Route path="/verify-email" element={<VerifyEmail/>} />
+        <Route path="/capabilities/:capability" element={<Capabilities/>} />
+        <Route path="/about" element={<AboutNova/>} />
+        <Route path="/login" element={<><AuthHomeButton/><Login/></>} />
+        <Route path="/register" element={<><AuthHomeButton/><Register/></>} />
+        <Route path="*" element={<NotFound/>} />
+    </Routes></Suspense>;
+}
+export default function App() { const locationKey = useMemo(() => window.location.pathname, []); return <BrowserRouter key={locationKey}><ThemeRuntime/><AppRoutes/></BrowserRouter>; }
