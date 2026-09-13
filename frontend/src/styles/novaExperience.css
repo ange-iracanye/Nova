@@ -64,15 +64,33 @@ body.nova-enhanced::before {
 .nova-hud-dot { width: 5px; height: 5px; border-radius: 50%; background: #34d399; box-shadow: 0 0 12px #34d399; animation: nova-pulse 1.8s ease-in-out infinite; }
 .nova-hud-divider { width: 1px; height: 11px; background: rgba(255,255,255,.08); }
 
-body.nova-dashboard-mode main { position: relative; }
-body.nova-dashboard-mode main > div.relative { animation: nova-dashboard-in .7s cubic-bezier(.2,.8,.2,1) both; }
-body.nova-dashboard-mode main section { transition: transform .35s cubic-bezier(.2,.8,.2,1), border-color .3s ease, box-shadow .35s ease; }
-body.nova-dashboard-mode main section:hover { transform: translateY(-2px); border-color: color-mix(in srgb, var(--nova-accent) 15%, rgba(255,255,255,.08)); box-shadow: 0 25px 80px rgba(0,0,0,.2), 0 0 45px color-mix(in srgb, var(--nova-accent) 4%, transparent); }
-body.nova-dashboard-mode main button { transition: transform .25s cubic-bezier(.2,.8,.2,1), box-shadow .25s ease, background .25s ease, border-color .25s ease; }
-body.nova-dashboard-mode main button:hover { box-shadow: 0 12px 35px rgba(0,0,0,.2); }
-body.nova-enhanced input, body.nova-enhanced textarea, body.nova-enhanced select { transition: border-color .25s ease, box-shadow .25s ease, transform .2s ease; }
-body.nova-enhanced input:focus, body.nova-enhanced textarea:focus, body.nova-enhanced select:focus { border-color: color-mix(in srgb, var(--nova-accent) 45%, transparent) !important; box-shadow: 0 0 0 3px color-mix(in srgb, var(--nova-accent) 8%, transparent), 0 0 30px color-mix(in srgb, var(--nova-accent) 5%, transparent); }
+/* Cinematic polish for existing page structures. These rules are deliberately additive. */
+body.nova-enhanced main { isolation: isolate; }
+body.nova-enhanced main::before { content: ""; position: absolute; inset: 0; pointer-events: none; z-index: -1; background: radial-gradient(circle at 12% 8%, color-mix(in srgb, var(--nova-accent) 4%, transparent), transparent 28%), radial-gradient(circle at 88% 62%, rgba(139,92,246,.035), transparent 30%); }
+body.nova-enhanced main section { position: relative; overflow: hidden; }
+body.nova-enhanced main section::before { content: ""; position: absolute; inset: 0; pointer-events: none; opacity: 0; background: linear-gradient(115deg, transparent 0%, color-mix(in srgb, var(--nova-accent) 7%, transparent) 45%, transparent 62%); transform: translateX(-110%); transition: opacity .3s ease; }
+body.nova-enhanced main section:hover::before { opacity: 1; animation: nova-sheen 1.1s ease forwards; }
+body.nova-enhanced main section:focus-within { border-color: color-mix(in srgb, var(--nova-accent) 22%, rgba(255,255,255,.08)); box-shadow: 0 20px 70px rgba(0,0,0,.22), 0 0 35px color-mix(in srgb, var(--nova-accent) 5%, transparent); }
+body.nova-enhanced main button:not(:disabled):active { transform: scale(.97); }
+body.nova-enhanced main a { transition: color .2s ease, opacity .2s ease, transform .2s ease; }
+body.nova-enhanced main a:hover { transform: translateY(-1px); }
+body.nova-enhanced main input, body.nova-enhanced main textarea, body.nova-enhanced main select { background-clip: padding-box; }
 
+body.nova-dashboard-mode main section { transform-origin: 50% 80%; }
+body.nova-dashboard-mode main section:nth-of-type(2) { animation-delay: .06s; }
+body.nova-dashboard-mode main section:nth-of-type(3) { animation-delay: .12s; }
+body.nova-dashboard-mode main section:nth-of-type(4) { animation-delay: .18s; }
+body.nova-dashboard-mode main section:nth-of-type(5) { animation-delay: .24s; }
+body.nova-dashboard-mode .nova-command-orb { bottom: 88px; }
+body.nova-dashboard-mode .nova-quick-dock { bottom: 154px; }
+
+body.nova-enhanced [class*="rounded-3xl"] { --nova-card-lift: 0px; }
+body.nova-enhanced [class*="rounded-3xl"]:hover { --nova-card-lift: -2px; }
+body.nova-enhanced [class*="rounded-3xl"] { transition: transform .35s cubic-bezier(.2,.8,.2,1), box-shadow .35s ease, border-color .3s ease; }
+
+body.nova-dashboard-mode main { padding-bottom: 5rem; }
+
+body.nova-enhanced .nova-page-enter body { animation: none; }
 .nova-page-enter body { animation: nova-page-body .65s ease both; }
 .nova-reduce-motion *, .nova-reduce-motion *::before, .nova-reduce-motion *::after { animation-duration: .001ms !important; animation-iteration-count: 1 !important; transition-duration: .001ms !important; scroll-behavior: auto !important; }
 
@@ -86,11 +104,14 @@ body.nova-enhanced input:focus, body.nova-enhanced textarea:focus, body.nova-enh
 @keyframes nova-command-in { from { opacity: 0; transform: translateY(-15px) scale(.97); } to { opacity: 1; transform: translateY(0) scale(1); } }
 @keyframes nova-dashboard-in { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }
 @keyframes nova-page-body { from { opacity: .35; filter: saturate(.8); } to { opacity: 1; filter: saturate(1); } }
+@keyframes nova-sheen { from { transform: translateX(-110%); } to { transform: translateX(110%); } }
 
 @media (max-width: 640px) {
   .nova-dashboard-hud { top: 68px; transform: translateX(-50%) scale(.88); }
   .nova-command-orb { right: 14px; bottom: 14px; }
   .nova-quick-dock { right: 14px; bottom: 78px; }
+  body.nova-dashboard-mode .nova-command-orb { bottom: 78px; }
+  body.nova-dashboard-mode .nova-quick-dock { bottom: 144px; }
   .nova-command-backdrop { padding-top: 7vh; }
   .nova-command-footer { display: none; }
 }
