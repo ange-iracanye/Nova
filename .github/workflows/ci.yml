@@ -29,7 +29,6 @@ jobs:
           test -f requirements-render.txt
           ! grep -nE -- '(^|[[:space:]])(--hash=|--require-hashes|--constraint)' requirements-render.txt
           ! grep -nE -- '(^|[[:space:]])(PIP_CONSTRAINT=|export PIP_CONSTRAINT=)' render-build.sh
-          ! grep -nE -- '(^|[[:space:]])(PIP_CONFIG_FILE=|export PIP_CONFIG_FILE=)(?!/dev/null)' render-build.sh || true
           grep -n 'export PIP_CONFIG_FILE=/dev/null' render-build.sh
           grep -n 'export PIP_REQUIRE_HASHES=0' render-build.sh
 
