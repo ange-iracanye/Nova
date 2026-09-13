@@ -21,8 +21,9 @@ python -m pip config debug || true
 unset PIP_CONSTRAINT PIP_REQUIRE_HASHES PIP_CONFIG_FILE PIP_EXTRA_INDEX_URL \
   PIP_INDEX_URL PIP_FIND_LINKS PIP_TRUSTED_HOST PIP_NO_INDEX || true
 
-# Give pip an explicit empty configuration file and explicitly disable hash
-# checking. PIP_CONFIG_FILE=/dev/null prevents normal config discovery.
+# Give pip an explicit empty configuration file for non-isolated diagnostics.
+# The actual installs below use --isolated, which ignores user/config/env
+# settings, and explicit PyPI command-line options.
 export PIP_CONFIG_FILE=/dev/null
 export PIP_REQUIRE_HASHES=0
 export PIP_NO_CACHE_DIR=1
@@ -45,9 +46,8 @@ esac
 printf '%s\n' '=== Installing Nova production dependencies ==='
 printf '%s\n' 'requirements-render.txt is the only repository dependency input.'
 
-# --isolated ignores all user/environment configuration except variables
-# explicitly supplied by the command. The explicit index and no-cache flags
-# make the source and cache behavior deterministic.
+# --isolated ignores user configuration and environment variables. The
+# explicit index and no-cache flags make source/cache behavior deterministic.
 python -m pip --isolated install --upgrade pip \
   --no-cache-dir \
   --disable-pip-version-check \
@@ -59,7 +59,6 @@ python -m pip --isolated install \
   --disable-pip-version-check \
   --index-url https://pypi.org/simple \
   --no-input \
-  --require-hashes=false \
   --force-reinstall \
   -r ./requirements-render.txt
 
