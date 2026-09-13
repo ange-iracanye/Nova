@@ -1,6 +1,6 @@
 import { Suspense, lazy, useMemo, useState, useEffect } from "react";
 import { BrowserRouter, Navigate, Route, Routes, useLocation, useNavigate } from "react-router-dom";
-import { BarChart3, Home as HomeIcon, LoaderCircle, Palette, UserCircle } from "lucide-react";
+import { BarChart3, Home as HomeIcon, LoaderCircle, UserCircle } from "lucide-react";
 
 const Home = lazy(() => import("./pages/Home"));
 const DemoHome = lazy(() => import("./pages/DemoHome"));
