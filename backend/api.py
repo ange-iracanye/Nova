@@ -1541,17 +1541,18 @@ async def demo_chat_stream(
 
     try:
 
-        result = demo_nova.process(
+        with nova_process_lock:
+            result = demo_nova.process(
 
-            message,
+                message,
 
-            user_email=(
-                f"demo-{request.session_id}"
-            ),
+                user_email=(
+                    f"demo-{request.session_id}"
+                ),
 
-            forced_mode=
-                request.tutor_mode
-        )
+                forced_mode=
+                    request.tutor_mode
+            )
 
     except Exception as error:
 
@@ -1613,7 +1614,10 @@ async def demo_chat_stream(
                 "no-cache",
 
             "X-Conversation-ID":
-                conversation_id
+                conversation_id,
+
+            "X-Nova-Version":
+                APP_VERSION
         }
     )
 
