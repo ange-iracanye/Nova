@@ -22,7 +22,7 @@
     "remark-gfm": "^4.0.1",
     "shiki": "^4.4.2",
     "tailwindcss": "^4.3.3",
-    "katex": "^0.16.47",
+    "katex": "^0.17.0",
     "rehype-katex": "^7.0.1",
     "remark-math": "^6.0.0"
   },
