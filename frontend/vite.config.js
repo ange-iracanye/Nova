@@ -5,9 +5,7 @@ import tailwindcss from "@tailwindcss/vite";
 
 // Production uses a same-origin /api proxy so the browser never has to resolve
 // the Render backend hostname directly. This avoids client-side DNS failures.
-const PRODUCTION_API_URL = process.env.NOVA_NATIVE_BUILD === "1"
-    ? "https://nova-api-i07q.onrender.com"
-    : "/api";
+const PRODUCTION_API_URL = "/api";
 
 export default defineConfig(({ mode }) => {
     const env = loadEnv(mode, process.cwd(), "VITE_");
