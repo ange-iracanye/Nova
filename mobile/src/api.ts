@@ -41,4 +41,5 @@ export const api = {
   async dashboard(email: string) { return request<any>(`/dashboard/${encodeURIComponent(email)}`); },
   async settings() { return request<{ success: boolean; settings: Settings }>('/settings'); },
   async saveSettings(settings: Settings) { return request<{ success: boolean; settings: Settings }>('/settings', { method: 'POST', body: JSON.stringify(settings) }); },
+  async deleteAccount() { return request<{ success: boolean; message?: string }>('/auth/delete-account', { method: 'POST', body: JSON.stringify({}) }); },
 };
