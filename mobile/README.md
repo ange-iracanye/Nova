@@ -16,3 +16,11 @@ Test login, registration, chat, dashboard, conversations, settings save, and log
 ## Architecture
 
 The app uses Expo + React Native + TypeScript, native navigation, SecureStore for the mobile session token, and the existing FastAPI backend. NovaCore and persistence remain server-side.
+
+## Native icons and splash screen
+
+The Nova logo is stored at `mobile/assets/logo.svg`. After the native platform projects have been generated, run:
+
+    npm run assets:generate
+
+This generates the platform icon and splash resources from the same Nova branding. Review the generated assets on both platforms before store submission.
