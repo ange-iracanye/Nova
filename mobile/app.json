@@ -7,9 +7,24 @@
     "userInterfaceStyle": "dark",
     "scheme": "nova",
     "newArchEnabled": true,
-    "ios": { "supportsTablet": true, "bundleIdentifier": "ai.nova.tutor" },
-    "android": { "package": "ai.nova.tutor", "adaptiveIcon": { "backgroundColor": "#070b12" } },
-    "plugins": ["expo-secure-store"],
-    "extra": { "apiUrl": "https://nova-api-i07q.onrender.com" }
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "ai.nova.tutor",
+      "config": {
+        "usesNonExemptEncryption": false
+      }
+    },
+    "android": {
+      "package": "ai.nova.tutor",
+      "adaptiveIcon": {
+        "backgroundColor": "#070b12"
+      }
+    },
+    "plugins": [
+      "expo-secure-store"
+    ],
+    "extra": {
+      "apiUrl": "https://nova-api-i07q.onrender.com"
+    }
   }
 }
