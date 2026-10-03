@@ -44,8 +44,12 @@ import {
 
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import remarkMath from "remark-math";
+import rehypeKatex from "rehype-katex";
+import "katex/dist/katex.min.css";
 import { useLocation, useNavigate } from "react-router-dom";
 import CodeBlock from "../components/CodeBlock";
+import { normalizeMathMarkdown } from "../components/mathMarkdown";
 
 /* =========================================================
    NOVA CHAT
@@ -465,7 +469,8 @@ function Message({
           ) : message.text ? (
             <div className="nova-markdown text-sm leading-7">
               <ReactMarkdown
-                remarkPlugins={[remarkGfm]}
+                remarkPlugins={[remarkGfm, remarkMath]}
+                rehypePlugins={[rehypeKatex]}
                 components={{
                   code({
                     inline,
@@ -566,7 +571,7 @@ function Message({
                   },
                 }}
               >
-                {message.text}
+                {normalizeMathMarkdown(message.text)}
               </ReactMarkdown>
             </div>
           ) : (
