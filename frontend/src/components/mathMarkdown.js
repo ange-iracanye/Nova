@@ -16,7 +16,7 @@ export function normalizeMathMarkdown(value) {
 
     result = result
       .replace(/\\\[([\s\S]*?)\\\]/g, (_, math) => "$$\n" + math.trim() + "\n$$")
-      .replace(/\\\(([^\\n]*?)\\\)/g, (_, math) => "$" + math.trim() + "$");
+      .replace(/\\\(([\\s\\S]*?)\\\)/g, (_, math) => "$" + math.trim() + "$");
 
     result = result.replace(
       /\[\s*([^\[\]\n]{1,300}?)\s*\]/g,
