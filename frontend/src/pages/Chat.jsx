@@ -1021,11 +1021,29 @@ export default function Chat() {
      ======================================================= */
 
   const createDemo = useCallback(async () => {
+    const previousSession = demoSession;
+
     try {
+      if (previousSession) {
+        try {
+          await fetch(
+            `${API_URL}/demo/session/${encodeURIComponent(previousSession)}`,
+            {
+              method: "DELETE",
+              cache: "no-store",
+              keepalive: true,
+            }
+          );
+        } catch {
+          // Demo cleanup is best-effort. The backend TTL remains the fallback.
+        }
+      }
+
       const response = await fetch(
         `${API_URL}/demo/session`,
         {
           method: "POST",
+          cache: "no-store",
         }
       );
 
@@ -1055,7 +1073,36 @@ export default function Chat() {
 
       return null;
     }
-  }, []);
+  }, [demoSession]);
+
+  /* =======================================================
+     DEMO SESSION CLEANUP
+     Demo state is intentionally temporary and must never become
+     persistent conversation history.
+     ======================================================= */
+
+  useEffect(() => {
+    if (!demo || !demoSession) {
+      return undefined;
+    }
+
+    const sessionId = demoSession;
+
+    return () => {
+      try {
+        fetch(
+          `${API_URL}/demo/session/${encodeURIComponent(sessionId)}`,
+          {
+            method: "DELETE",
+            cache: "no-store",
+            keepalive: true,
+          }
+        ).catch(() => {});
+      } catch {
+        // The backend TTL still cleans up abandoned sessions.
+      }
+    };
+  }, [demo, demoSession]);
 
   /* =======================================================
      LOAD HISTORY
