@@ -674,6 +674,8 @@ export default function Chat() {
     setDemoSession,
   ] = useState(null);
 
+  const demoSessionRef = useRef(null);
+
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [sidebar, setSidebar] = useState(true);
@@ -1021,7 +1023,7 @@ export default function Chat() {
      ======================================================= */
 
   const createDemo = useCallback(async () => {
-    const previousSession = demoSession;
+    const previousSession = demoSessionRef.current;
 
     try {
       if (previousSession) {
@@ -1062,6 +1064,7 @@ export default function Chat() {
       }
 
       if (mountedRef.current) {
+        demoSessionRef.current = data.session_id;
         setDemoSession(data.session_id);
       }
 
@@ -1073,7 +1076,7 @@ export default function Chat() {
 
       return null;
     }
-  }, [demoSession]);
+  }, []);
 
   /* =======================================================
      DEMO SESSION CLEANUP
