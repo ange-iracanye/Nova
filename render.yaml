@@ -62,7 +62,7 @@ services:
     runtime: node
     plan: free
     region: frankfurt
-    buildCommand: cd frontend && rm -rf dist node_modules && npm install --no-audit --no-fund && npm run build
+    buildCommand: cd frontend && rm -rf dist node_modules && rm -rf /tmp/nova-npm-cache && npm install --cache /tmp/nova-npm-cache --no-audit --no-fund --prefer-online && npm run build
     startCommand: cd frontend && npm start
     autoDeploy: true
     numInstances: 1
