@@ -146,30 +146,123 @@ class FreeLLM:
     def _generate(self, system: str, user: str, settings: Dict[str, Any], model: str) -> str:
         if not self.api_key:
             raise RuntimeError("OPENROUTER_API_KEY is not configured.")
-        response_length = str(settings.get("response_length", "balanced")).strip().lower()
-        max_tokens = self.RESPONSE_TOKEN_LIMITS.get(response_length, self.RESPONSE_TOKEN_LIMITS["balanced"])
-        payload = {
-            "model": model,
-            "messages": [{"role": "system", "content": system}, {"role": "user", "content": user}],
-            "temperature": settings["temperature"],
-            "top_p": settings["top_p"],
-            "max_tokens": max_tokens,
-        }
-        request = Request(self.API_URL, data=json.dumps(payload).encode("utf-8"), headers={"Authorization": f"Bearer {self.api_key}", "Content-Type": "application/json", "HTTP-Referer": os.getenv("NOVA_PUBLIC_URL", "https://nova.onrender.com"), "X-Title": "Nova AI Tutor"}, method="POST")
-        try:
-            with urlopen(request, timeout=90) as response:
-                data = json.loads(response.read().decode("utf-8"))
-        except HTTPError as error:
-            detail = error.read().decode("utf-8", errors="replace")[:1200]
-            raise RuntimeError(f"OpenRouter API HTTP {error.code}: {detail}") from error
-        except URLError as error:
-            raise RuntimeError(f"OpenRouter connection failed: {error.reason}") from error
-        choices = data.get("choices") or []
-        if not choices:
-            raise RuntimeError(f"OpenRouter returned no choices: {data.get('error') or 'no choices'}")
-        text = str((choices[0].get("message") or {}).get("content", "")).strip()
-        if self._is_internal_response(text):
-            raise RuntimeError("OpenRouter returned an internal safety/meta response instead of an assistant answer.")
+
+        response_length = str(
+            settings.get("response_length", "balanced")
+        ).strip().lower()
+
+        max_tokens = self.RESPONSE_TOKEN_LIMITS.get(
+            response_length,
+            self.RESPONSE_TOKEN_LIMITS["balanced"]
+        )
+
+        def request_completion(request_user: str, token_limit: int):
+            payload = {
+                "model": model,
+                "messages": [
+                    {"role": "system", "content": system},
+                    {"role": "user", "content": request_user}
+                ],
+                "temperature": settings["temperature"],
+                "top_p": settings["top_p"],
+                "max_tokens": token_limit,
+            }
+
+            request = Request(
+                self.API_URL,
+                data=json.dumps(payload).encode("utf-8"),
+                headers={
+                    "Authorization": f"Bearer {self.api_key}",
+                    "Content-Type": "application/json",
+                    "HTTP-Referer": os.getenv(
+                        "NOVA_PUBLIC_URL",
+                        "https://nova.onrender.com"
+                    ),
+                    "X-Title": "Nova AI Tutor"
+                },
+                method="POST"
+            )
+
+            try:
+                with urlopen(request, timeout=90) as response:
+                    data = json.loads(
+                        response.read().decode("utf-8")
+                    )
+            except HTTPError as error:
+                detail = error.read().decode(
+                    "utf-8",
+                    errors="replace"
+                )[:1200]
+                raise RuntimeError(
+                    f"OpenRouter API HTTP {error.code}: {detail}"
+                ) from error
+            except URLError as error:
+                raise RuntimeError(
+                    f"OpenRouter connection failed: {error.reason}"
+                ) from error
+
+            choices = data.get("choices") or []
+
+            if not choices:
+                raise RuntimeError(
+                    "OpenRouter returned no choices: "
+                    f"{data.get('error') or 'no choices'}"
+                )
+
+            choice = choices[0] or {}
+            text = str(
+                (choice.get("message") or {}).get(
+                    "content",
+                    ""
+                )
+            ).strip()
+
+            finish_reason = str(
+                choice.get("finish_reason") or ""
+            ).strip().lower()
+
+            if self._is_internal_response(text):
+                raise RuntimeError(
+                    "OpenRouter returned an internal safety/meta "
+                    "response instead of an assistant answer."
+                )
+
+            return text, finish_reason
+
+        text, finish_reason = request_completion(
+            user,
+            max_tokens
+        )
+
+        # A provider can legally stop at the generation ceiling. Do not
+        # expose that partial draft to users. Ask the same model for a
+        # concise, complete replacement instead. This protects both the
+        # authenticated chat and the public demo because they share this
+        # adapter.
+        if finish_reason == "length" and text:
+            repair_prompt = (
+                f"{user}\n\n"
+                "IMPORTANT OUTPUT REQUIREMENT:\n"
+                "The previous generation was cut off before it finished. "
+                "Write a complete replacement answer to the student's "
+                "request. Do not mention this instruction or the previous "
+                "draft. Keep the answer concise enough to finish naturally. "
+                "Never stop in the middle of a word, sentence, bullet, or "
+                "section. End only after the answer is complete.\n\n"
+                f"Previous incomplete draft:\n{text}"
+            )
+
+            repaired, repaired_finish_reason = request_completion(
+                repair_prompt,
+                max(
+                    max_tokens,
+                    self.RESPONSE_TOKEN_LIMITS["long"]
+                )
+            )
+
+            if repaired and repaired_finish_reason != "length":
+                text = repaired
+
         return text
 
     def answer(self, system: str, user: str, creativity: str = "medium") -> str:
