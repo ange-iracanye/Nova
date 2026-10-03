@@ -234,12 +234,11 @@ class FreeLLM:
             max_tokens
         )
 
-        # A provider can legally stop at the generation ceiling. Do not
-        # expose that partial draft to users. Ask the same model for a
-        # concise, complete replacement instead. This protects both the
-        # authenticated chat and the public demo because they share this
-        # adapter.
-        if finish_reason == "length" and text:
+        # A provider can legally stop at its generation ceiling. Do not
+        # expose that partial draft to users. OpenRouter models can report
+        # this as either "length" or "max_tokens", depending on the route.
+        # Ask the same model for a concise, complete replacement instead.
+        if finish_reason in {"length", "max_tokens"} and text:
             repair_prompt = (
                 f"{user}\n\n"
                 "IMPORTANT OUTPUT REQUIREMENT:\n"
@@ -282,6 +281,19 @@ class FreeLLM:
             "Do not switch to the saved UI/profile language and do not copy the language of older memory."
         )
         system = f"{system}\n\n{language_rule}"
+
+        system = (
+            f"{system}\n\n"
+            "COMPLETENESS AND FORMATTING RULES: Return one complete, "
+            "self-contained answer. Never stop mid-word, mid-sentence, "
+            "mid-bullet, mid-heading, or mid-example. Do not leave a "
+            "sentence unfinished just because the answer is getting long. "
+            "Prefer a shorter complete explanation over a longer incomplete "
+            "one. Use valid Markdown only. For mathematical notation, use "
+            "complete LaTeX delimiters such as \\(x\\), \\[x\\], "
+            "and complete fenced code blocks. Never output half-written "
+            "Markdown or LaTeX syntax."
+        )
 
         temporal_hint = self._extract_temporal_hint(original_user)
         if temporal_hint:
