@@ -57,6 +57,7 @@ python -m pip --isolated install --upgrade pip \
 python -m pip --isolated install \
   --no-cache-dir \
   --disable-pip-version-check \
+  --no-require-hashes \
   --index-url https://pypi.org/simple \
   --no-input \
   --force-reinstall \
