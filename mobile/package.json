@@ -14,8 +14,7 @@
     "build:all": "npx eas build --platform all --profile production",
     "build:android:preview": "npx eas build --platform android --profile preview",
     "submit:android": "npx eas submit --platform android --profile production",
-    "submit:ios": "npx eas submit --platform ios --profile production",
-    "assets:generate": "npx capacitor-assets generate --assetPath assets --iconBackgroundColor '#020617' --iconBackgroundColorDark '#020617' --splashBackgroundColor '#020617' --splashBackgroundColorDark '#020617'"
+    "submit:ios": "npx eas submit --platform ios --profile production"
   },
   "dependencies": {
     "@react-navigation/bottom-tabs": "^7.4.8",
@@ -28,15 +27,10 @@
     "react": "19.2.0",
     "react-native": "0.83.2",
     "react-native-safe-area-context": "~5.6.0",
-    "react-native-screens": "~4.16.0",
-    "@capacitor/core": "8.5.2"
+    "react-native-screens": "~4.16.0"
   },
   "devDependencies": {
     "@types/react": "~19.2.0",
-    "typescript": "~5.9.0",
-    "@capacitor/cli": "8.5.2",
-    "@capacitor/android": "8.5.2",
-    "@capacitor/ios": "8.5.2",
-    "@capacitor/assets": "3.0.5"
+    "typescript": "~5.9.0"
   }
 }
