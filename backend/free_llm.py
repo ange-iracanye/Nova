@@ -289,9 +289,12 @@ class FreeLLM:
             "mid-bullet, mid-heading, or mid-example. Do not leave a "
             "sentence unfinished just because the answer is getting long. "
             "Prefer a shorter complete explanation over a longer incomplete "
-            "one. Use valid Markdown only. For mathematical notation, use "
-            "complete LaTeX delimiters such as \\(x\\), \\[x\\], "
-            "and complete fenced code blocks. Never output half-written "
+            "one. Use valid Markdown only. For mathematical notation, always "
+            "use $...$ for inline math and $...$ on separate lines for "
+            "display equations. Never write powers or subscripts as plain "
+            "text when they are part of an equation. Use complete LaTeX "
+            "such as $x^2$, $x_1$, \\frac{a}{b}, \\sqrt{x}, \\alpha, \\sum, "
+            "and \\int when appropriate. Never output half-written "
             "Markdown or LaTeX syntax."
         )
 
