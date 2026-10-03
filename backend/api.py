@@ -1546,8 +1546,11 @@ async def demo_chat_stream(
 
                 message,
 
+                # NovaCore validates user_email as a real email address.
+                # Keep the demo identity synthetic and valid while remaining
+                # isolated from persistent user accounts.
                 user_email=(
-                    f"demo-{request.session_id}"
+                    f"demo-{request.session_id}@demo.nova"
                 ),
 
                 forced_mode=
