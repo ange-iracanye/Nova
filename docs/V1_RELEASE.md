@@ -11,7 +11,7 @@ The checked-in `render.yaml` defines two Render services in Frankfurt:
 - PostgreSQL persistence is configured through the secret `NOVA_DATABASE_URL`.
 - OpenRouter is configured through `OPENROUTER_API_KEY`, with `nvidia/nemotron-3-ultra:free` and `openrouter/free` as the configured model identifiers.
 - The frontend/API origin values are currently set in `render.yaml`; confirm they match the live service URLs before deployment.
-- The frontend lockfile is `frontend/package-lock.json`. Use `npm ci` for reproducible local/CI installs; the Render build command currently uses `npm install`.
+- The frontend lockfile is `frontend/package-lock.json`, but the current CI run has found it out of sync with `frontend/package.json` (missing transitive entries such as `hastscript`, `katex`, `property-information`, and `commander`). The current CI workflows use `npm install` to let lint/build checks proceed. **Before claiming reproducible builds, regenerate and commit the lockfile from `frontend/package.json`, then restore `npm ci` and confirm all workflows pass.** The Render build command currently uses `npm install`.
 
 Free-tier targets are subject to provider changes, quota limits, cold starts, and service availability. Do not describe the service as unlimited or guaranteed to remain available.
 
