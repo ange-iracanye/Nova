@@ -1,59 +1,50 @@
-# Nova V1 Public Release
+# Nova V1 Public Release Checklist
 
-## Repository-side readiness
+This document separates repository checks from live-service and operator checks. Passing CI is not, by itself, a public-launch approval.
 
-Nova V1 targets a $0/month deployment using a free Render web service, a free PostgreSQL database, and a free OpenRouter model configuration. Render's free filesystem is treated as ephemeral; production user data must be restored from and synchronized to PostgreSQL.
+## Current repository/deployment configuration
 
-Current deployment assumptions:
+The checked-in `render.yaml` defines two Render services in Frankfurt:
 
-- Render backend: single Free instance in Frankfurt;
-- Render frontend: Free static site;
-- free PostgreSQL persistence through `NOVA_DATABASE_URL`;
-- OpenRouter as the production AI gateway;
-- production model: `nvidia/nemotron-3-ultra:free`;
-- production fallback: `openrouter/free`;
-- production API docs disabled by default;
-- production CORS restricted to the exact frontend HTTPS origin;
-- Python 3.11.9;
-- frontend deploy currently uses `npm install` because this repository does not yet contain a package-lock file.
+- `nova-api`: Python API using `backend.render_entry:app`, Python 3.11.9, a single Free instance, and `/health` health checks.
+- `nova-frontend`: Node-based frontend build and server.
+- PostgreSQL persistence is configured through the secret `NOVA_DATABASE_URL`.
+- OpenRouter is configured through `OPENROUTER_API_KEY`, with `nvidia/nemotron-3-ultra:free` and `openrouter/free` as the configured model identifiers.
+- The frontend/API origin values are currently set in `render.yaml`; confirm they match the live service URLs before deployment.
+- The frontend lockfile is `frontend/package-lock.json`. Use `npm ci` for reproducible local/CI installs; the Render build command currently uses `npm install`.
 
-## Operator actions
+Free-tier targets are subject to provider changes, quota limits, cold starts, and service availability. Do not describe the service as unlimited or guaranteed to remain available.
 
-These cannot be completed safely by repository edits alone:
+## Operator verification required
 
-1. Create a free PostgreSQL project and copy its PostgreSQL connection string.
-2. Create an OpenRouter API key with access to the configured free model(s).
-3. Create/connect the Render deployment from `render.yaml`.
-4. Add `NOVA_DATABASE_URL` as a Render secret.
-5. Add `OPENROUTER_API_KEY` as a Render secret.
-6. Set `NOVA_ALLOWED_ORIGINS` to the exact HTTPS URL of the deployed frontend.
-7. Set `VITE_API_URL` to the exact HTTPS URL of the deployed API.
-8. Deploy both services.
-9. Verify `/health` and `/ready` on the live API.
-10. Verify that Nova can produce a real answer through OpenRouter.
-11. Verify the configured fallback remains free and never silently switches to paid usage.
-12. Register a test account and verify login, chat, streaming, dashboard, settings, conversations, memory, upload, and logout.
-13. Create a second test account and verify that the first account's data is not visible to it.
-14. Verify account deletion removes the account and its user-owned data according to the final retention policy.
-15. Let the API restart/spin down, then verify that accounts, sessions, conversations, memory, and learning data are restored.
-16. Run `scripts/v1_smoke.py` against the live API.
-17. Complete a manual browser test of the deployed HTTPS frontend on desktop and mobile-sized viewports.
-18. Test provider errors, provider quota exhaustion, database failure, rate limits, oversized requests, and upload limits.
-19. Replace every placeholder in `frontend/public/privacy.html` and `frontend/public/terms.html` with final operator/legal information and complete the required legal review before public registration.
-20. Review the free-provider quotas before public promotion. Free hosting and free AI tiers are quota-limited and can stop serving requests when their limits are reached.
+These checks require live services and cannot be proven by changing repository files alone.
 
-## Free-tier limitations
-
-This architecture intentionally avoids a paid server, paid disk, and paid model API. That does **not** mean unlimited compute is available. Render Free can spin down after inactivity and has monthly usage limits. PostgreSQL free tiers have limited database capacity and may pause inactive projects. OpenRouter free models have model-specific rate limits and availability constraints. If those quotas are exhausted, Nova must fail gracefully rather than silently switching to a paid provider.
+1. Confirm the deployed frontend and API URLs match `render.yaml`.
+2. Verify API `/health` and `/ready` behavior on the live deployment.
+3. Verify a real AI response through the configured OpenRouter model.
+4. Verify provider failures and exhausted free quotas fail gracefully without silently switching to paid usage.
+5. Register a test account and verify login, chat, streaming, dashboard, settings, conversations, memory, uploads, and logout.
+6. Create a second test account and verify it cannot read or alter the first account's data.
+7. Verify account deletion removes the account and its user-owned data according to the documented retention policy.
+8. Restart or allow the API to spin down, then verify accounts, sessions, conversations, memory, and learning data persist.
+9. Run `python scripts/v1_smoke.py` against the live API.
+10. Manually test the deployed HTTPS frontend on desktop and mobile-sized viewports.
+11. Test provider errors, provider quota exhaustion, database failures, rate limits, oversized requests, and upload limits.
+12. Confirm all production secrets are configured in the hosting provider, not committed to Git.
+13. Review the current CI and security workflow results and resolve actionable failures.
 
 ## Privacy and legal launch blocker
 
-`frontend/public/privacy.html` and `frontend/public/terms.html` are currently templates and must **not** be treated as final legal documents. They contain operator-specific placeholders for identity, contact details, retention, providers, age/child safety, transfers, jurisdiction, liability, deletion, and other terms.
+`frontend/public/privacy.html` and `frontend/public/terms.html` are templates containing operator-specific placeholders. They are not final legal documents.
 
-Do not collect public-user data until those documents are completed and reviewed for the jurisdictions in which Nova will be offered.
+Before collecting public-user data, complete and review these documents for the jurisdictions in which Nova will be offered. Confirm operator identity/contact details, data collected, providers, retention, deletion, age/child safety, international transfers, jurisdiction, liability, and other applicable terms.
+
+## Multi-instance limitation
+
+NovaCore currently relies on a process-level lock. Keep the API at one instance until request isolation is redesigned, tested, and verified.
 
 ## Release decision
 
-A green GitHub build proves repository checks only. Before calling Nova V1 publicly launched, verify the live infrastructure, free AI provider, persistence after restart, account isolation, account deletion, browser behavior, quota behavior, and legal documents.
+Do not call Nova publicly launched until the live infrastructure, model provider, persistence, account isolation, deletion behavior, browser flows, quota handling, and legal documents have all been verified.
 
-Once the live checks pass, tag the verified commit as `v1.0.0` and publish the release notes.
+After those checks pass, tag the verified commit as `v1.0.0` and publish release notes describing what was actually tested.
