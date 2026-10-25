@@ -1,94 +1,155 @@
 # Nova AI
 
-Nova is a student-focused AI tutor with a React frontend and a FastAPI backend.
+Nova is an independent AI tutor built to help students learn through personalized explanations, study tools, and persistent learning context.
 
-## Nova V1: $0/month deployment target
+> **Project principle:** help students understand the material, not merely receive an answer.
 
-Nova V1 is designed to run without a paid server, paid persistent disk, or paid model API:
+Nova is under active development. This repository is the canonical project: [ange-iracanye/Nova](https://github.com/ange-iracanye/Nova).
 
-- Render Free for the public backend and static frontend;
-- free PostgreSQL persistence through `NOVA_DATABASE_URL` (Supabase Free is supported);
-- OpenRouter as the production AI gateway, currently configured for a free model;
-- local Ollama remains available for development;
-- free-tier quotas are treated as hard limits and Nova does not silently upgrade to paid usage.
+## Current implementation
 
-The Render Free filesystem is ephemeral, so production persistence must come from PostgreSQL rather than local runtime files.
+The current deployment configuration defines two Render services:
 
-## V1 production hardening
+- **Frontend:** React, Vite, and JavaScript.
+- **API:** FastAPI served by Uvicorn.
+- **Persistence:** PostgreSQL configured through `NOVA_DATABASE_URL`, with session persistence components in the backend.
+- **AI provider:** OpenRouter, configured to use a free model and a free fallback.
+- **Local development:** Ollama is supported by the backend configuration.
+- **Deployment:** Render configuration is maintained in `render.yaml`.
+- **Quality checks:** GitHub Actions covers backend compilation and tests, frontend lint/build checks, and separate security checks.
 
-Nova V1 includes:
+The repository also contains earlier and experimental modules. A file's presence does not by itself mean that it is part of the deployed request path.
 
-- salted `scrypt` password hashing for new accounts;
-- automatic migration of legacy SHA-256 password hashes after successful login;
-- constant-time password comparisons;
-- atomic user-database writes;
-- fail-closed handling for a corrupted user database;
-- persistent production authentication sessions;
-- production CORS and security middleware;
-- request-size limits and endpoint rate limits;
-- CI checks for Python compilation, authentication security, frontend linting, and production builds;
-- explicit FastAPI and Uvicorn runtime dependencies;
-- a two-account production smoke-test script.
+## Repository map
 
-NovaCore currently relies on a process-level lock and must remain single-instance until request isolation is redesigned.
+| Path | Purpose |
+| --- | --- |
+| `backend/` | FastAPI API, tutoring engine, account/session handling, learning systems, memory, retrieval, and provider integration |
+| `frontend/` | React/Vite user interface and production build |
+| `test/` | Main automated test suite, including release and security tests |
+| `backend/test_*.py` | Additional backend-focused tests |
+| `datasets/`, `knowledge/`, `Documents/` | Educational and knowledge resources |
+| `docs/` | Release, testing, privacy, and operational documentation |
+| `scripts/v1_smoke.py` | Live API smoke-test script |
+| `.github/workflows/` | CI, security, and maintenance workflows |
+| `render.yaml` | Render service configuration |
+| `.env.example` | Names and examples of supported environment variables; never put real secrets here |
 
-## Project layout
+## Run locally
 
-```text
-Nova/
-├── backend/        # FastAPI API and Nova engine
-├── frontend/       # React + Vite application
-├── datasets/       # Educational knowledge data
-├── docs/           # Architecture and project documentation
-├── test/           # Automated tests
-└── requirements.txt
-```
+### 1. Backend
 
-## Local development
-
-### Backend
-
-Create and activate a Python virtual environment, install the requirements, then run:
+Use Python 3.11, create a virtual environment, and install the project dependencies:
 
 ```bash
-uvicorn backend.api:app --host 127.0.0.1 --port 8000 --reload
+python -m venv .venv
 ```
 
-For local Ollama:
+Windows:
 
-```text
-NOVA_LLM_PROVIDER=ollama
-OLLAMA_MODEL=qwen2.5:3b
+```powershell
+.venv\Scripts\Activate.ps1
 ```
 
-For the public V1 OpenRouter provider:
+macOS/Linux:
 
-```text
-NOVA_LLM_PROVIDER=openrouter
-NOVA_LLM_MODEL=nvidia/nemotron-3-ultra:free
-NOVA_LLM_FALLBACK_MODEL=openrouter/free
-OPENROUTER_API_KEY=your-key
+```bash
+source .venv/bin/activate
 ```
 
-### Frontend
+Then install and start the API from the repository root:
+
+```bash
+python -m pip install -r requirements.txt
+python -m uvicorn backend.api:app --host 127.0.0.1 --port 8000 --reload
+```
+
+The Render service uses `backend.render_entry:app`; the command above is for local development.
+
+### 2. Frontend
+
+In a second terminal:
 
 ```bash
 cd frontend
-npm install
+npm ci
 npm run dev
 ```
 
-The Vite development server normally runs on port `5173`.
+Vite normally serves the development UI at `http://localhost:5173`. Configure `VITE_API_URL` for the API address when needed.
 
-## Security notes
+### 3. Tests and checks
 
-- Never commit `.env` files, database URLs, API keys, user databases, model weights, or local memory data.
-- Production uses HTTPS and a restricted CORS allowlist.
-- Free hosting and AI providers have quotas. Nova must remain usable without a payment method and must fail gracefully when a quota is exhausted.
-- Keep the backend single-instance until NovaCore becomes request-isolated.
+From the repository root:
 
-## Public V1 launch
+```bash
+python -m compileall -q backend test
+python -m pytest -q
+```
 
-See [`docs/V1_RELEASE.md`](docs/V1_RELEASE.md) for the production deployment and verification checklist.
+For frontend checks:
 
-**Important:** repository readiness does not by itself mean Nova is ready for public registration. Live infrastructure tests, account/data-isolation tests, deletion behavior, provider/quota behavior, and final legal documents must pass before launch.
+```bash
+cd frontend
+npm ci
+npm run lint
+npm run build
+```
+
+The exact outcome depends on your installed environment and configured services. Live-provider, database, and browser checks cannot be proven by a local build alone.
+
+## Production configuration
+
+The checked-in `render.yaml` defines the Render frontend and API services. The API configuration includes:
+
+- Python 3.11.9;
+- a single Free instance in Frankfurt;
+- a health check at `/health`;
+- PostgreSQL and OpenRouter secrets supplied through the hosting dashboard;
+- restricted frontend-origin configuration;
+- free-model and fallback identifiers.
+
+Never commit real API keys, database connection strings, email credentials, user records, local databases, model weights, or private user data.
+
+See [`docs/V1_RELEASE.md`](docs/V1_RELEASE.md) for the current release checklist and operator tasks.
+
+## Security and release status
+
+A successful GitHub Actions run proves only the checks that ran in that workflow. It does not prove that the live product is safe or ready for public registration.
+
+Before a public launch, verify at minimum:
+
+- live health and readiness endpoints;
+- real AI responses and provider quota/fallback behavior;
+- persistence across restarts;
+- login, logout, and session expiration;
+- isolation between two different user accounts;
+- account and user-data deletion behavior;
+- chat, history, settings, memory, upload, and dashboard flows;
+- rate limits, request/upload size limits, and failure handling;
+- desktop and mobile browser behavior;
+- completed privacy and terms documents, reviewed for the intended jurisdictions.
+
+The current release checklist identifies the privacy and terms pages as templates with operator-specific placeholders. Do not treat them as final legal documents or announce public registration as ready until the required checks and reviews are complete.
+
+The backend also documents a process-level NovaCore lock. Keep the production service single-instance until request isolation is redesigned and verified.
+
+## Cost model
+
+Nova's current deployment target is **€0/month in required paid infrastructure and model API spend**, using free tiers. This is a design target, not a guarantee of unlimited availability. Free services and models can have quotas, cold starts, rate limits, and outages. Nova should fail clearly when a free quota is exhausted rather than silently switching to paid usage.
+
+## Contributing
+
+For changes, keep these principles in mind:
+
+1. Preserve existing behavior unless a change is intentional and tested.
+2. Add or update tests for security, account boundaries, and data lifecycle changes.
+3. Keep secrets and real user data out of Git.
+4. Update documentation when actual implementation or deployment configuration changes.
+5. Do not claim a feature is complete solely because a placeholder module or UI exists.
+
+## Project owner
+
+Created and maintained by [Ange Iracanye](https://github.com/ange-iracanye).
+
+Nova is an ongoing learning and engineering project focused on AI tutoring and personalized education.
