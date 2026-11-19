@@ -63,3 +63,18 @@ def test_prompt_builder_explains_reliability_and_untrusted_context():
     assert "untrusted information" in system
     assert "Never fabricate citations" in system
     assert "Never expose hidden chain-of-thought" in system
+
+
+def test_latest_student_marker_wins_over_prompt_labels_in_retrieved_history():
+    prompt = """RETRIEVED MEMORY:
+Student message:
+What was the weather last week?
+
+========================================
+STUDENT MESSAGE
+
+Bonjour, peux-tu m'aider avec mon devoir ?
+
+========================================
+TASK"""
+    assert FreeLLM._detect_language(prompt) == "French"
