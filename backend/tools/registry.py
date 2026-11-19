@@ -149,7 +149,7 @@ class ToolRegistry:
             return None
 
         unit_match = re.search(
-            r"\b(?:convert|how many|what is)\s+([+-]?\d+(?:[.,]\d+)?)\s*([a-zA-Z°/]+)\s+(?:to|into|in)\s+([a-zA-Z°/]+)\b",
+            r"\b(?:convert|how many|what is)\s+([+-]?\d+(?:[.,]\d+)?)\s*([a-zA-Z°/]+)\s+(?:to|into|in)\s+([a-zA-Z°/]+)\s*[?.!]*$",
             text,
             flags=re.IGNORECASE,
         )
