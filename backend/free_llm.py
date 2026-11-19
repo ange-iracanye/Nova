@@ -82,12 +82,24 @@ class FreeLLM:
     @classmethod
     def _extract_latest_message(cls, user: str) -> str:
         text = str(user or "")
-        markers = ("Student's original question:", "Student message:")
+        markers = (
+            "Student's original question:",
+            "Student message:",
+            "STUDENT MESSAGE",
+            "Student request:",
+        )
         for marker in markers:
-            if marker in text:
-                value = text.rsplit(marker, 1)[1]
-                value = value.split("\n\nFRESH WEB CONTEXT", 1)[0]
-                return value.strip()
+            match = re.search(re.escape(marker), text, flags=re.IGNORECASE)
+            if not match:
+                continue
+            value = text[match.end():]
+            value = re.split(
+                r"\n\s*={3,}\s*\n|\n\s*FRESH WEB CONTEXT\b",
+                value,
+                maxsplit=1,
+                flags=re.IGNORECASE,
+            )[0]
+            return value.strip()
         return text.strip()
 
     @classmethod
