@@ -67,6 +67,8 @@ def test_registry_supports_data_and_energy_units():
     assert data["result"]["value"] == 1.073741824
     energy = registry.execute("unit_converter", {"value": 1, "from_unit": "kwh", "to_unit": "j"})
     assert energy["result"]["value"] == 3600000
+    electron_volt = registry.execute("unit_converter", {"value": 1, "from_unit": "ev", "to_unit": "j"})
+    assert electron_volt["result"]["value"] == 1.602176634e-19
 
 
 def test_world_clock_returns_timezone_aware_time():
