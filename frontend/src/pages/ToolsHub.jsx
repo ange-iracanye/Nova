@@ -122,6 +122,7 @@ export default function ToolsHub() {
           <div className="mb-4 flex items-center gap-3"><span className="flex h-9 w-9 items-center justify-center rounded-xl bg-violet-400/[.08] text-violet-300"><Ruler size={17}/></span><div><h3 className="text-sm font-semibold">Unit converter</h3><p className="text-[11px] text-slate-500">Common scientific units</p></div></div>
           <Field label="Value" value={unitValue} onChange={setUnitValue} type="number" placeholder="5"/>
           <div className="mt-3 grid grid-cols-2 gap-3"><Field label="From" value={fromUnit} onChange={setFromUnit} placeholder="km"/><Field label="To" value={toUnit} onChange={setToUnit} placeholder="mi"/></div>
+          <p className="mt-2 text-[10px] leading-5 text-slate-600">Examples: km to mi · °C to °F · GiB to GB · kWh to J</p>
           <button className={`${buttonClass} mt-3 w-full`} disabled={busy === "unit_converter" || !available.has("unit_converter")} onClick={() => runTool("unit_converter", { value: Number(unitValue), from_unit: fromUnit, to_unit: toUnit })}>{busy === "unit_converter" ? <LoaderCircle size={14} className="animate-spin"/> : <Ruler size={14}/>} Convert</button>
           <Output toolId="unit_converter" value={outputs.unit_converter}/>
         </Panel>
