@@ -140,7 +140,7 @@ class FreeLLM:
         )
         freshness_terms = cls.FRESHNESS_TERMS | set(multilingual_terms)
         if any(
-            re.search(r"(?<!\\w)" + re.escape(term) + r"(?!\\w)", text)
+            re.search(r"(?<!\w)" + re.escape(term) + r"(?!\w)", text)
             for term in freshness_terms
         ):
             return True
