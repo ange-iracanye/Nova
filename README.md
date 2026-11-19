@@ -105,7 +105,7 @@ The exact outcome depends on your installed environment and configured services.
 The authenticated Tool Hub is available at `/tools`. It currently provides local, read-only tools:
 
 - Safe arithmetic and common math functions (AST-based evaluation, never Python `eval`);
-- unit conversions for common scientific units;
+- unit conversions for length, area, mass, time, volume, speed, data, energy, pressure and temperature;
 - timezone-aware world clock;
 - study plans with active recall and spaced review;
 - text statistics and reading-time estimates.
