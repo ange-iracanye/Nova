@@ -63,6 +63,8 @@ def test_prompt_builder_explains_reliability_and_untrusted_context():
     assert "untrusted information" in system
     assert "Never fabricate citations" in system
     assert "Never expose hidden chain-of-thought" in system
+    assert "PERSONALITY AND TRUST" in system
+    assert "Do not pretend to have human feelings" in system
 
 
 def test_latest_student_marker_wins_over_prompt_labels_in_retrieved_history():
