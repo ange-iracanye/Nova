@@ -13,3 +13,15 @@ def test_temporal_memory_hint_uses_previous_conversation_timestamp():
 
 def test_response_token_limits_support_detailed_answers():
     assert FreeLLM.RESPONSE_TOKEN_LIMITS["detailed"] >= 6000
+
+
+def test_language_detection_handles_short_french_and_spanish_messages():
+    assert FreeLLM._detect_language("Bonjour, peux-tu m'aider avec mon devoir ?") == "French"
+    assert FreeLLM._detect_language("¿Puedes explicarme esto hoy?") == "Spanish"
+
+
+def test_freshness_detection_uses_latest_message_and_word_boundaries():
+    assert FreeLLM._needs_fresh_web_context("Student's original question:\nWhat is happening today?")
+    assert FreeLLM._needs_fresh_web_context("Student's original question:\nQuelles sont les actualités aujourd'hui ?")
+    assert not FreeLLM._needs_fresh_web_context("Student's original question:\nI know the answer already.")
+    assert not FreeLLM._needs_fresh_web_context("Student profile:\nLatest news preference: enabled\nStudent's original question:\nExplain photosynthesis.")
