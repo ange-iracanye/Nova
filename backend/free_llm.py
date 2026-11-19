@@ -82,17 +82,15 @@ class FreeLLM:
     @classmethod
     def _extract_latest_message(cls, user: str) -> str:
         text = str(user or "")
-        markers = (
-            "Student's original question:",
-            "Student message:",
-            "STUDENT MESSAGE",
-            "Student request:",
+        marker_pattern = (
+            r"Student's original question:|Student message:|"
+            r"STUDENT MESSAGE|Student request:"
         )
-        for marker in markers:
-            match = re.search(re.escape(marker), text, flags=re.IGNORECASE)
-            if not match:
-                continue
-            value = text[match.end():]
+        matches = list(re.finditer(marker_pattern, text, flags=re.IGNORECASE))
+        if matches:
+            # The latest marker wins: retrieved conversation history may
+            # itself contain older prompt labels before the current message.
+            value = text[matches[-1].end():]
             value = re.split(
                 r"\n\s*={3,}\s*\n|\n\s*FRESH WEB CONTEXT\b",
                 value,
