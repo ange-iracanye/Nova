@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import {
   ArrowRight, Brain, Command, Gauge, Keyboard, LayoutDashboard,
-  Palette, Search, Settings2, Sparkles, UserCircle, X, Zap
+  Palette, Search, Settings2, Sparkles, UserCircle, Wrench, X, Zap
 } from "lucide-react";
 import "../styles/novaExperience.css";
 import "../styles/novaCinematicPlus.css";
@@ -10,6 +10,7 @@ import "../styles/novaCinematicPlus.css";
 const ACTIONS = [
   { label: "Open dashboard", hint: "Learning cockpit", icon: LayoutDashboard, path: "/dashboard" },
   { label: "Open chat", hint: "Start learning", icon: Brain, path: "/chat" },
+  { label: "Open Tool Hub", hint: "Calculations, conversions & study tools", icon: Wrench, path: "/tools" },
   { label: "Open settings", hint: "Tutor behavior", icon: Settings2, path: "/settings" },
   { label: "Open account", hint: "Profile & appearance", icon: UserCircle, path: "/account" },
   { label: "Account security", hint: "Password & protection", icon: Gauge, path: "/account-security" },
@@ -86,7 +87,7 @@ export default function NovaExperience() {
     <div className="nova-ambient" aria-hidden="true"><div className="nova-ambient-grid" /><div className="nova-orb nova-orb-one" /><div className="nova-orb nova-orb-two" /><div className="nova-orb nova-orb-three" /><div className="nova-spotlight" style={{ left: `${spotlight.x}%`, top: `${spotlight.y}%` }} /><div className="nova-stars" /><div className="nova-scanline" /></div>
     <div className="nova-scroll-progress" style={{ width: `${progress}%` }} />
     <button className={`nova-command-orb ${dockOpen ? "is-open" : ""}`} onClick={() => setDockOpen(value => !value)} aria-label="Open Nova command center" title="Nova command center"><span className="nova-orb-glyph">{dockOpen ? <X size={20} /> : <Zap size={20} />}</span><span className="nova-orb-core" /><span className="nova-orb-ring" /><span className="nova-orb-ring nova-orb-ring-two" /></button>
-    {dockOpen && <div className="nova-quick-dock"><div className="nova-dock-label"><span /> NOVA CONTROL</div><button onClick={() => setPaletteOpen(true)}><Command size={15} /> Command center <kbd>⌘K</kbd></button><button onClick={() => run("/account")}><Palette size={15} /> Personalize</button><button onClick={() => run("/dashboard")}><Brain size={15} /> Learning cockpit</button><button onClick={() => run("/chat")}><Sparkles size={15} /> Start learning</button></div>}
+    {dockOpen && <div className="nova-quick-dock"><div className="nova-dock-label"><span /> NOVA CONTROL</div><button onClick={() => setPaletteOpen(true)}><Command size={15} /> Command center <kbd>⌘K</kbd></button><button onClick={() => run("/account")}><Palette size={15} /> Personalize</button><button onClick={() => run("/dashboard")}><Brain size={15} /> Learning cockpit</button><button onClick={() => run("/chat")}><Sparkles size={15} /> Start learning</button><button onClick={() => run("/tools")}><Wrench size={15} /> Tool Hub</button></div>}
     {dashboard && <div className="nova-dashboard-hud" aria-hidden="true"><div className="nova-hud-dot" /><span>LIVE LEARNING OS</span><span className="nova-hud-divider" /><span>ADAPTIVE</span><span className="nova-hud-signal">◉</span></div>}
     {paletteOpen && <div className="nova-command-backdrop" onMouseDown={() => setPaletteOpen(false)}><div className="nova-command-panel" onMouseDown={event => event.stopPropagation()}><div className="nova-command-header"><div className="nova-command-title"><Command size={17} /> Nova command center <span className="nova-command-live">READY</span></div><button onClick={() => setPaletteOpen(false)}><X size={17} /></button></div><div className="nova-command-search"><Search size={17} /><input autoFocus value={query} onChange={event => setQuery(event.target.value)} placeholder="Jump anywhere in Nova…"/><kbd>ESC</kbd></div><div className="nova-command-list">{filtered.map((item, index) => { const Icon = item.icon; return <button key={item.path} onMouseEnter={() => setActiveIndex(index)} onClick={() => run(item.path)} className={`nova-command-item ${activeIndex === index ? "is-active" : ""}`}><span className="nova-command-icon"><Icon size={17} /></span><span><strong>{item.label}</strong><small>{item.hint}</small></span><span className="nova-command-index">{index + 1}</span><ArrowRight size={15} /></button>; })}{!filtered.length && <div className="nova-command-empty"><Keyboard size={18} /> Nothing matched that search.</div>}</div><div className="nova-command-footer"><span><kbd>↑↓</kbd> Navigate</span><span><kbd>↵</kbd> Open</span><span><kbd>ESC</kbd> Close</span></div></div></div>}
   </>;
