@@ -36,7 +36,7 @@ class ToolRegistry:
             "id": "unit_converter",
             "name": "Unit converter",
             "category": "utilities",
-            "description": "Convert common length, mass, time, volume, speed and temperature units.",
+            "description": "Convert length, area, mass, time, volume, speed, data, energy, pressure and temperature units.",
             "read_only": True,
             "requires_confirmation": False,
             "input_schema": {"value": "number", "from_unit": "string", "to_unit": "string"},
@@ -99,6 +99,28 @@ class ToolRegistry:
         "speed": {
             "m/s": 1.0, "mps": 1.0, "km/h": 1 / 3.6, "kph": 1 / 3.6,
             "mph": 0.44704, "mi/h": 0.44704,
+        },
+        "area": {
+            "m2": 1.0, "sqm": 1.0, "cm2": 0.0001, "mm2": 0.000001,
+            "km2": 1_000_000.0, "sqkm": 1_000_000.0,
+            "hectare": 10_000.0, "ha": 10_000.0,
+            "acre": 4046.8564224, "acres": 4046.8564224,
+            "ft2": 0.09290304, "sqft": 0.09290304,
+        },
+        "data": {
+            "b": 1.0, "byte": 1.0, "bytes": 1.0,
+            "kb": 1000.0, "mb": 1_000_000.0, "gb": 1_000_000_000.0, "tb": 1_000_000_000_000.0,
+            "kib": 1024.0, "mib": 1_048_576.0, "gib": 1_073_741_824.0, "tib": 1_099_511_627_776.0,
+        },
+        "energy": {
+            "j": 1.0, "joule": 1.0, "joules": 1.0, "kj": 1000.0,
+            "cal": 4.184, "kcal": 4184.0, "wh": 3600.0, "kwh": 3_600_000.0,
+            "ev": 1.602176634e-19,
+        },
+        "pressure": {
+            "pa": 1.0, "kpa": 1000.0, "mpa": 1_000_000.0,
+            "bar": 100_000.0, "mbar": 100.0,
+            "atm": 101_325.0, "psi": 6894.757293168,
         },
     }
     TIMEZONES = {
