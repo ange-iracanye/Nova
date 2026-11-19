@@ -914,6 +914,9 @@ def api_info():
             "dashboard",
             "health",
             "statistics",
+            "tool_hub",
+            "local_tools",
+            "integration_catalog",
         ],
 
         "timestamp": utc_now()
@@ -3467,6 +3470,15 @@ def frontend_config():
                 True,
 
             "search":
+                True,
+
+            "tool_hub":
+                True,
+
+            "local_tools":
+                True,
+
+            "integrations":
                 True
         },
 
