@@ -1093,7 +1093,7 @@ class NovaCore:
                 "tool_execution",
                 self._stage_tool_execution
             )
-            if request.tool_result:
+            if request.tool_result and request.tool_result.get("tool") != "study_planner":
                 return self._complete_fast_tool_request(request)
 
             # =================================================
@@ -2778,7 +2778,7 @@ Student's original question:
 
         # Deterministic, read-only tool calls can return immediately.
         # This avoids a provider round trip for exact local operations.
-        if request.tool_result:
+        if request.tool_result and request.tool_result.get("tool") != "study_planner":
             request.answer = self._format_tool_result(request.tool_result)
             return
 
