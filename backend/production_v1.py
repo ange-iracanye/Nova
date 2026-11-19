@@ -4,6 +4,7 @@ from __future__ import annotations
 from typing import Any
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, Field
+from backend.tools.registry import ToolRegistry, ToolError
 from backend.memory_system.conversation_manager import ConversationManager
 from backend import api
 
@@ -14,6 +15,14 @@ router = APIRouter(prefix="/v1", tags=["Production V1"])
 # every conversation request while preserving persistence and external-change
 # detection.
 _CONVERSATION_MANAGER = ConversationManager(persist=True)
+
+_TOOL_REGISTRY = ToolRegistry()
+
+
+class ToolExecutionRequest(BaseModel):
+    tool_id: str = Field(..., min_length=1, max_length=80)
+    arguments: dict[str, Any] = Field(default_factory=dict)
+
 
 class RenameRequest(BaseModel):
     title: str = Field(..., min_length=1, max_length=200)
@@ -152,3 +161,75 @@ def dashboard(request: Request):
     conversations = _items(email)[:50]
     question_count = _real_usage_metrics_fallback(email, conversations)
     return {"success": True, "student": {"email": email}, "stats": {"questions": question_count, "total_subjects": 0, "total_topics": 0, "study_attempts": 0, "correct_answers": 0, "wrong_answers": 0, "total_answers": 0, "overall_mastery": 0, "average_confidence": 0, "memory_count": 0, "conversation_count": len(conversations), "understanding_attempts": 0, "accuracy": 0}, "subjects": {}, "knowledge_map": {}, "knowledge_subjects": [], "progress": {}, "understanding": {}, "difficulty": {"easy": 0, "medium": 0, "hard": 0}, "strengths": [], "weaknesses": [], "session": {"subject": "None", "topic": "None", "mode": "None", "score": 0}, "learning_graph": {"subjects": {}}, "recent_conversations": _items_for_recent(email)}
+
+
+@router.get("/tools")
+def list_tools(request: Request):
+    _email(request)
+    return {"success": True, "version": _TOOL_REGISTRY.VERSION, "tools": _TOOL_REGISTRY.list_tools()}
+
+
+@router.post("/tools/execute")
+def execute_tool(request: Request, payload: ToolExecutionRequest):
+    _email(request)
+    try:
+        result = _TOOL_REGISTRY.execute(payload.tool_id, payload.arguments)
+    except ToolError as error:
+        raise HTTPException(status_code=422, detail=str(error))
+    return {"success": True, **result}
+
+
+@router.get("/integrations")
+def list_integrations(request: Request):
+    _email(request)
+    integrations = [
+        {
+            "id": "google_calendar",
+            "name": "Google Calendar",
+            "category": "productivity",
+            "status": "not_configured",
+            "description": "Read calendar availability and create events after explicit confirmation.",
+            "permissions": ["calendar.read", "calendar.events.create"],
+            "requires_oauth": True,
+            "write_actions_require_confirmation": True,
+        },
+        {
+            "id": "gmail",
+            "name": "Gmail",
+            "category": "communication",
+            "status": "not_configured",
+            "description": "Search and summarize email only after the account owner connects Google.",
+            "permissions": ["gmail.read"],
+            "requires_oauth": True,
+            "write_actions_require_confirmation": True,
+        },
+        {
+            "id": "notion",
+            "name": "Notion",
+            "category": "workspace",
+            "status": "not_configured",
+            "description": "Search and organize pages in a connected Notion workspace.",
+            "permissions": ["pages.read", "pages.write"],
+            "requires_oauth": True,
+            "write_actions_require_confirmation": True,
+        },
+        {
+            "id": "github",
+            "name": "GitHub",
+            "category": "development",
+            "status": "not_configured",
+            "description": "Review repositories and propose code changes in a connected GitHub account.",
+            "permissions": ["repositories.read", "pull_requests.write"],
+            "requires_oauth": True,
+            "write_actions_require_confirmation": True,
+        },
+    ]
+    return {
+        "success": True,
+        "integrations": integrations,
+        "security": {
+            "connected_accounts_are_user_scoped": True,
+            "write_actions_require_confirmation": True,
+            "secrets_are_never_returned_by_this_endpoint": True,
+        },
+    }
