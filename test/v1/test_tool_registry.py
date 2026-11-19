@@ -61,6 +61,14 @@ def test_temperature_conversion_handles_same_unit_and_absolute_zero():
         registry.execute("unit_converter", {"value": -300, "from_unit": "c", "to_unit": "f"})
 
 
+def test_registry_supports_data_and_energy_units():
+    registry = ToolRegistry()
+    data = registry.execute("unit_converter", {"value": 1, "from_unit": "gib", "to_unit": "gb"})
+    assert data["result"]["value"] == 1.073741824
+    energy = registry.execute("unit_converter", {"value": 1, "from_unit": "kwh", "to_unit": "j"})
+    assert energy["result"]["value"] == 3600000
+
+
 def test_world_clock_returns_timezone_aware_time():
     result = ToolRegistry().execute("world_clock", {"timezone": "Paris"})
     assert result["result"]["timezone"] == "Europe/Paris"
