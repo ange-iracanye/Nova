@@ -94,6 +94,14 @@ def test_text_analyzer_counts_content():
     assert result["sentences"] == 2
 
 
+def test_study_planner_rejects_boolean_and_fractional_limits():
+    registry = ToolRegistry()
+    with pytest.raises(ToolError):
+        registry.execute("study_planner", {"topic": "Algebra", "days": True, "daily_minutes": 30})
+    with pytest.raises(ToolError):
+        registry.execute("study_planner", {"topic": "Algebra", "days": 3.5, "daily_minutes": 30})
+
+
 def test_chat_router_only_runs_explicit_deterministic_requests():
     registry = ToolRegistry()
     calculation = registry.route_message("What is 12 * 8?")
