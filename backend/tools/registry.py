@@ -209,6 +209,8 @@ class ToolRegistry:
         return {"expression": expression, "value": result}
 
     def _unit_converter(self, args: dict[str, Any]) -> dict[str, Any]:
+        if isinstance(args.get("value"), bool):
+            raise ToolError("The value must be a number, not a boolean.")
         try:
             value = float(args.get("value"))
         except (TypeError, ValueError):
@@ -217,6 +219,8 @@ class ToolRegistry:
             raise ToolError("The value is outside the supported range.")
         source = self._normalize_unit(args.get("from_unit"))
         target = self._normalize_unit(args.get("to_unit"))
+        if source in {"k", "kelvin"} and value < 0:
+            raise ToolError("Kelvin temperatures cannot be below absolute zero.")
         if source in {"c", "°c", "celsius"} and target in {"f", "°f", "fahrenheit"}:
             converted = value * 9 / 5 + 32
             group = "temperature"
@@ -265,6 +269,8 @@ class ToolRegistry:
             days = int(args.get("days", 7))
             minutes = int(args.get("daily_minutes", 30))
         except (TypeError, ValueError):
+            raise ToolError("Days and daily minutes must be whole numbers.")
+        if isinstance(args.get("days", 7), bool) or isinstance(args.get("daily_minutes", 30), bool):
             raise ToolError("Days and daily minutes must be whole numbers.")
         if not 1 <= days <= 90 or not 5 <= minutes <= 240:
             raise ToolError("Choose 1–90 days and 5–240 minutes per day.")
