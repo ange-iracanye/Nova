@@ -22,11 +22,17 @@ function Field({ label, value, onChange, placeholder, type = "text", min, max })
   return <label className="block min-w-0"><span className="mb-2 block text-[11px] font-semibold uppercase tracking-[.14em] text-slate-500">{label}</span><input type={type} min={min} max={max} value={value} onChange={event => onChange(event.target.value)} placeholder={placeholder} className="w-full rounded-xl border border-white/[.09] bg-[#080e1b] px-3.5 py-3 text-sm text-slate-100 outline-none transition placeholder:text-slate-600 focus:border-cyan-400/40"/></label>;
 }
 
-function Output({ value }) {
+function Output({ toolId, value }) {
   if (!value) return null;
   return <div className="mt-4 overflow-hidden rounded-2xl border border-cyan-400/15 bg-cyan-400/[.045]">
     <div className="flex items-center gap-2 border-b border-white/[.06] px-4 py-3 text-xs font-semibold text-cyan-200"><Sparkles size={14}/> Nova tool result</div>
-    <pre className="max-h-72 overflow-auto whitespace-pre-wrap break-words px-4 py-4 text-xs leading-6 text-slate-200">{JSON.stringify(value, null, 2)}</pre>
+    <div className="p-4">
+      {toolId === "calculator" && <><p className="text-[10px] font-semibold uppercase tracking-[.16em] text-slate-500">{value.expression}</p><p className="mt-1 text-3xl font-semibold tracking-tight text-white">{value.value}</p></>}
+      {toolId === "unit_converter" && <><p className="text-[10px] font-semibold uppercase tracking-[.16em] text-slate-500">Converted value</p><p className="mt-1 text-2xl font-semibold text-white">{value.value} <span className="text-base text-cyan-200">{value.to_unit}</span></p><p className="mt-1 text-xs text-slate-500">{value.input} {value.from_unit} · {value.category}</p></>}
+      {toolId === "world_clock" && <><p className="text-xl font-semibold text-white">{value.formatted}</p><p className="mt-1 text-xs text-slate-500">{value.timezone}</p></>}
+      {toolId === "study_planner" && <><div className="mb-3 flex flex-wrap gap-2 text-[10px] text-cyan-100"><span className="rounded-lg bg-cyan-300/10 px-2.5 py-1">{value.duration_days} days</span><span className="rounded-lg bg-cyan-300/10 px-2.5 py-1">{value.daily_minutes} min / day</span><span className="rounded-lg bg-cyan-300/10 px-2.5 py-1">{value.total_minutes} min total</span></div><div className="max-h-64 space-y-2 overflow-auto">{(value.sessions || []).map(session => <div key={session.day} className="flex gap-3 rounded-xl border border-white/[.05] bg-black/10 p-3"><span className="shrink-0 text-xs font-semibold text-cyan-200">Day {session.day}</span><div><p className="text-[10px] text-slate-500">{session.date}</p><p className="mt-1 text-xs leading-5 text-slate-200">{session.activity}</p></div></div>)}</div></>}
+      {toolId === "text_analyzer" && <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">{[["Words", value.words], ["Characters", value.characters], ["Sentences", value.sentences], ["Paragraphs", value.paragraphs], ["Reading time", value.estimated_reading_minutes + " min"]].map(([label, amount]) => <div key={label} className="rounded-xl border border-white/[.05] bg-black/10 p-3"><p className="text-[10px] text-slate-500">{label}</p><p className="mt-1 text-lg font-semibold text-white">{amount}</p></div>)}</div>}
+    </div>
   </div>;
 }
 
@@ -109,7 +115,7 @@ export default function ToolsHub() {
           <div className="mb-4 flex items-center gap-3"><span className="flex h-9 w-9 items-center justify-center rounded-xl bg-cyan-400/[.08] text-cyan-300"><Calculator size={17}/></span><div><h3 className="text-sm font-semibold">Smart calculator</h3><p className="text-[11px] text-slate-500">Safe arithmetic engine</p></div></div>
           <Field label="Expression" value={expression} onChange={setExpression} placeholder="e.g. sqrt(81) + 12 * 4"/>
           <button className={`${buttonClass} mt-3 w-full`} disabled={busy === "calculator" || !available.has("calculator")} onClick={() => runTool("calculator", { expression })}>{busy === "calculator" ? <LoaderCircle size={14} className="animate-spin"/> : <Calculator size={14}/>} Calculate</button>
-          <Output value={outputs.calculator}/>
+          <Output toolId="calculator" value={outputs.calculator}/>
         </Panel>
 
         <Panel>
@@ -117,14 +123,14 @@ export default function ToolsHub() {
           <Field label="Value" value={unitValue} onChange={setUnitValue} type="number" placeholder="5"/>
           <div className="mt-3 grid grid-cols-2 gap-3"><Field label="From" value={fromUnit} onChange={setFromUnit} placeholder="km"/><Field label="To" value={toUnit} onChange={setToUnit} placeholder="mi"/></div>
           <button className={`${buttonClass} mt-3 w-full`} disabled={busy === "unit_converter" || !available.has("unit_converter")} onClick={() => runTool("unit_converter", { value: Number(unitValue), from_unit: fromUnit, to_unit: toUnit })}>{busy === "unit_converter" ? <LoaderCircle size={14} className="animate-spin"/> : <Ruler size={14}/>} Convert</button>
-          <Output value={outputs.unit_converter}/>
+          <Output toolId="unit_converter" value={outputs.unit_converter}/>
         </Panel>
 
         <Panel>
           <div className="mb-4 flex items-center gap-3"><span className="flex h-9 w-9 items-center justify-center rounded-xl bg-amber-400/[.08] text-amber-300"><Clock3 size={17}/></span><div><h3 className="text-sm font-semibold">World clock</h3><p className="text-[11px] text-slate-500">City or IANA timezone</p></div></div>
           <Field label="Timezone" value={timezone} onChange={setTimezone} placeholder="Europe/Paris"/>
           <button className={`${buttonClass} mt-3 w-full`} disabled={busy === "world_clock" || !available.has("world_clock")} onClick={() => runTool("world_clock", { timezone })}>{busy === "world_clock" ? <LoaderCircle size={14} className="animate-spin"/> : <Clock3 size={14}/>} Get local time</button>
-          <Output value={outputs.world_clock}/>
+          <Output toolId="world_clock" value={outputs.world_clock}/>
         </Panel>
 
         <Panel>
@@ -132,14 +138,14 @@ export default function ToolsHub() {
           <Field label="Study topic" value={topic} onChange={setTopic} placeholder="e.g. Algebra, cell biology..."/>
           <div className="mt-3 grid grid-cols-2 gap-3"><Field label="Days" value={days} onChange={setDays} type="number" min="1" max="90"/><Field label="Minutes / day" value={minutes} onChange={setMinutes} type="number" min="5" max="240"/></div>
           <button className={`${buttonClass} mt-3 w-full`} disabled={busy === "study_planner" || !available.has("study_planner") || !topic.trim()} onClick={() => runTool("study_planner", { topic, days: Number(days), daily_minutes: Number(minutes) })}>{busy === "study_planner" ? <LoaderCircle size={14} className="animate-spin"/> : <GraduationCap size={14}/>} Build study plan</button>
-          <Output value={outputs.study_planner}/>
+          <Output toolId="study_planner" value={outputs.study_planner}/>
         </Panel>
 
         <Panel className="md:col-span-2">
           <div className="mb-4 flex items-center gap-3"><span className="flex h-9 w-9 items-center justify-center rounded-xl bg-sky-400/[.08] text-sky-300"><FileText size={17}/></span><div><h3 className="text-sm font-semibold">Text analyzer</h3><p className="text-[11px] text-slate-500">Understand the size and structure of your notes or draft</p></div></div>
           <textarea value={text} onChange={event => setText(event.target.value)} rows={4} maxLength={20000} placeholder="Paste your notes or a text passage here..." className="w-full resize-y rounded-xl border border-white/[.09] bg-[#080e1b] px-3.5 py-3 text-sm leading-6 text-slate-100 outline-none transition placeholder:text-slate-600 focus:border-cyan-400/40"/>
           <div className="mt-3 flex flex-wrap items-center justify-between gap-3"><span className="text-[11px] text-slate-600">{text.length.toLocaleString()} / 20,000 characters</span><button className={buttonClass} disabled={busy === "text_analyzer" || !available.has("text_analyzer") || !text.trim()} onClick={() => runTool("text_analyzer", { text })}>{busy === "text_analyzer" ? <LoaderCircle size={14} className="animate-spin"/> : <FileText size={14}/>} Analyze text</button></div>
-          <Output value={outputs.text_analyzer}/>
+          <Output toolId="text_analyzer" value={outputs.text_analyzer}/>
         </Panel>
       </div>
 
