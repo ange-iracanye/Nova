@@ -186,8 +186,19 @@ class ToolRegistry:
             except ToolError:
                 pass
 
+        text_match = re.search(
+            r"^(?:analy[sz]e|analyse|count words in|how many words are in)\s+(?:this text|the following text)?\s*[:\-]\s*(.+)$",
+            text,
+            flags=re.IGNORECASE | re.DOTALL,
+        )
+        if text_match:
+            try:
+                return self.execute("text_analyzer", {"text": text_match.group(1).strip()})
+            except ToolError:
+                pass
+
         time_match = re.search(
-            r"\b(?:what time is it|current time|time now)\s+(?:in|at)\s+([a-zA-Z_ /-]+?)\s*[?.!]*$",
+            r"\b(?:what time is it|what is the time|current time|time now)\s+(?:in|at)\s+([a-zA-Z_ /-]+?)\s*[?.!]*$",
             text,
             flags=re.IGNORECASE,
         )
