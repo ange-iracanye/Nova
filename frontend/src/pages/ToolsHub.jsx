@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import {
   ArrowLeft, Calculator, Clock3, FileText, GraduationCap, Layers3,
   LoaderCircle, RefreshCw, Ruler, ShieldCheck, Sparkles, Wrench,
@@ -37,6 +37,7 @@ function Output({ toolId, value }) {
 }
 
 export default function ToolsHub() {
+  const navigate = useNavigate();
   const [catalog, setCatalog] = useState([]);
   const [integrations, setIntegrations] = useState([]);
   const [loadingCatalog, setLoadingCatalog] = useState(true);
@@ -59,8 +60,15 @@ export default function ToolsHub() {
       fetch(`${API_URL}/v1/tools`, { credentials: "include", headers: { Accept: "application/json" } }),
       fetch(`${API_URL}/v1/integrations`, { credentials: "include", headers: { Accept: "application/json" } }),
     ]).then(async ([toolsResponse, integrationsResponse]) => {
-      const toolsPayload = toolsResponse.ok ? await toolsResponse.json() : null;
-      const integrationsPayload = integrationsResponse.ok ? await integrationsResponse.json() : null;
+      if (toolsResponse.status === 401 || integrationsResponse.status === 401) {
+        if (active) navigate("/login", { replace: true });
+        return;
+      }
+      if (!toolsResponse.ok || !integrationsResponse.ok) {
+        throw new Error("Nova could not load the tool catalog.");
+      }
+      const toolsPayload = await toolsResponse.json();
+      const integrationsPayload = await integrationsResponse.json();
       if (!active) return;
       setCatalog(Array.isArray(toolsPayload?.tools) ? toolsPayload.tools : []);
       setIntegrations(Array.isArray(integrationsPayload?.integrations) ? integrationsPayload.integrations : []);
@@ -68,7 +76,7 @@ export default function ToolsHub() {
       if (active) setError("Nova could not load the tool catalog. Check your connection and try again.");
     }).finally(() => { if (active) setLoadingCatalog(false); });
     return () => { active = false; };
-  }, []);
+  }, [navigate]);
 
   async function runTool(toolId, argumentsValue) {
     setBusy(toolId);
