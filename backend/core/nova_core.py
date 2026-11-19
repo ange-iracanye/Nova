@@ -1086,6 +1086,16 @@ class NovaCore:
                 self._stage_topic
             )
 
+            # Fast path: deterministic read-only tools do not need the
+            # full memory, learning-analysis or language-model pipeline.
+            self._run_stage(
+                request,
+                "tool_execution",
+                self._stage_tool_execution
+            )
+            if request.tool_result:
+                return self._complete_fast_tool_request(request)
+
             # =================================================
             # LEARNING STATE
             # =================================================
@@ -1162,12 +1172,6 @@ class NovaCore:
                 request,
                 "personalization",
                 self._stage_personalization
-            )
-
-            self._run_stage(
-                request,
-                "tool_execution",
-                self._stage_tool_execution
             )
 
             # =================================================
@@ -1361,6 +1365,31 @@ class NovaCore:
                 self.last_request_duration_ms = (
                     request.duration_ms()
                 )
+
+    def _complete_fast_tool_request(
+        self,
+        request: NovaRequestContext
+    ) -> Dict[str, Any]:
+        """Finish a deterministic tool request without invoking the LLM."""
+        for stage_name, function in (
+            ("generation", self._stage_generation),
+            ("verification", self._stage_verification),
+            ("formatting", self._stage_formatting),
+            ("save_response", self._stage_save_response),
+            ("runtime_state", self._stage_runtime_state),
+        ):
+            self._run_stage(request, stage_name, function)
+
+        request.success = True
+        request.completed = True
+        self.successful_requests += 1
+        if request.degraded_components:
+            self.degraded_requests += 1
+
+        result = self._build_result(request)
+        self._run_hooks(self.after_request_hooks, request)
+        self._record_request_history(request)
+        return result
 
     # =========================================================
     # REQUEST CREATION
