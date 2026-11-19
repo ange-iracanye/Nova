@@ -111,6 +111,9 @@ def test_chat_router_only_runs_explicit_deterministic_requests():
     assert conversion["tool"] == "unit_converter"
     assert conversion["result"]["value"] == 2000
     assert registry.route_message("Explain photosynthesis in simple words.") is None
+    text_analysis = registry.route_message("Analyze this text: Nova helps students learn. It adapts.")
+    assert text_analysis["tool"] == "text_analyzer"
+    assert text_analysis["result"]["words"] == 7
 
 
 def test_unknown_tool_is_never_executed():
