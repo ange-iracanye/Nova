@@ -114,6 +114,9 @@ def test_chat_router_only_runs_explicit_deterministic_requests():
     text_analysis = registry.route_message("Analyze this text: Nova helps students learn. It adapts.")
     assert text_analysis["tool"] == "text_analyzer"
     assert text_analysis["result"]["words"] == 6
+    clock = registry.route_message("What is the time in Paris?")
+    assert clock["tool"] == "world_clock"
+    assert clock["result"]["timezone"] == "Europe/Paris"
 
 
 def test_unknown_tool_is_never_executed():
