@@ -14,6 +14,7 @@ const Settings = lazy(() => import("./pages/Settings"));
 const DemoSettings = lazy(() => import("./pages/DemoSettings"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 const Capabilities = lazy(() => import("./pages/Capabilities"));
+const ToolsHub = lazy(() => import("./pages/ToolsHub"));
 const AboutNova = lazy(() => import("./pages/AboutNova"));
 const AccountSecurity = lazy(() => import("./pages/AccountSecurity"));
 const AccountManagement = lazy(() => import("./pages/AccountManagement"));
@@ -147,6 +148,7 @@ function AppRoutes() {
     return <Suspense fallback={<PageLoader />}><Routes>
         <Route path="/" element={<AdaptiveRoute demo={<DemoHome/>} account={<Home/>} />} />
         <Route path="/chat" element={<Chat/>} />
+        <Route path="/tools" element={<AuthRedirect><ToolsHub/></AuthRedirect>} />
         <Route path="/settings" element={<AdaptiveRoute demo={<DemoSettings/>} account={<><Settings/><AccountShortcut/></>} />} />
         <Route path="/dashboard" element={<AuthRedirect><><Dashboard/><AccountShortcut/><AnalyticsShortcut/></></AuthRedirect>} />
         <Route path="/analytics" element={<AuthRedirect><AnalyticsGuard/></AuthRedirect>} />
