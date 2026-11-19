@@ -167,7 +167,7 @@ class ToolRegistry:
     def route_message(self, message: str) -> dict[str, Any] | None:
         """Run a deterministic tool only when the user's wording is explicit."""
         text = str(message or "").strip()
-        if not text or len(text) > 2_000:
+        if not text or len(text) > self.MAX_TEXT_LENGTH:
             return None
 
         unit_match = re.search(
