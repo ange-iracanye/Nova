@@ -37,11 +37,11 @@ class FreeLLM:
     )
     LANGUAGE_WORDS = {
         "English": {"the", "is", "are", "when", "what", "how", "why", "last", "time", "talked", "please", "make", "about", "and", "with", "from"},
-        "French": {"le", "la", "les", "des", "est", "sont", "quand", "quoi", "comment", "pourquoi", "dernier", "dernière", "fois", "parlé", "fait", "avec", "dans", "première", "guerre"},
-        "Spanish": {"el", "la", "los", "las", "es", "son", "cuando", "qué", "cómo", "por", "qué", "última", "vez", "hablamos", "hacer", "con", "guerra"},
-        "German": {"der", "die", "das", "ist", "sind", "wann", "was", "wie", "warum", "letzte", "zeit", "gesprochen", "machen", "mit", "krieg"},
-        "Italian": {"il", "lo", "la", "gli", "le", "è", "sono", "quando", "cosa", "come", "perché", "ultima", "volta", "parlato", "fare", "con", "guerra"},
-        "Portuguese": {"o", "a", "os", "as", "é", "são", "quando", "que", "como", "porquê", "última", "vez", "falamos", "fazer", "com", "guerra"},
+        "French": {"le", "la", "les", "des", "est", "sont", "quand", "quoi", "comment", "pourquoi", "dernier", "dernière", "fois", "parlé", "fait", "avec", "dans", "première", "guerre", "bonjour", "salut", "merci", "aujourd'hui", "aujourd’hui", "maintenant", "pour", "une", "un", "je", "tu", "nous", "vous", "mon", "ma", "mes", "peux", "être", "c'est", "j'ai", "explique", "aide", "devoir"},
+        "Spanish": {"el", "la", "los", "las", "es", "son", "cuando", "qué", "cómo", "por", "última", "vez", "hablamos", "hacer", "con", "guerra", "hola", "gracias", "hoy", "ahora", "está", "están", "para", "una", "uno", "yo", "tú", "nosotros", "ustedes", "mi", "mis", "puedes", "explicar", "ayuda", "porque", "también"},
+        "German": {"der", "die", "das", "ist", "sind", "wann", "was", "wie", "warum", "letzte", "zeit", "gesprochen", "machen", "mit", "krieg", "hallo", "danke", "heute", "jetzt", "für", "und", "ein", "eine", "ich", "du", "wir", "nicht", "kannst", "bitte", "erkläre"},
+        "Italian": {"il", "lo", "la", "gli", "le", "è", "sono", "quando", "cosa", "come", "perché", "ultima", "volta", "parlato", "fare", "con", "guerra", "ciao", "grazie", "oggi", "adesso", "per", "una", "uno", "io", "tu", "noi", "voi", "non", "puoi", "anche", "spiega"},
+        "Portuguese": {"o", "a", "os", "as", "é", "são", "quando", "que", "como", "porquê", "última", "vez", "falamos", "fazer", "com", "guerra", "olá", "ola", "obrigado", "obrigada", "hoje", "agora", "para", "uma", "um", "eu", "você", "nós", "não", "pode", "também", "explique"},
     }
 
     def __init__(self, model: Optional[str] = None, max_retries: int = 1, retry_delay: float = 1.0):
@@ -138,7 +138,12 @@ class FreeLLM:
             "hoy", "ahora", "actualmente", "esta semana", "heute", "jetzt", "aktuell",
             "oggi", "adesso", "attualmente", "hoje", "agora", "atualmente",
         )
-        if any(term in text for term in cls.FRESHNESS_TERMS | set(multilingual_terms)): return True
+        freshness_terms = cls.FRESHNESS_TERMS | set(multilingual_terms)
+        if any(
+            re.search(r"(?<!\\w)" + re.escape(term) + r"(?!\\w)", text)
+            for term in freshness_terms
+        ):
+            return True
         return bool(
             re.search(r"\bwhat(?:'s| is) happening\b", text)
             or re.search(r"\bwhat happened\b", text)
