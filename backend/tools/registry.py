@@ -266,7 +266,7 @@ class ToolRegistry:
             converted = value * source_factor / target_factor
         if not isfinite(converted):
             raise ToolError("The conversion result is outside the supported range.")
-        return {"input": value, "from_unit": source, "to_unit": target, "value": round(converted, 10), "category": group}
+        return {"input": value, "from_unit": source, "to_unit": target, "value": float(format(converted, ".12g")), "category": group}
 
     def _world_clock(self, args: dict[str, Any]) -> dict[str, Any]:
         requested = str(args.get("timezone") or "").strip()
