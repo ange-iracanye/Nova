@@ -72,7 +72,7 @@ def test_study_planner_creates_bounded_active_recall_schedule():
 
 def test_text_analyzer_counts_content():
     result = ToolRegistry().execute("text_analyzer", {"text": "One short sentence. Another sentence!"})["result"]
-    assert result["words"] == 6
+    assert result["words"] == 5
     assert result["sentences"] == 2
 
 
