@@ -61,7 +61,7 @@ Then install and start the API from the repository root:
 
 ```bash
 python -m pip install -r requirements.txt
-python -m uvicorn backend.api:app --host 127.0.0.1 --port 8000 --reload
+python -m uvicorn backend.production:app --host 127.0.0.1 --port 8000 --reload
 ```
 
 The Render service uses `backend.render_entry:app`; the command above is for local development.
@@ -99,6 +99,26 @@ npm run build
 **Dependency-lock note:** the current `frontend/package-lock.json` is out of sync with `frontend/package.json` (the current CI logs identify missing transitive entries). Until the lockfile is regenerated and committed, `npm install` is required instead of `npm ci`. The CI workflows currently use `npm install` to avoid failing before lint/build checks can run.
 
 The exact outcome depends on your installed environment and configured services. Live-provider, database, and browser checks cannot be proven by a local build alone.
+
+## Nova Tool Hub
+
+The authenticated Tool Hub is available at `/tools`. It currently provides local, read-only tools:
+
+- Safe arithmetic and common math functions (AST-based evaluation, never Python `eval`);
+- unit conversions for length, area, mass, time, volume, speed, data, energy, pressure and temperature;
+- timezone-aware world clock;
+- study plans with active recall and spaced review;
+- text statistics and reading-time estimates.
+
+The chat pipeline can automatically route explicit arithmetic, unit-conversion, time and study-plan requests to these deterministic tools. Simple tool requests bypass the language-model call, reducing latency and provider usage. Tool outputs are returned as structured metadata and saved with the conversation response.
+
+Authenticated API endpoints:
+
+- `GET /v1/tools` lists available tools and input shapes.
+- `POST /v1/tools/execute` executes a read-only local tool.
+- `GET /v1/integrations` lists external integration providers and their setup status.
+
+Google Calendar, Gmail, Notion and GitHub are currently catalog entries only. OAuth flows, secure per-user token storage and provider-specific adapters must be configured before those accounts can be connected or actions performed. No external account is represented as connected by default. Any future write-capable integration must request explicit permission and confirmation for each sensitive action.
 
 ## Production configuration
 

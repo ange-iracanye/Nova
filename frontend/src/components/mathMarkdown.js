@@ -3,8 +3,8 @@ const MATH_SIGNAL =
 
 function protectCode(text, transform) {
   return text
-    .split(/(\`\`\`[\s\S]*?\`\`\`|~~~[\s\S]*?~~~)/g)
-    .map((part) => (/^(\`\`\`|~~~)/.test(part) ? part : transform(part)))
+    .split(/(```[\s\S]*?```|~~~[\s\S]*?~~~)/g)
+    .map((part) => (/^(```|~~~)/.test(part) ? part : transform(part)))
     .join("");
 }
 
@@ -29,7 +29,7 @@ export function normalizeMathMarkdown(value) {
 
     // Repair the older Nova format: [ i^2 = -1 ].
     result = result.replace(
-      /\[\s*([^\[\]\n]{1,300}?)\s*\]/g,
+      /\[\s*((?:(?!\[|\])[^\n]){1,300}?)\s*\]/g,
       (match, math) => MATH_SIGNAL.test(math) ? "$" + math.trim() + "$" : match
     );
 

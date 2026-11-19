@@ -14,6 +14,7 @@ const Settings = lazy(() => import("./pages/Settings"));
 const DemoSettings = lazy(() => import("./pages/DemoSettings"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 const Capabilities = lazy(() => import("./pages/Capabilities"));
+const ToolsHub = lazy(() => import("./pages/ToolsHub"));
 const AboutNova = lazy(() => import("./pages/AboutNova"));
 const AccountSecurity = lazy(() => import("./pages/AccountSecurity"));
 const AccountManagement = lazy(() => import("./pages/AccountManagement"));
@@ -142,11 +143,12 @@ function AnalyticsGuard() {
     return <Analytics/>;
 }
 function AuthHomeButton() { const navigate = useNavigate(); return <button type="button" onClick={() => navigate("/")} title="Back to Nova home" aria-label="Back to Nova home" className="fixed left-5 top-5 z-[100] flex items-center gap-2 rounded-xl border border-white/10 bg-slate-900/80 px-3.5 py-2.5 text-sm font-medium text-slate-300 shadow-xl backdrop-blur-xl transition hover:border-cyan-400/30 hover:bg-slate-800 hover:text-white"><HomeIcon size={16}/> Home</button>; }
-function AdaptiveRoute({ authenticated, demo, account }) { const user = useAuthState(); const location = useLocation(); useEffect(() => { const labels = { "/": user ? "Your learning space" : "Learn smarter", "/chat": "Learn", "/dashboard": "Dashboard", "/analytics": "Analytics", "/settings": "Settings", "/account": "Account", "/account-security": "Account security", "/about": "About Nova" }; document.title = `Nova AI · ${labels[location.pathname] || "Explore"}`; }, [location.pathname, user]); if (authenticated) return user ? authenticated : demo; return user ? account : demo; }
+function AdaptiveRoute({ authenticated, demo, account }) { const user = useAuthState(); const location = useLocation(); useEffect(() => { const labels = { "/": user ? "Your learning space" : "Learn smarter", "/chat": "Learn", "/dashboard": "Dashboard", "/analytics": "Analytics", "/tools": "Tool Hub", "/settings": "Settings", "/account": "Account", "/account-security": "Account security", "/about": "About Nova" }; document.title = `Nova AI · ${labels[location.pathname] || "Explore"}`; }, [location.pathname, user]); if (authenticated) return user ? authenticated : demo; return user ? account : demo; }
 function AppRoutes() {
     return <Suspense fallback={<PageLoader />}><Routes>
         <Route path="/" element={<AdaptiveRoute demo={<DemoHome/>} account={<Home/>} />} />
         <Route path="/chat" element={<Chat/>} />
+        <Route path="/tools" element={<AuthRedirect><ToolsHub/></AuthRedirect>} />
         <Route path="/settings" element={<AdaptiveRoute demo={<DemoSettings/>} account={<><Settings/><AccountShortcut/></>} />} />
         <Route path="/dashboard" element={<AuthRedirect><><Dashboard/><AccountShortcut/><AnalyticsShortcut/></></AuthRedirect>} />
         <Route path="/analytics" element={<AuthRedirect><AnalyticsGuard/></AuthRedirect>} />

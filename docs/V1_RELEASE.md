@@ -13,6 +13,8 @@ The checked-in `render.yaml` defines two Render services in Frankfurt:
 - The frontend/API origin values are currently set in `render.yaml`; confirm they match the live service URLs before deployment.
 - The frontend lockfile is `frontend/package-lock.json`, but the current CI run has found it out of sync with `frontend/package.json` (missing transitive entries such as `hastscript`, `katex`, `property-information`, and `commander`). The current CI workflows use `npm install` to let lint/build checks proceed. **Before claiming reproducible builds, regenerate and commit the lockfile from `frontend/package.json`, then restore `npm ci` and confirm all workflows pass.** The Render build command currently uses `npm install`.
 
+The authenticated Tool Hub is served at `/tools` and exposes read-only local tools through `/v1/tools` and `/v1/tools/execute`. The chat pipeline can short-circuit explicit calculator, unit-conversion, timezone and study-planning requests without a model-provider round trip. The external integration catalog currently reports Google Calendar, Gmail, Notion and GitHub as not configured; do not advertise these providers as connected until OAuth, per-user token storage, permission checks and write-action confirmation have been implemented and verified.
+
 Free-tier targets are subject to provider changes, quota limits, cold starts, and service availability. Do not describe the service as unlimited or guaranteed to remain available.
 
 ## Operator verification required
@@ -31,7 +33,7 @@ These checks require live services and cannot be proven by changing repository f
 10. Manually test the deployed HTTPS frontend on desktop and mobile-sized viewports.
 11. Test provider errors, provider quota exhaustion, database failures, rate limits, oversized requests, and upload limits.
 12. Confirm all production secrets are configured in the hosting provider, not committed to Git.
-13. Review the current CI and security workflow results and resolve actionable failures.
+13. Verify the Tool Hub page, authenticated tool catalog/execution endpoints, input limits, rate limits and automatic chat tool routing. Confirm ordinary educational questions still use the normal tutor pipeline.\n14. Review the current CI and security workflow results and resolve actionable failures.
 
 ## Privacy and legal launch blocker
 

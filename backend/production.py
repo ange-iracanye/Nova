@@ -93,7 +93,7 @@ if IS_PRODUCTION and COOKIE_SAMESITE == "none":
     COOKIE_SAMESITE = "lax"
 MAX_BODY_BYTES = int(os.getenv("NOVA_MAX_BODY_BYTES", str(512 * 1024)))
 MAX_UPLOAD_BYTES = int(os.getenv("NOVA_MAX_UPLOAD_BYTES", str(10 * 1024 * 1024)))
-_RATE_LIMITS = {"/login": (10, 300), "/register": (8, 600), "/chat": (30, 60), "/chat/stream": (30, 60), "/demo/chat/stream": (20, 60), "/account": (3, 3600), "/memory": (3, 3600)}
+_RATE_LIMITS = {"/login": (10, 300), "/register": (8, 600), "/chat": (30, 60), "/chat/stream": (30, 60), "/demo/chat/stream": (20, 60), "/account": (3, 3600), "/memory": (3, 3600), "/v1/tools/execute": (40, 60)}
 _rate_windows: dict[tuple[str, str], deque[float]] = defaultdict(deque)
 
 

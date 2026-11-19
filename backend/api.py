@@ -914,6 +914,9 @@ def api_info():
             "dashboard",
             "health",
             "statistics",
+            "tool_hub",
+            "local_tools",
+            "integration_catalog",
         ],
 
         "timestamp": utc_now()
@@ -1154,6 +1157,12 @@ def chat(
         "conversation_id":
             conversation_id,
 
+        "tools_used":
+            safe_list(result.get("tools_used")),
+
+        "metadata":
+            safe_dict(result.get("metadata")),
+
         "timestamp":
             utc_now()
     }
@@ -1331,6 +1340,13 @@ async def chat_stream(
 
             "X-Conversation-ID":
                 conversation_id,
+
+            "X-Nova-Tools-Used":
+                ",".join(
+                    str(item.get("tool"))
+                    for item in safe_list(result.get("tools_used"))
+                    if isinstance(item, dict) and item.get("tool")
+                ),
 
             "X-Nova-Version":
                 APP_VERSION
@@ -3467,6 +3483,15 @@ def frontend_config():
                 True,
 
             "search":
+                True,
+
+            "tool_hub":
+                True,
+
+            "local_tools":
+                True,
+
+            "integrations":
                 True
         },
 
