@@ -7,14 +7,6 @@ import {
 
 const API_URL = (import.meta.env.VITE_API_URL || "http://127.0.0.1:8000").replace(/\/+$/, "");
 
-const TOOL_CARDS = [
-  { id: "calculator", title: "Smart calculator", description: "Arithmetic and common mathematical functions.", icon: Calculator },
-  { id: "unit_converter", title: "Unit converter", description: "Length, mass, time, volume, speed and temperature.", icon: Ruler },
-  { id: "world_clock", title: "World clock", description: "Current local time in supported cities and timezones.", icon: Clock3 },
-  { id: "study_planner", title: "Study planner", description: "A focused schedule built around active recall and review.", icon: GraduationCap },
-  { id: "text_analyzer", title: "Text analyzer", description: "Word count, reading time and document structure.", icon: FileText },
-];
-
 const INTEGRATION_NAMES = {
   google_calendar: "Google Calendar",
   gmail: "Gmail",
