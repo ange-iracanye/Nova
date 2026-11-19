@@ -262,13 +262,19 @@ class ToolRegistry:
         topic = str(args.get("topic") or "").strip()
         if len(topic) < 2 or len(topic) > 180:
             raise ToolError("The topic must contain between 2 and 180 characters.")
+        raw_days = args.get("days", 7)
+        raw_minutes = args.get("daily_minutes", 30)
+        if isinstance(raw_days, bool) or isinstance(raw_minutes, bool):
+            raise ToolError("Days and daily minutes must be whole numbers.")
         try:
-            days = int(args.get("days", 7))
-            minutes = int(args.get("daily_minutes", 30))
+            days_value = float(raw_days)
+            minutes_value = float(raw_minutes)
         except (TypeError, ValueError):
             raise ToolError("Days and daily minutes must be whole numbers.")
-        if isinstance(args.get("days", 7), bool) or isinstance(args.get("daily_minutes", 30), bool):
+        if not isfinite(days_value) or not isfinite(minutes_value) or not days_value.is_integer() or not minutes_value.is_integer():
             raise ToolError("Days and daily minutes must be whole numbers.")
+        days = int(days_value)
+        minutes = int(minutes_value)
         if not 1 <= days <= 90 or not 5 <= minutes <= 240:
             raise ToolError("Choose 1–90 days and 5–240 minutes per day.")
         today = datetime.now().date()
