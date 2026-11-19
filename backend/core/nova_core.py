@@ -2887,10 +2887,16 @@ Student's original question:
         ).strip()
 
         if not answer:
-
             raise RuntimeError(
                 "TutorEngine returned an empty response."
             )
+
+        if (
+            request.tool_result.get("tool") == "study_planner"
+            and answer == getattr(self.tutor, "FALLBACK_RESPONSE", "Nova couldn't generate a response right now.")
+        ):
+            request.add_warning("The language model was unavailable; Nova returned the deterministic study schedule instead.")
+            answer = self._format_tool_result(request.tool_result)
 
         request.answer = answer
 
