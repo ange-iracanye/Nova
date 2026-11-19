@@ -53,6 +53,14 @@ def test_registry_rejects_incompatible_units():
         ToolRegistry().execute("unit_converter", {"value": 2, "from_unit": "km", "to_unit": "kg"})
 
 
+def test_temperature_conversion_handles_same_unit_and_absolute_zero():
+    registry = ToolRegistry()
+    same = registry.execute("unit_converter", {"value": 20, "from_unit": "c", "to_unit": "c"})
+    assert same["result"]["value"] == 20
+    with pytest.raises(ToolError):
+        registry.execute("unit_converter", {"value": -300, "from_unit": "c", "to_unit": "f"})
+
+
 def test_world_clock_returns_timezone_aware_time():
     result = ToolRegistry().execute("world_clock", {"timezone": "Paris"})
     assert result["result"]["timezone"] == "Europe/Paris"
