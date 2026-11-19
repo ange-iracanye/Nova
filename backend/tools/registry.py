@@ -219,25 +219,22 @@ class ToolRegistry:
             raise ToolError("The value is outside the supported range.")
         source = self._normalize_unit(args.get("from_unit"))
         target = self._normalize_unit(args.get("to_unit"))
-        if source in {"k", "kelvin"} and value < 0:
-            raise ToolError("Kelvin temperatures cannot be below absolute zero.")
-        if source in {"c", "°c", "celsius"} and target in {"f", "°f", "fahrenheit"}:
-            converted = value * 9 / 5 + 32
-            group = "temperature"
-        elif source in {"f", "°f", "fahrenheit"} and target in {"c", "°c", "celsius"}:
-            converted = (value - 32) * 5 / 9
-            group = "temperature"
-        elif source in {"c", "°c", "celsius"} and target in {"k", "kelvin"}:
-            converted = value + 273.15
-            group = "temperature"
-        elif source in {"k", "kelvin"} and target in {"c", "°c", "celsius"}:
-            converted = value - 273.15
-            group = "temperature"
-        elif source in {"f", "°f", "fahrenheit"} and target in {"k", "kelvin"}:
-            converted = (value - 32) * 5 / 9 + 273.15
-            group = "temperature"
-        elif source in {"k", "kelvin"} and target in {"f", "°f", "fahrenheit"}:
-            converted = (value - 273.15) * 9 / 5 + 32
+        temperature_units = {"c", "f", "k"}
+        if source in temperature_units and target in temperature_units:
+            if source == "c":
+                kelvin = value + 273.15
+            elif source == "f":
+                kelvin = (value - 32) * 5 / 9 + 273.15
+            else:
+                kelvin = value
+            if kelvin < 0:
+                raise ToolError("Temperatures cannot be below absolute zero.")
+            if target == "c":
+                converted = kelvin - 273.15
+            elif target == "f":
+                converted = (kelvin - 273.15) * 9 / 5 + 32
+            else:
+                converted = kelvin
             group = "temperature"
         else:
             group, source_factor = self._find_unit(source)
