@@ -67,7 +67,8 @@ def _canonical_progress(progress: dict) -> dict:
             if topic not in bucket:
                 bucket[topic] = data
                 continue
-            old = bucket[topic] if isinstance(bucket[topic], dict) else {}
+            # Never mutate the caller's progress payload while merging aliases.
+            old = dict(bucket[topic]) if isinstance(bucket[topic], dict) else {}
             incoming = data if isinstance(data, dict) else {}
             old_attempts = _int(old.get("attempts"))
             incoming_attempts = _int(incoming.get("attempts"))
