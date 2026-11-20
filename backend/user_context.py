@@ -7,7 +7,9 @@ user is active without threading email arguments through every legacy API.
 
 from __future__ import annotations
 
-from contextvars import ContextVar
+from contextlib import contextmanager
+from contextvars import ContextVar, Token
+from collections.abc import Iterator
 
 
 _ACTIVE_USER: ContextVar[str | None] = ContextVar(
@@ -35,3 +37,18 @@ def get_active_user() -> str | None:
 
 def clear_active_user() -> None:
     _ACTIVE_USER.set(None)
+
+
+@contextmanager
+def user_context(email: str | None) -> Iterator[str | None]:
+    """Temporarily bind a user and restore the previous context on exit.
+
+    ContextVar tokens make nested scopes safe and prevent a completed
+    operation from leaving its user attached to later work in the same
+    execution context.
+    """
+    token: Token[str | None] = _ACTIVE_USER.set(normalize_user(email))
+    try:
+        yield _ACTIVE_USER.get()
+    finally:
+        _ACTIVE_USER.reset(token)
