@@ -4,7 +4,7 @@ from typing import Any
 
 from fastapi import APIRouter, HTTPException, Request
 
-from backend.user_context import set_active_user
+from backend.user_context import user_context
 from backend.learning_graph import LearningGraph
 from backend.learning.progress_tracker import ProgressTracker, canonical_subject
 from backend.student.knowledge_map import KnowledgeMap
@@ -174,8 +174,7 @@ def _merge_topic_stats(progress: dict, graph: dict) -> tuple[dict, int, int, int
     return subjects, total_attempts, total_correct, total_wrong, total_topics
 
 
-def _build_dashboard(email: str) -> dict:
-    set_active_user(email)
+def _build_dashboard_data(email: str) -> dict:
     progress = ProgressTracker(email).get()
     graph = LearningGraph(email).get()
     knowledge = KnowledgeMap(email).get()
@@ -225,6 +224,12 @@ def _build_dashboard(email: str) -> dict:
         "session": {"subject": "None", "topic": "None", "mode": "None", "score": 0},
         "overall": {"mastery": overall_mastery, "attempts": total_attempts, "correct": total_correct, "wrong": total_wrong, "topics": total_topics},
     }
+
+
+def _build_dashboard(email: str) -> dict:
+    """Build one student's dashboard inside a request-local user scope."""
+    with user_context(email):
+        return _build_dashboard_data(email)
 
 
 @router.get("/dashboard")
