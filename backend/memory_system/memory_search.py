@@ -167,27 +167,21 @@ class MemorySearch:
             return 0.0
 
         try:
+            # A dot product is meaningful only when both vectors describe the
+            # same embedding space. zip() silently truncates mismatched vectors.
+            if len(query_embedding) != len(memory_embedding):
+                return 0.0
 
-            score = float(
-                sum(
-                    a * b
-                    for a, b in zip(
-                        query_embedding,
-                        memory_embedding
-                    )
-                )
+            score = sum(
+                float(a) * float(b)
+                for a, b in zip(query_embedding, memory_embedding)
             )
+            if not math.isfinite(score):
+                return 0.0
 
-            return max(
-                0.0,
-                min(
-                    1.0,
-                    score
-                )
-            )
+            return max(0.0, min(1.0, score))
 
-        except Exception:
-
+        except (TypeError, ValueError, OverflowError):
             return 0.0
 
     # =====================================
