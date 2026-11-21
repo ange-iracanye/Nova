@@ -1,0 +1,62 @@
+import json
+
+from backend.learning.progress_tracker import ProgressTracker
+
+
+def test_progress_tracker_recovers_from_non_object_json(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    progress_file = tmp_path / "data" / "memory" / "progress" / "default.json"
+    progress_file.parent.mkdir(parents=True)
+    progress_file.write_text('["not", "a", "progress", "object"]', encoding="utf-8")
+
+    tracker = ProgressTracker()
+
+    assert tracker.get() == {}
+    tracker.update("Mathematics", "Algebra", 75)
+    assert tracker.get()["Mathematics"]["Algebra"]["attempts"] == 1
+
+
+def test_progress_tracker_merges_malformed_legacy_counters_safely(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    progress_file = tmp_path / "data" / "memory" / "progress" / "default.json"
+    progress_file.parent.mkdir(parents=True)
+    progress_file.write_text(json.dumps({
+        "python": {
+            "Basics": {
+                "attempts": "invalid",
+                "confidence": "nan",
+                "difficulty_easy": "invalid",
+            }
+        },
+        "quantum computing": {
+            "Basics": {
+                "attempts": 2,
+                "confidence": 80,
+                "difficulty_medium": "2",
+            }
+        },
+    }), encoding="utf-8")
+
+    tracker = ProgressTracker()
+    topic = tracker.get()["Technology"]["Basics"]
+
+    assert topic["attempts"] == 2
+    assert topic["confidence"] == 80
+    assert topic["difficulty_easy"] == 0
+    assert topic["difficulty_medium"] == 2
+
+
+def test_progress_tracker_update_repairs_malformed_topic_values(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    progress_file = tmp_path / "data" / "memory" / "progress" / "default.json"
+    progress_file.parent.mkdir(parents=True)
+    progress_file.write_text(json.dumps({
+        "Mathematics": {"Algebra": "broken"}
+    }), encoding="utf-8")
+
+    tracker = ProgressTracker()
+    tracker.update("Mathematics", "Algebra", 90)
+
+    topic = tracker.get()["Mathematics"]["Algebra"]
+    assert topic["attempts"] == 1
+    assert topic["confidence"] == 62.0

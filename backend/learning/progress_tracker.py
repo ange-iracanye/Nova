@@ -1,5 +1,6 @@
 import json
 import hashlib
+import math
 import re
 from pathlib import Path
 from datetime import datetime
@@ -9,6 +10,23 @@ from backend.user_context import set_active_user
 _SUBJECT_ALIASES = {
     "math": "Mathematics", "mathematics": "Mathematics", "maths": "Mathematics", "algebra": "Mathematics", "calculus": "Mathematics", "geometry": "Mathematics", "statistics": "Mathematics", "stats": "Mathematics", "physics": "Physics", "biology": "Biology", "chemistry": "Chemistry", "geography": "Geography", "history": "History", "tech": "Technology", "technology": "Technology", "computer science": "Technology", "programming": "Technology", "coding": "Technology", "economics": "Economics", "economy": "Economics", "business": "Business", "management": "Business", "entrepreneurship": "Business", "psychology": "Psychology", "sociology": "Sociology", "philosophy": "Philosophy", "phylosophy": "Philosophy", "literature": "Literature", "english literature": "Literature", "language": "Languages", "languages": "Languages", "linguistics": "Languages", "french": "Languages", "français": "Languages", "english": "Languages", "spanish": "Languages", "german": "Languages", "italian": "Languages", "arabic": "Languages", "japanese": "Languages", "chinese": "Languages", "law": "Law", "legal studies": "Law", "political science": "Political Science", "politics": "Political Science", "government": "Political Science", "civics": "Political Science", "art": "Art", "fine art": "Art", "visual arts": "Art", "music": "Music",
 }
+
+def _safe_count(value):
+    try:
+        return max(0, int(value or 0))
+    except (TypeError, ValueError, OverflowError):
+        return 0
+
+
+def _safe_confidence(value, default=50.0):
+    try:
+        confidence = float(value)
+    except (TypeError, ValueError, OverflowError):
+        return default
+    if not math.isfinite(confidence):
+        return default
+    return max(0.0, min(100.0, confidence))
+
 
 _DOMAIN_KEYWORDS = {
     "Technology": {"python", "javascript", "typescript", "java", "c++", "c#", "rust", "golang", "programming", "coding", "algorithm", "algorithms", "database", "api", "software", "cybersecurity", "cyber security", "firewall", "networking", "linux", "docker", "github", "git", "quantum computing", "quantum computer", "machine learning", "artificial intelligence", "neural network", "operating system"},
@@ -53,7 +71,10 @@ class ProgressTracker:
         self.file = self._get_file()
         if self.file.exists():
             try: self.progress = json.loads(self.file.read_text(encoding="utf-8"))
-            except Exception: self.progress = {}
+            except (OSError, ValueError, TypeError): self.progress = {}
+            if not isinstance(self.progress, dict):
+                self.progress = {}
+                self._save()
         else:
             self.progress = {}; self._save()
 
@@ -78,15 +99,20 @@ class ProgressTracker:
                     bucket[topic] = data; continue
                 old, incoming = bucket[topic], data
                 if not isinstance(old, dict) or not isinstance(incoming, dict): continue
-                old_attempts, new_attempts = int(old.get("attempts", 0) or 0), int(incoming.get("attempts", 0) or 0)
+                old_attempts = _safe_count(old.get("attempts"))
+                new_attempts = _safe_count(incoming.get("attempts"))
                 total = old_attempts + new_attempts
-                if total:
-                    old["confidence"] = round((float(old.get("confidence", 50) or 50) * old_attempts + float(incoming.get("confidence", 50) or 50) * new_attempts) / total, 1)
+                old_confidence = _safe_confidence(old.get("confidence", 50))
+                new_confidence = _safe_confidence(incoming.get("confidence", 50))
+                old["confidence"] = (
+                    round((old_confidence * old_attempts + new_confidence * new_attempts) / total, 1)
+                    if total else old_confidence
+                )
                 old["attempts"] = total
                 old["last_seen"] = max(str(old.get("last_seen") or ""), str(incoming.get("last_seen") or ""))
                 old["mastered"] = bool(old.get("mastered")) or bool(incoming.get("mastered"))
                 for key in ("difficulty_easy", "difficulty_medium", "difficulty_hard"):
-                    old[key] = int(old.get(key, 0) or 0) + int(incoming.get(key, 0) or 0)
+                    old[key] = _safe_count(old.get(key)) + _safe_count(incoming.get(key))
         if changed:
             self.progress = merged; self._save()
 
@@ -98,12 +124,15 @@ class ProgressTracker:
         try: confidence = max(0.0, min(100.0, float(confidence)))
         except (TypeError, ValueError): confidence = 50.0
         bucket = self.progress.setdefault(subject, {})
-        if topic not in bucket:
+        if not isinstance(bucket, dict):
+            bucket = {}
+            self.progress[subject] = bucket
+        if topic not in bucket or not isinstance(bucket.get(topic), dict):
             bucket[topic] = {"attempts": 0, "confidence": 50, "mastered": False, "first_seen": datetime.now().isoformat(), "last_seen": None, "difficulty_easy": 0, "difficulty_medium": 0, "difficulty_hard": 0}
         data = bucket[topic]
-        data["attempts"] = int(data.get("attempts", 0) or 0) + 1
-        previous = float(data.get("confidence", 50) or 50)
-        attempts = int(data["attempts"])
+        data["attempts"] = _safe_count(data.get("attempts")) + 1
+        previous = _safe_confidence(data.get("confidence", 50))
+        attempts = data["attempts"]
         learning_rate = 0.30 if attempts <= 3 else 0.15
         data["confidence"] = round(previous + (confidence - previous) * learning_rate, 1)
         data["mastered"] = data["confidence"] >= 85 and attempts >= 5
@@ -111,7 +140,7 @@ class ProgressTracker:
         level = str(difficulty or "").strip().lower()
         if level in {"easy", "medium", "hard"}:
             key = f"difficulty_{level}"
-            data[key] = int(data.get(key, 0) or 0) + 1
+            data[key] = _safe_count(data.get(key)) + 1
         self._save()
 
     def get(self):
