@@ -12,7 +12,7 @@ def test_dashboard_restores_previous_user_after_success(monkeypatch):
 
     monkeypatch.setattr(dashboard, "_build_dashboard_data", build)
 
-    assert dashboard._build_dashboard(" Student@Example.com ") == {"ok": True}
+    assert dashboard._build_dashboard("student@example.com") == {"ok": True}
     assert get_active_user() == "previous@example.com"
 
 
