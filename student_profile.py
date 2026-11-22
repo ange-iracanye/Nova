@@ -1,8 +1,16 @@
 import hashlib
 import json
+import math
 from pathlib import Path
 
 from backend.user_context import get_active_user
+
+
+def _safe_count(value):
+    try:
+        return max(0, int(value or 0))
+    except (TypeError, ValueError, OverflowError):
+        return 0
 
 
 class StudentProfile:
@@ -56,11 +64,14 @@ class StudentProfile:
 
     def add_question(self, topic=None):
         self._load()
-        self.profile["questions_asked"] = int(self.profile.get("questions_asked", 0) or 0) + 1
+        self.profile["questions_asked"] = _safe_count(self.profile.get("questions_asked")) + 1
         if topic:
-            topics = self.profile.setdefault("topics_seen", [])
+            topics = self.profile.get("topics_seen")
+            if not isinstance(topics, list):
+                topics = []
+                self.profile["topics_seen"] = topics
             if topic not in topics:
-                topics.append(topic)
+                topics.append(str(topic))
         self.save()
 
     def set_name(self, name):
@@ -84,7 +95,13 @@ class StudentProfile:
             for topic, data in topics.items():
                 if not isinstance(data, dict):
                     continue
-                mastery = float(data.get("confidence", 0) or 0)
+                try:
+                    mastery = float(data.get("confidence", 0) or 0)
+                except (TypeError, ValueError, OverflowError):
+                    continue
+                if not math.isfinite(mastery):
+                    continue
+                mastery = max(0.0, min(100.0, mastery))
                 label = f"{subject} / {topic}"
                 if mastery >= 75:
                     strengths.append((mastery, label))
@@ -99,7 +116,7 @@ class StudentProfile:
         self._load()
         strengths, weaknesses = self._learning_snapshot()
         snapshot = dict(self.profile)
-        snapshot["questions"] = int(snapshot.get("questions_asked", 0) or 0)
+        snapshot["questions"] = _safe_count(snapshot.get("questions_asked"))
         snapshot["strengths"] = strengths
         snapshot["weaknesses"] = weaknesses
         return snapshot
