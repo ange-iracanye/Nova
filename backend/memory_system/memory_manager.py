@@ -149,7 +149,16 @@ class MemoryManager:
 
     @staticmethod
     def _conversation_text(conversation):
-        return "\n".join(f"{m.get('role', 'user').title()}: {m.get('text', '')}" for m in conversation.get("messages", []) if isinstance(m, dict))
+        if not isinstance(conversation, dict):
+            return ""
+        messages = conversation.get("messages", [])
+        if not isinstance(messages, list):
+            return ""
+        return "\n".join(
+            f"{m.get('role', 'user').title()}: {m.get('text', '')}"
+            for m in messages
+            if isinstance(m, dict)
+        )
 
     @staticmethod
     def _format_date(value):
@@ -162,12 +171,17 @@ class MemoryManager:
 
     def _conversation_context(self, email, query, max_characters):
         conversations = self.conversations.list(email)
-        if not conversations: return ""
-        ordered = list(conversations.values()); ordered.sort(key=lambda c: c.get("updated_at", "") if isinstance(c, dict) else "", reverse=True)
-        current = ordered[0] if ordered else None
+        if not isinstance(conversations, dict) or not conversations:
+            return ""
+        ordered = [item for item in conversations.values() if isinstance(item, dict)]
+        ordered.sort(key=lambda item: item.get("updated_at", ""), reverse=True)
+        if not ordered:
+            return ""
+        current = ordered[0]
         sections = ["MEMORY DATE RULE: Conversation timestamps below are authoritative metadata. Use them to answer questions about when the user previously talked to Nova. Do not claim that you cannot know a date when a relevant timestamp is present."]
         if current:
-            messages = [m for m in current.get("messages", []) if isinstance(m, dict)]
+            raw_messages = current.get("messages", [])
+            messages = [m for m in raw_messages if isinstance(m, dict)] if isinstance(raw_messages, list) else []
             if messages:
                 sections.append(f"CURRENT CONVERSATION (highest priority; updated {self._format_date(current.get('updated_at'))}):")
                 for message in messages[-12:]:
@@ -179,7 +193,8 @@ class MemoryManager:
         candidates = []
         for conversation in ordered[1:]:
             if not isinstance(conversation, dict): continue
-            messages = [m for m in conversation.get("messages", []) if isinstance(m, dict)]
+            raw_messages = conversation.get("messages", [])
+            messages = [m for m in raw_messages if isinstance(m, dict)] if isinstance(raw_messages, list) else []
             if not messages: continue
             text = self._conversation_text(conversation); relevance = self._keyword_score(query, text)
             if relevance <= 0 and not temporal_query: continue
