@@ -1,5 +1,6 @@
 import json
 import hashlib
+import math
 from pathlib import Path
 from datetime import datetime
 
@@ -180,7 +181,8 @@ class KnowledgeMap:
         except (
             json.JSONDecodeError,
             OSError,
-            TypeError
+            TypeError,
+            UnicodeError
         ):
 
             self.map = {}
@@ -247,9 +249,13 @@ class KnowledgeMap:
 
         except (
             TypeError,
-            ValueError
+            ValueError,
+            OverflowError
         ):
 
+            confidence = 50.0
+
+        if not math.isfinite(confidence):
             confidence = 50.0
 
         confidence = max(
@@ -329,16 +335,12 @@ class KnowledgeMap:
 
         now = datetime.now().isoformat()
 
-        if subject not in self.map:
-
+        if not isinstance(self.map.get(subject), dict):
             self.map[subject] = {}
 
-        existing = self.map[
-            subject
-        ].get(
-            topic,
-            {}
-        )
+        existing = self.map[subject].get(topic, {})
+        if not isinstance(existing, dict):
+            existing = {}
 
         # =====================================
         # EXISTING VALUES
@@ -357,12 +359,13 @@ class KnowledgeMap:
 
         except (
             TypeError,
-            ValueError
+            ValueError,
+            OverflowError
         ):
 
             attempts = 0
 
-        attempts += 1
+        attempts = max(0, attempts) + 1
 
         first_seen = existing.get(
             "first_seen"
