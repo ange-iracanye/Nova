@@ -1,8 +1,26 @@
 import hashlib
 import json
+import math
 from pathlib import Path
 
 from backend.user_context import get_active_user
+
+
+def _safe_count(value):
+    try:
+        return max(0, int(value or 0))
+    except (TypeError, ValueError, OverflowError):
+        return 0
+
+
+def _safe_confidence(value):
+    try:
+        confidence = float(value)
+    except (TypeError, ValueError, OverflowError):
+        return 0.0
+    if not math.isfinite(confidence):
+        return 0.0
+    return max(0.0, min(100.0, confidence))
 
 
 class LearningGraph:
@@ -79,8 +97,8 @@ class LearningGraph:
             for topic, data in topics.items():
                 if not isinstance(data, dict):
                     continue
-                attempts = max(0, int(data.get("attempts", 0) or 0))
-                confidence = max(0.0, min(100.0, float(data.get("confidence", 0) or 0)))
+                attempts = _safe_count(data.get("attempts", 0))
+                confidence = _safe_confidence(data.get("confidence", 0))
                 last_seen = str(data.get("last_seen") or "")
                 subject_node["topics"][topic] = {
                     "mastery": round(confidence, 1),
@@ -116,10 +134,9 @@ class LearningGraph:
         subject = str(subject or "").strip()
         if not subject:
             return
-        self.graph["subjects"].setdefault(
-            subject,
-            {"mastery": 0.0, "topics": {}},
-        )
+        node = self.graph["subjects"].get(subject)
+        if not isinstance(node, dict):
+            self.graph["subjects"][subject] = {"mastery": 0.0, "topics": {}}
         self.save()
 
     def add_topic(self, subject, topic):
@@ -128,11 +145,13 @@ class LearningGraph:
         topic = str(topic or "").strip()
         if not subject or not topic:
             return
-        self.graph["subjects"].setdefault(
-            subject,
-            {"mastery": 0.0, "topics": {}},
-        )
-        self.graph["subjects"][subject]["topics"].setdefault(
+        node = self.graph["subjects"].get(subject)
+        if not isinstance(node, dict):
+            node = {"mastery": 0.0, "topics": {}}
+            self.graph["subjects"][subject] = node
+        if not isinstance(node.get("topics"), dict):
+            node["topics"] = {}
+        node["topics"].setdefault(
             topic,
             {
                 "mastery": 0.0,
@@ -149,11 +168,11 @@ class LearningGraph:
         self.add_topic(subject, topic)
         self._refresh()
         data = self.graph["subjects"][subject]["topics"][topic]
-        data["times_studied"] = int(data.get("times_studied", 0)) + 1
+        data["times_studied"] = _safe_count(data.get("times_studied")) + 1
         if correct:
-            data["correct_answers"] = int(data.get("correct_answers", 0)) + 1
+            data["correct_answers"] = _safe_count(data.get("correct_answers")) + 1
         else:
-            data["wrong_answers"] = int(data.get("wrong_answers", 0)) + 1
+            data["wrong_answers"] = _safe_count(data.get("wrong_answers")) + 1
         total = data["correct_answers"] + data["wrong_answers"]
         if total:
             data["mastery"] = round(data["correct_answers"] / total * 100, 1)
