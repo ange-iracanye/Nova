@@ -42,7 +42,7 @@ class ConversationManager:
         try:
             loaded = json.loads(self.file.read_text(encoding="utf-8"))
             self.data = loaded if isinstance(loaded, dict) else {"users": {}}
-        except (json.JSONDecodeError, OSError):
+        except (json.JSONDecodeError, OSError, UnicodeError):
             self.data = {"users": {}}
         if not isinstance(self.data.get("users"), dict):
             self.data["users"] = {}
@@ -113,8 +113,11 @@ class ConversationManager:
             conversation = user["conversations"][cid]
             if not isinstance(conversation, dict):
                 return False
-            conversation.setdefault("messages", [])
-            conversation["messages"].append({
+            messages = conversation.get("messages")
+            if not isinstance(messages, list):
+                messages = []
+                conversation["messages"] = messages
+            messages.append({
                 "role": role,
                 "text": text,
                 "timestamp": datetime.now().isoformat(),
@@ -126,7 +129,7 @@ class ConversationManager:
             return True
 
     def generate_title(self, message):
-        title = message.strip().replace("\n", " ")
+        title = str(message or "").strip().replace("\n", " ")
         if not title:
             return "New Chat"
         title = " ".join(title.split())
@@ -147,7 +150,7 @@ class ConversationManager:
             user = self._user(email)
             if cid not in user["conversations"]:
                 return False
-            title = title.strip().replace("\n", " ")
+            title = str(title or "").strip().replace("\n", " ")
             if not title:
                 return False
             conversation = user["conversations"][cid]
