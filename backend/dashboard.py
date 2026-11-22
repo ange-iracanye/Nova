@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from typing import Any
+import math
 
 from fastapi import APIRouter, HTTPException, Request
 
@@ -44,7 +45,9 @@ def _authorized_email(request: Request, requested_email: str | None = None) -> s
 def _clamp(value: Any, low: float = 0.0, high: float = 100.0) -> float:
     try:
         number = float(value)
-    except (TypeError, ValueError):
+    except (TypeError, ValueError, OverflowError):
+        number = low
+    if not math.isfinite(number):
         number = low
     return round(max(low, min(high, number)), 1)
 
@@ -52,13 +55,15 @@ def _clamp(value: Any, low: float = 0.0, high: float = 100.0) -> float:
 def _int(value: Any) -> int:
     try:
         return max(0, int(value or 0))
-    except (TypeError, ValueError):
+    except (TypeError, ValueError, OverflowError):
         return 0
 
 
 def _canonical_progress(progress: dict) -> dict:
     result: dict = {}
-    for raw_subject, topics in (progress or {}).items():
+    if not isinstance(progress, dict):
+        return result
+    for raw_subject, topics in progress.items():
         subject = canonical_subject(raw_subject)
         bucket = result.setdefault(subject, {})
         if not isinstance(topics, dict):
@@ -94,7 +99,10 @@ def _canonical_graph(graph: dict) -> dict:
         target = result["subjects"].setdefault(subject, {"mastery": 0.0, "topics": {}})
         if not isinstance(node, dict):
             continue
-        for topic, data in (node.get("topics", {}) or {}).items():
+        topics = node.get("topics", {})
+        if not isinstance(topics, dict):
+            continue
+        for topic, data in topics.items():
             if topic not in target["topics"]:
                 target["topics"][topic] = dict(data) if isinstance(data, dict) else {}
                 continue
