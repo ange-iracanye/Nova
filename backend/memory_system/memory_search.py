@@ -443,6 +443,13 @@ class MemorySearch:
         limit=8
     ):
 
+        try:
+            limit = max(0, int(limit))
+        except (TypeError, ValueError, OverflowError):
+            return []
+        if limit == 0:
+            return []
+
         results = self.search(
             memories,
             query,

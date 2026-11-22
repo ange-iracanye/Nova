@@ -52,3 +52,14 @@ def test_search_clamps_invalid_minimum_score():
 
     assert search.search([{"text": "algebra"}], "algebra", minimum_score=float("nan"))
     assert search.search([{"text": "algebra"}], "algebra", minimum_score=2) == []
+
+
+
+def test_diverse_search_validates_limit_before_expanding_candidates():
+    search = MemorySearch()
+    memories = [{"text": "algebra practice", "subject": "Mathematics"}]
+
+    assert search.search_diverse(memories, "algebra", limit="invalid") == []
+    assert search.search_diverse(memories, "algebra", limit=-3) == []
+    assert search.search_diverse(memories, "algebra", limit=0) == []
+    assert len(search.search_diverse(memories, "algebra", limit=1)) == 1
