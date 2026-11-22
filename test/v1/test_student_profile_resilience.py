@@ -9,6 +9,7 @@ def test_student_profile_repairs_question_counters_and_topic_lists(tmp_path, mon
     profile = StudentProfile("counter-test@example.com")
     profile.profile["questions_asked"] = "not-a-number"
     profile.profile["topics_seen"] = "broken"
+    profile.save()
 
     profile.add_question("Algebra")
 
@@ -41,5 +42,6 @@ def test_student_profile_question_count_is_safe_for_large_invalid_values(tmp_pat
     monkeypatch.chdir(tmp_path)
     profile = StudentProfile("infinite-counter@example.com")
     profile.profile["questions_asked"] = float("inf")
+    profile.save()
 
     assert profile.get()["questions"] == 0
