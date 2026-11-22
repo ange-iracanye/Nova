@@ -87,3 +87,33 @@ def test_progress_tracker_update_clamps_finite_confidence(tmp_path, monkeypatch)
     progress = tracker.get()["Mathematics"]
     assert progress["Low"]["confidence"] == 35.0
     assert progress["High"]["confidence"] == 65.0
+
+
+
+def test_progress_tracker_recovers_from_invalid_utf8_file(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    progress_file = tmp_path / "data" / "memory" / "progress" / "default.json"
+    progress_file.parent.mkdir(parents=True)
+    progress_file.write_bytes(b"\xff\xfe\xfa")
+
+    tracker = ProgressTracker()
+
+    assert tracker.get() == {}
+    tracker.update("Physics", "Motion", 70)
+    assert tracker.get()["Physics"]["Motion"]["attempts"] == 1
+
+
+def test_progress_tracker_repairs_malformed_alias_topic_during_merge(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    progress_file = tmp_path / "data" / "memory" / "progress" / "default.json"
+    progress_file.parent.mkdir(parents=True)
+    progress_file.write_text(json.dumps({
+        "tech": {"Basics": "broken"},
+        "python": {"Basics": {"attempts": 2, "confidence": 70}},
+    }), encoding="utf-8")
+
+    tracker = ProgressTracker()
+
+    topic = tracker.get()["Technology"]["Basics"]
+    assert topic["attempts"] == 2
+    assert topic["confidence"] == 70

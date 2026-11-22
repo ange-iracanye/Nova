@@ -71,7 +71,7 @@ class ProgressTracker:
         self.file = self._get_file()
         if self.file.exists():
             try: self.progress = json.loads(self.file.read_text(encoding="utf-8"))
-            except (OSError, ValueError, TypeError): self.progress = {}
+            except (OSError, ValueError, TypeError, UnicodeError): self.progress = {}
             if not isinstance(self.progress, dict):
                 self.progress = {}
                 self._save()
@@ -98,7 +98,12 @@ class ProgressTracker:
                 if topic not in bucket:
                     bucket[topic] = data; continue
                 old, incoming = bucket[topic], data
-                if not isinstance(old, dict) or not isinstance(incoming, dict): continue
+                if not isinstance(old, dict):
+                    bucket[topic] = incoming if isinstance(incoming, dict) else {}
+                    changed = True
+                    continue
+                if not isinstance(incoming, dict):
+                    continue
                 old_attempts = _safe_count(old.get("attempts"))
                 new_attempts = _safe_count(incoming.get("attempts"))
                 total = old_attempts + new_attempts
