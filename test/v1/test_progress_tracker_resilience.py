@@ -60,3 +60,30 @@ def test_progress_tracker_update_repairs_malformed_topic_values(tmp_path, monkey
     topic = tracker.get()["Mathematics"]["Algebra"]
     assert topic["attempts"] == 1
     assert topic["confidence"] == 62.0
+
+
+
+def test_progress_tracker_update_uses_safe_default_for_non_finite_confidence(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    tracker = ProgressTracker()
+
+    tracker.update("Mathematics", "NaN input", float("nan"))
+    tracker.update("Mathematics", "Infinite input", float("inf"))
+    tracker.update("Mathematics", "Invalid input", "not-a-number")
+
+    progress = tracker.get()["Mathematics"]
+    assert progress["NaN input"]["confidence"] == 50.0
+    assert progress["Infinite input"]["confidence"] == 50.0
+    assert progress["Invalid input"]["confidence"] == 50.0
+
+
+def test_progress_tracker_update_clamps_finite_confidence(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    tracker = ProgressTracker()
+
+    tracker.update("Mathematics", "Low", -20)
+    tracker.update("Mathematics", "High", 140)
+
+    progress = tracker.get()["Mathematics"]
+    assert progress["Low"]["confidence"] == 35.0
+    assert progress["High"]["confidence"] == 65.0

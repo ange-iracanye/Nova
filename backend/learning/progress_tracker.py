@@ -121,8 +121,7 @@ class ProgressTracker:
         topic = " ".join(str(topic or "").strip().split())
         if not subject or not topic: return
         self._merge_subject_aliases()
-        try: confidence = max(0.0, min(100.0, float(confidence)))
-        except (TypeError, ValueError): confidence = 50.0
+        confidence = _safe_confidence(confidence, default=50.0)
         bucket = self.progress.setdefault(subject, {})
         if not isinstance(bucket, dict):
             bucket = {}
