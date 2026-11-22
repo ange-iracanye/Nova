@@ -19,3 +19,36 @@ def test_semantic_score_keeps_valid_normalized_vectors():
 
     assert search.semantic_score([0.6, 0.8], [0.6, 0.8]) == 1.0
     assert search.semantic_score([1.0, 0.0], [-1.0, 0.0]) == 0.0
+
+
+
+def test_importance_score_uses_default_for_non_finite_values():
+    search = MemorySearch()
+
+    assert search.importance_score({"importance": float("nan")}) == 0.5
+    assert search.importance_score({"importance": float("inf")}) == 0.5
+    assert search.importance_score({"importance": "invalid"}) == 0.5
+
+
+def test_search_skips_malformed_memories_and_validates_limits():
+    search = MemorySearch()
+
+    results = search.search(
+        [None, "broken", {"text": "algebra practice", "importance": 0.8}],
+        "algebra",
+        limit=5,
+        minimum_score=0,
+    )
+
+    assert len(results) == 1
+    assert results[0]["memory"]["text"] == "algebra practice"
+    assert search.search([{"text": "algebra"}], "algebra", limit=-1) == []
+    assert search.search([{"text": "algebra"}], "algebra", limit="invalid") == []
+    assert search.search([{"text": "algebra"}], "algebra", limit=0) == []
+
+
+def test_search_clamps_invalid_minimum_score():
+    search = MemorySearch()
+
+    assert search.search([{"text": "algebra"}], "algebra", minimum_score=float("nan"))
+    assert search.search([{"text": "algebra"}], "algebra", minimum_score=2) == []

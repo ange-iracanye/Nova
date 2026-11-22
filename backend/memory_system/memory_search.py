@@ -238,24 +238,11 @@ class MemorySearch:
     ):
 
         try:
-
-            value = float(
-                memory.get(
-                    "importance",
-                    0.5
-                )
-            )
-
-            return max(
-                0.0,
-                min(
-                    1.0,
-                    value
-                )
-            )
-
-        except Exception:
-
+            value = float(memory.get("importance", 0.5))
+            if not math.isfinite(value):
+                return 0.5
+            return max(0.0, min(1.0, value))
+        except (AttributeError, TypeError, ValueError, OverflowError):
             return 0.5
 
     # =====================================
@@ -267,10 +254,7 @@ class MemorySearch:
         memory
     ):
 
-        memory_type = memory.get(
-            "type",
-            "episode"
-        )
+        memory_type = str(memory.get("type", "episode") or "episode").strip().lower()
 
         weights = {
 
@@ -315,6 +299,9 @@ class MemorySearch:
         memory,
         query_embedding=None
     ):
+
+        if not isinstance(memory, dict):
+            return 0.0
 
         text = (
             memory.get("text")
@@ -392,6 +379,21 @@ class MemorySearch:
         if not memories:
             return []
 
+        try:
+            limit = max(0, int(limit))
+        except (TypeError, ValueError, OverflowError):
+            return []
+        if limit == 0:
+            return []
+
+        try:
+            minimum_score = float(minimum_score)
+            if not math.isfinite(minimum_score):
+                minimum_score = 0.20
+        except (TypeError, ValueError, OverflowError):
+            minimum_score = 0.20
+        minimum_score = max(0.0, min(1.0, minimum_score))
+
         query_embedding = (
             self.create_query_embedding(
                 query
@@ -401,6 +403,8 @@ class MemorySearch:
         scored = []
 
         for memory in memories:
+            if not isinstance(memory, dict):
+                continue
 
             score = self.score(
                 query,
