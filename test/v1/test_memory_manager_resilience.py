@@ -1,0 +1,59 @@
+import json
+
+from backend.memory_system.memory_manager import MemoryManager
+
+
+def _manager(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("NOVA_ENABLE_SEMANTIC_MEMORY", "false")
+    monkeypatch.setenv("NOVA_CONVERSATIONS_FILE", "data/conversations.json")
+    return MemoryManager(base_path=tmp_path / "memory")
+
+
+def test_memory_manager_normalizes_non_finite_importance_and_confidence(tmp_path, monkeypatch):
+    manager = _manager(tmp_path, monkeypatch)
+
+    memory = manager.add_memory(
+        "student@example.com",
+        "I am learning algebra",
+        confidence=float("nan"),
+        importance=float("inf"),
+        metadata="not-a-dictionary",
+    )
+
+    assert memory["confidence"] == 0.8
+    assert memory["importance"] == 0.5
+    assert memory["metadata"] == {}
+
+
+def test_memory_manager_skips_malformed_memory_records(tmp_path, monkeypatch):
+    manager = _manager(tmp_path, monkeypatch)
+    data = manager.default_memory()
+    data["memories"] = [
+        None,
+        "broken",
+        {"text": "algebra practice", "importance": 0.8, "type": "learning"},
+    ]
+    path = manager.user_file("student@example.com")
+    path.parent.mkdir(parents=True)
+    path.write_text(json.dumps(data), encoding="utf-8")
+
+    loaded = manager.load("student@example.com")
+    assert len(loaded["memories"]) == 1
+    results = manager.search("student@example.com", "algebra")
+
+    assert len(results) == 1
+    assert results[0]["memory"]["text"] == "algebra practice"
+
+
+def test_memory_manager_repairs_invalid_recall_count(tmp_path, monkeypatch):
+    manager = _manager(tmp_path, monkeypatch)
+    memory = manager.add_memory("student@example.com", "Algebra revision")
+    memory["recall_count"] = "invalid"
+    manager._write(manager.user_file("student@example.com"), {
+        **manager.default_memory(),
+        "memories": [memory],
+    })
+
+    result = manager.add_memory("student@example.com", "Algebra revision")
+    assert result["recall_count"] == 1

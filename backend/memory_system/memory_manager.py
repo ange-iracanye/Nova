@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 import os
 import re
 from datetime import datetime, timezone
@@ -10,6 +11,25 @@ from pathlib import Path
 from backend.memory_system.conversation_manager import ConversationManager
 from backend.memory_system.memory_extractor import MemoryExtractor
 from backend.memory_system.memory_search import MemorySearch
+
+
+def _safe_count(value):
+    try:
+        return max(0, int(value or 0))
+    except (TypeError, ValueError, OverflowError):
+        return 0
+
+
+def _safe_unit_value(value, default):
+    try:
+        number = float(value)
+    except (TypeError, ValueError, OverflowError):
+        return default
+    if not math.isfinite(number):
+        return default
+    if number > 1:
+        number /= 100
+    return max(0.0, min(1.0, number))
 
 
 class MemoryManager:
@@ -43,7 +63,10 @@ class MemoryManager:
         except Exception: memory = self.default_memory()
         if not isinstance(memory, dict): memory = self.default_memory()
         for key in ("memories", "facts", "preferences", "goals", "learning", "episodes"):
-            if not isinstance(memory.get(key), list): memory[key] = []
+            if not isinstance(memory.get(key), list):
+                memory[key] = []
+            elif key == "memories":
+                memory[key] = [item for item in memory[key] if isinstance(item, dict)]
         if not isinstance(memory.get("statistics"), dict): memory["statistics"] = self.default_memory()["statistics"]
         return memory
 
@@ -77,17 +100,15 @@ class MemoryManager:
     def add_memory(self, email, text, memory_type="episode", subject=None, conversation_id=None, importance=0.5, confidence=0.8, metadata=None, formatted_text=None):
         if not text: return None
         data = self.load(email); now = datetime.now().isoformat()
-        try: confidence = float(confidence)
-        except (TypeError, ValueError): confidence = 0.8
-        if confidence > 1: confidence /= 100
-        confidence = max(0.0, min(1.0, confidence))
+        confidence = _safe_unit_value(confidence, 0.8)
+        importance = _safe_unit_value(importance, 0.5)
         search_text = (formatted_text or f"Subject: {subject or ''}\nUser: {text}\nNova:").strip()
         embedding = self.search_engine.embed(search_text) or self._embed(search_text)
-        memory = {"id": hashlib.sha256((email + now + text).encode("utf-8")).hexdigest(), "type": memory_type, "text": search_text, "subject": subject, "conversation_id": conversation_id, "importance": importance, "confidence": confidence, "created_at": now, "last_recalled": None, "recall_count": 0, "metadata": metadata or {}, "embedding": embedding}
+        memory = {"id": hashlib.sha256((email + now + text).encode("utf-8")).hexdigest(), "type": memory_type, "text": search_text, "subject": subject, "conversation_id": conversation_id, "importance": importance, "confidence": confidence, "created_at": now, "last_recalled": None, "recall_count": 0, "metadata": metadata if isinstance(metadata, dict) else {}, "embedding": embedding}
         normalized = search_text.lower().strip()
         for existing in data["memories"]:
             if str(existing.get("text", "")).lower().strip() == normalized:
-                existing["recall_count"] = existing.get("recall_count", 0) + 1; existing["last_recalled"] = now; self._write(self.user_file(email), data); return existing
+                existing["recall_count"] = _safe_count(existing.get("recall_count")) + 1; existing["last_recalled"] = now; self._write(self.user_file(email), data); return existing
         data["memories"].append(memory)
         category = {"fact": "facts", "preference": "preferences", "goal": "goals", "learning": "learning", "episode": "episodes"}.get(memory_type)
         if category: data[category].append(memory["id"])
@@ -107,13 +128,13 @@ class MemoryManager:
             self.add_memory(email, item.get("text", ""), final_type, subject, conversation_id, importance=item.get("importance", 1.0 if final_type == "fact" else 0.8), confidence=item.get("confidence", 0.8))
 
     def search(self, email, query, limit=8, subject=None):
-        data = self.load(email); memories = data["memories"]
+        data = self.load(email); memories = [m for m in data["memories"] if isinstance(m, dict)]
         if subject: memories = [m for m in memories if m.get("subject") == subject or m.get("type") in {"fact", "preference", "goal"}]
         results = self.search_engine.search(memories, query, limit=limit)
         if results:
             now = datetime.now().isoformat()
             for result in results:
-                memory = result["memory"]; memory["recall_count"] = memory.get("recall_count", 0) + 1; memory["last_recalled"] = now
+                memory = result["memory"]; memory["recall_count"] = _safe_count(memory.get("recall_count")) + 1; memory["last_recalled"] = now
             self._write(self.user_file(email), data)
         return results
 
