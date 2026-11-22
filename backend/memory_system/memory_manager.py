@@ -100,7 +100,16 @@ class MemoryManager:
     def add_memory(self, email, text, memory_type="episode", subject=None, conversation_id=None, importance=0.5, confidence=0.8, metadata=None, formatted_text=None):
         if not text: return None
         data = self.load(email); now = datetime.now().isoformat()
-        confidence = _safe_unit_value(confidence, 0.8)
+        try:
+            confidence = float(confidence)
+        except (TypeError, ValueError, OverflowError):
+            confidence = 0.8
+        if not math.isfinite(confidence):
+            confidence = 0.8
+        if confidence > 1:
+            confidence /= 100
+        confidence = max(0.0, min(1.0, confidence))
+
         importance = _safe_unit_value(importance, 0.5)
         search_text = (formatted_text or f"Subject: {subject or ''}\nUser: {text}\nNova:").strip()
         embedding = self.search_engine.embed(search_text) or self._embed(search_text)

@@ -1,6 +1,6 @@
 import json
 
-from backend.memory_system.memory_manager import MemoryManager
+from backend.memory_system.memory_manager import MemoryManager, _safe_unit_value
 
 
 def _manager(tmp_path, monkeypatch):
@@ -57,3 +57,10 @@ def test_memory_manager_repairs_invalid_recall_count(tmp_path, monkeypatch):
 
     result = manager.add_memory("student@example.com", "Algebra revision")
     assert result["recall_count"] == 1
+
+
+
+def test_memory_unit_value_helper_rejects_non_finite_values():
+    assert _safe_unit_value(float("nan"), 0.8) == 0.8
+    assert _safe_unit_value(float("inf"), 0.5) == 0.5
+    assert _safe_unit_value(140, 0.5) == 1.0
