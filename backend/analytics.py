@@ -36,6 +36,15 @@ def _user_key(email: str) -> str:
     return hashlib.sha256(email.strip().lower().encode("utf-8")).hexdigest()
 
 
+def _canonical_route(path: str) -> str:
+    """Persist route categories, never dynamic path segments such as email addresses."""
+    normalized = str(path or "").split("?", 1)[0]
+    for prefix in TRACKED_PREFIXES:
+        if normalized == prefix or normalized.startswith(prefix + "/"):
+            return prefix
+    return "/other"
+
+
 def _connect():
     if psycopg is None or conninfo_to_dict is None or not DATABASE_URL:
         raise RuntimeError("Nova analytics database is not configured.")
@@ -75,7 +84,7 @@ def record_event(email: str, event_type: str, path: str) -> None:
         with _connect() as conn:
             conn.execute(
                 "INSERT INTO nova_analytics_events(user_key, event_type, path) VALUES (%s, %s, %s)",
-                (_user_key(email), event_type[:80], path[:300]),
+                (_user_key(email), event_type[:80], _canonical_route(path)),
             )
             conn.commit()
     except Exception as exc:
