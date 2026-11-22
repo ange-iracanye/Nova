@@ -39,8 +39,13 @@ def _remove_local_user(email: str) -> bool:
     path = auth.USERS_FILE
     if not path.exists():
         return False
-    data = json.loads(path.read_text(encoding="utf-8"))
-    users = data.get("users", {})
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError, TypeError, UnicodeError):
+        return False
+    if not isinstance(data, dict) or not isinstance(data.get("users"), dict):
+        return False
+    users = data["users"]
     normalized = _normalize_email(email)
     keys = [key for key in users if _normalize_email(key) == normalized]
     if not keys:
@@ -103,8 +108,8 @@ def delete_user_data(email: str, session_store: Any = None) -> dict[str, Any]:
     if conversation_file.exists():
         try:
             data = json.loads(conversation_file.read_text(encoding="utf-8"))
-            users = data.get("users", {})
-            matching = [key for key in users if _normalize_email(key) == normalized]
+            users = data.get("users", {}) if isinstance(data, dict) else {}
+            matching = [key for key in users if _normalize_email(key) == normalized] if isinstance(users, dict) else []
             if matching:
                 for key in matching:
                     users.pop(key, None)
@@ -112,7 +117,7 @@ def delete_user_data(email: str, session_store: Any = None) -> dict[str, Any]:
                 temporary.write_text(json.dumps(data, indent=4, ensure_ascii=False), encoding="utf-8")
                 temporary.replace(conversation_file)
                 deleted["conversations"] = True
-        except (OSError, ValueError) as error:
+        except (OSError, ValueError, TypeError, UnicodeError) as error:
             raise RuntimeError("Nova could not safely remove persisted conversation data.") from error
     return deleted
 
