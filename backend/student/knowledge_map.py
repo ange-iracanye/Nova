@@ -275,6 +275,15 @@ class KnowledgeMap:
 
         return confidence
 
+    def _read_confidence(self, value):
+        try:
+            confidence = float(value)
+        except (TypeError, ValueError, OverflowError):
+            return None
+        if not math.isfinite(confidence):
+            return None
+        return max(self.MIN_CONFIDENCE, min(self.MAX_CONFIDENCE, confidence))
+
     # =====================================
     # CATEGORY
     # =====================================
@@ -638,17 +647,8 @@ class KnowledgeMap:
                     )
                 )
 
-                try:
-
-                    confidence = float(
-                        confidence
-                    )
-
-                except (
-                    TypeError,
-                    ValueError
-                ):
-
+                confidence = self._read_confidence(confidence)
+                if confidence is None:
                     continue
 
                 if confidence < (
@@ -741,17 +741,8 @@ class KnowledgeMap:
                     )
                 )
 
-                try:
-
-                    confidence = float(
-                        confidence
-                    )
-
-                except (
-                    TypeError,
-                    ValueError
-                ):
-
+                confidence = self._read_confidence(confidence)
+                if confidence is None:
                     continue
 
                 if confidence >= (
@@ -857,16 +848,11 @@ class KnowledgeMap:
                     )
                 )
 
+                confidence = self._read_confidence(topic_data.get("confidence", 50))
+                if confidence is None:
+                    continue
                 if not topic_category:
-
-                    topic_category = (
-                        self._get_category(
-                            topic_data.get(
-                                "confidence",
-                                50
-                            )
-                        )
-                    )
+                    topic_category = self._get_category(confidence)
 
                 if topic_category != category:
 
@@ -881,10 +867,7 @@ class KnowledgeMap:
                         topic,
 
                     "confidence":
-                        topic_data.get(
-                            "confidence",
-                            50
-                        ),
+                        confidence,
 
                     "category":
                         topic_category,

@@ -28,3 +28,40 @@ def test_knowledge_map_subject_confidence_ignores_non_finite_values(tmp_path, mo
     }
 
     assert knowledge.get_subject_confidence("mathematics") == 70
+
+
+
+def test_knowledge_map_topic_lists_exclude_non_finite_confidence(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    knowledge = KnowledgeMap()
+    knowledge.map = {
+        "mathematics": {
+            "infinite": {"confidence": float("inf")},
+            "nan": {"confidence": float("nan")},
+            "weak": {"confidence": 20},
+            "strong": {"confidence": 90},
+        }
+    }
+
+    weak = knowledge.get_weak_topics()
+    strong = knowledge.get_strong_topics()
+
+    assert [item["topic"] for item in weak] == ["weak"]
+    assert [item["topic"] for item in strong] == ["strong"]
+    assert strong[0]["confidence"] == 90
+
+
+def test_knowledge_map_category_results_return_normalized_confidence(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    knowledge = KnowledgeMap()
+    knowledge.map = {
+        "mathematics": {
+            "algebra": {"confidence": 140, "category": "mastery"},
+            "invalid": {"confidence": float("nan"), "category": "mastery"},
+        }
+    }
+
+    results = knowledge.get_topics_by_category("mastery")
+
+    assert len(results) == 1
+    assert results[0]["confidence"] == 100
