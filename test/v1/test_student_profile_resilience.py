@@ -6,7 +6,7 @@ from student_profile import StudentProfile
 
 def test_student_profile_repairs_question_counters_and_topic_lists(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
-    profile = StudentProfile()
+    profile = StudentProfile("counter-test@example.com")
     profile.profile["questions_asked"] = "not-a-number"
     profile.profile["topics_seen"] = "broken"
 
@@ -18,9 +18,11 @@ def test_student_profile_repairs_question_counters_and_topic_lists(tmp_path, mon
 
 def test_student_profile_learning_snapshot_ignores_non_finite_confidence(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
+    email = "profile-test@example.com"
     progress_dir = tmp_path / "data" / "memory" / "progress"
     progress_dir.mkdir(parents=True)
-    (progress_dir / "default.json").write_text(json.dumps({
+    user_id = hashlib.sha256(email.encode("utf-8")).hexdigest()
+    (progress_dir / f"{user_id}.json").write_text(json.dumps({
         "Mathematics": {
             "Algebra": {"confidence": float("inf")},
             "Geometry": {"confidence": 85},
@@ -28,7 +30,7 @@ def test_student_profile_learning_snapshot_ignores_non_finite_confidence(tmp_pat
         }
     }), encoding="utf-8")
 
-    profile = StudentProfile()
+    profile = StudentProfile(email)
     snapshot = profile.get()
 
     assert snapshot["strengths"] == ["Mathematics / Geometry"]
@@ -37,7 +39,7 @@ def test_student_profile_learning_snapshot_ignores_non_finite_confidence(tmp_pat
 
 def test_student_profile_question_count_is_safe_for_large_invalid_values(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
-    profile = StudentProfile()
+    profile = StudentProfile("infinite-counter@example.com")
     profile.profile["questions_asked"] = float("inf")
 
     assert profile.get()["questions"] == 0
