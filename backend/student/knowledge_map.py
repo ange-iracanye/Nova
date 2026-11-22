@@ -465,18 +465,10 @@ class KnowledgeMap:
 
             return None
 
-        return (
-
-            self.map
-            .get(
-                subject,
-                {}
-            )
-            .get(
-                topic
-            )
-
-        )
+        subject_data = self.map.get(subject, {})
+        if not isinstance(subject_data, dict):
+            return None
+        return subject_data.get(topic)
 
     # =====================================
     # GET SUBJECT
@@ -495,12 +487,8 @@ class KnowledgeMap:
 
             return {}
 
-        return dict(
-            self.map.get(
-                subject,
-                {}
-            )
-        )
+        data = self.map.get(subject, {})
+        return dict(data) if isinstance(data, dict) else {}
 
     # =====================================
     # GET SUBJECT CONFIDENCE
@@ -539,21 +527,12 @@ class KnowledgeMap:
                 continue
 
             try:
-
-                confidence = float(
-                    confidence
-                )
-
-            except (
-                TypeError,
-                ValueError
-            ):
-
+                confidence = float(confidence)
+            except (TypeError, ValueError, OverflowError):
                 continue
-
-            confidences.append(
-                confidence
-            )
+            if not math.isfinite(confidence):
+                continue
+            confidences.append(max(0.0, min(100.0, confidence)))
 
         if not confidences:
 
@@ -1103,14 +1082,8 @@ class KnowledgeMap:
 
             return False
 
-        if subject not in self.map:
-
-            return False
-
-        if topic not in self.map[
-            subject
-        ]:
-
+        subject_data = self.map.get(subject)
+        if not isinstance(subject_data, dict) or topic not in subject_data:
             return False
 
         del self.map[
