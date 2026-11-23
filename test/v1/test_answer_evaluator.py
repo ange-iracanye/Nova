@@ -41,3 +41,11 @@ def test_evaluator_recognizes_french_answers_for_supported_subjects():
     assert evaluator.evaluate("physique", "La gravité agit sur la masse et le mouvement.") == 60
     assert evaluator.evaluate("biologie", "La cellule contient de l'ADN.") == 40
     assert evaluator.evaluate("chimie", "Une molécule contient un atome et une liaison.") == 60
+
+
+
+def test_evaluator_does_not_double_count_duplicate_translated_keywords():
+    evaluator = AnswerEvaluator()
+
+    assert evaluator.evaluate("physics", "The force acts on the mass.") == 40
+    assert evaluator.evaluate("math", "A fraction is part of mathematics.") == 20

@@ -70,7 +70,7 @@ class AnswerEvaluator:
             return 0
         text = str(answer or "").casefold()
         score = 0
-        for word in keywords:
+        for word in dict.fromkeys(keywords):
             pattern = rf"(?<!\w){re.escape(word)}(?!\w)"
             if re.search(pattern, text, flags=re.UNICODE):
                 score += 20
