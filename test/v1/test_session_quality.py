@@ -44,7 +44,8 @@ def test_persistent_session_repairs_malformed_json_and_values(monkeypatch, tmp_p
     manager = DummySessionManager()
     result = manager.get()
 
-    assert result["subject"] == "['bad']"
+    assert result["subject"] is None
+    assert result["waiting_answer"] is False
     assert result["score"] == 0
     assert result["questions"] == 0
     assert result["last_question"] == "7"

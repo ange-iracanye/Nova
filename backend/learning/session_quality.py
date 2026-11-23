@@ -37,9 +37,9 @@ def _default():
 
 
 def _label(value):
-    if value is None:
+    if not isinstance(value, str):
         return None
-    value = str(value).strip()
+    value = value.strip()
     return value or None
 
 
@@ -58,13 +58,21 @@ def _safe_score(value):
     return score if math.isfinite(score) else 0.0
 
 
+def _safe_bool(value):
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        return value.strip().lower() in {"1", "true", "yes", "on"}
+    return value == 1
+
+
 def _normalize(value):
     result = _default()
     if not isinstance(value, dict):
         return result
     for key in ("subject", "topic", "mode", "last_question"):
         result[key] = _label(value.get(key))
-    result["waiting_answer"] = bool(value.get("waiting_answer"))
+    result["waiting_answer"] = _safe_bool(value.get("waiting_answer"))
     result["score"] = _safe_score(value.get("score", 0))
     result["questions"] = _safe_count(value.get("questions", 0))
     return result
