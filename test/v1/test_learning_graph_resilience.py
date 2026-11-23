@@ -64,3 +64,20 @@ def test_learning_graph_rejects_empty_topic_and_returns_snapshot(tmp_path, monke
     snapshot["subjects"]["Mathematics"]["topics"]["Algebra"]["mastery"] = 99
 
     assert graph.get()["subjects"]["Mathematics"]["topics"]["Algebra"]["mastery"] == 0
+
+
+
+def test_learning_graph_recalculates_subject_mastery_after_topic_updates(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    graph = LearningGraph("graph-mastery@example.com")
+
+    graph.update_topic("Mathematics", "Algebra", True)
+    graph.update_topic("Mathematics", "Algebra", False)
+    graph.update_topic("Mathematics", "Geometry", True)
+
+    result = graph.get()["subjects"]["Mathematics"]
+
+    assert result["topics"]["Algebra"]["mastery"] == 50
+    assert result["topics"]["Geometry"]["mastery"] == 100
+    assert result["mastery"] == 66.7
+    assert result["topics"]["Algebra"]["last_review"]

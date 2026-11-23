@@ -228,6 +228,21 @@ class LearningGraph:
         total = data["correct_answers"] + data["wrong_answers"]
         if total:
             data["mastery"] = round(data["correct_answers"] / total * 100, 1)
+        data["last_review"] = datetime.now().isoformat()
+
+        subject_node = self.graph["subjects"][subject]
+        weighted_mastery = 0.0
+        weight_total = 0
+        for topic_data in subject_node["topics"].values():
+            if not isinstance(topic_data, dict):
+                continue
+            weight = max(1, _safe_count(topic_data.get("times_studied")))
+            weighted_mastery += _safe_confidence(topic_data.get("mastery")) * weight
+            weight_total += weight
+        subject_node["mastery"] = (
+            round(weighted_mastery / weight_total, 1)
+            if weight_total else 0.0
+        )
         self.save()
         return True
 
