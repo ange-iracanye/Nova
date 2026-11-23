@@ -17,7 +17,10 @@ class AnswerVerifier:
         if not match:
             return answer
 
-        n = int(match.group(1))
+        raw_index = match.group(1)
+        if len(raw_index) > len(str(self.MAX_FIBONACCI_INDEX)):
+            return answer
+        n = int(raw_index)
         if n > self.MAX_FIBONACCI_INDEX:
             return answer
 
@@ -29,6 +32,11 @@ class AnswerVerifier:
             r"(?:is|equals|means)\s+(\d+)",
             answer.casefold(),
         )
-        if number_matches and int(number_matches[0]) != a:
-            return f"Fibonacci({n}) = {a}."
+        if number_matches:
+            try:
+                claimed = int(number_matches[0])
+            except (ValueError, OverflowError):
+                return answer
+            if claimed != a:
+                return f"Fibonacci({n}) = {a}."
         return answer
