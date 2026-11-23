@@ -29,3 +29,28 @@ def test_understanding_analyzer_clamps_non_finite_values_safely():
     assert analyzer._clamp(float("inf")) == 0
     assert analyzer._clamp(150) == 100
     assert analyzer._clamp_change(float("inf")) == 0
+
+
+
+def test_recent_understanding_history_rejects_malformed_collections():
+    analyzer = UnderstandingAnalyzer()
+    analyzer.history["mathematics"] = {"history": "not-a-list"}
+
+    assert analyzer.get_recent_history("mathematics") == []
+
+
+def test_recent_understanding_history_filters_invalid_entries_and_bounds_limit():
+    analyzer = UnderstandingAnalyzer()
+    analyzer.history["mathematics"] = {
+        "history": [
+            {"confidence": 60},
+            "invalid",
+            None,
+            {"confidence": 80},
+        ]
+    }
+
+    assert analyzer.get_recent_history("mathematics", float("inf")) == [
+        {"confidence": 60},
+        {"confidence": 80},
+    ]
