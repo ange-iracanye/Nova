@@ -55,3 +55,13 @@ def test_evaluator_supports_french_subject_aliases():
 
     assert evaluator.evaluate("chimie", "An atom is part of a molecule.") == 40
     assert evaluator.evaluate("géographie", "A continent has many countries.") == 40
+
+
+
+def test_evaluator_recognizes_french_answers_for_supported_subjects():
+    evaluator = AnswerEvaluator()
+
+    assert evaluator.evaluate("mathématiques", "Une équation contient une variable.") == 40
+    assert evaluator.evaluate("physique", "La gravité agit sur la masse et le mouvement.") == 60
+    assert evaluator.evaluate("biologie", "La cellule contient de l'ADN.") == 40
+    assert evaluator.evaluate("chimie", "Une molécule contient un atome et une liaison.") == 60

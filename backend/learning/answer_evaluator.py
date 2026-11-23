@@ -7,17 +7,23 @@ class AnswerEvaluator:
     KEYWORDS = {
         "physics": (
             "gravity", "force", "mass", "energy", "motion",
+            "gravité", "force", "masse", "énergie", "mouvement",
         ),
         "biology": (
             "cell", "plant", "photosynthesis", "dna", "organism",
+            "cellule", "plante", "photosynthèse", "adn", "organisme",
         ),
         "math": (
             "equation", "number", "solve", "variable", "formula",
             "algebra", "geometry", "fraction", "integer", "derivative",
+            "équation", "nombre", "résoudre", "formule", "algèbre",
+            "géométrie", "fraction", "entier", "dérivée",
         ),
         "chemistry": (
             "atom", "molecule", "element", "compound", "reaction",
             "electron", "proton", "periodic", "bond", "solution",
+            "atome", "molécule", "élément", "composé", "réaction",
+            "électron", "proton", "liaison",
         ),
         "computer science": (
             "algorithm", "variable", "function", "loop", "database",
@@ -34,6 +40,7 @@ class AnswerEvaluator:
     }
     TOPIC_ALIASES = {
         "mathematics": "math",
+        "mathématiques": "math",
         "mathematical": "math",
         "maths": "math",
         "algebra": "math",
@@ -51,6 +58,7 @@ class AnswerEvaluator:
         "géographie": "geography",
         "physique": "physics",
         "biologie": "biology",
+        "histoire": "history",
     }
 
     def evaluate(self, expected_topic, answer):
