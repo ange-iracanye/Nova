@@ -28,14 +28,19 @@ class AnswerEvaluator:
         "computer science": (
             "algorithm", "variable", "function", "loop", "database",
             "program", "code", "input", "output", "data",
+            "algorithme", "boucle", "base de données", "programme",
+            "entrée", "sortie", "données",
         ),
         "history": (
             "empire", "revolution", "century", "historical", "civilization",
             "treaty", "war", "independence", "kingdom", "reform",
+            "révolution", "siècle", "civilisation", "traité", "guerre",
+            "indépendance", "royaume", "réforme",
         ),
         "geography": (
             "continent", "country", "climate", "population", "river",
             "mountain", "ocean", "capital", "latitude", "longitude",
+            "pays", "climat", "rivière", "montagne", "océan", "capitale",
         ),
     }
     TOPIC_ALIASES = {

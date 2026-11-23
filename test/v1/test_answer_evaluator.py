@@ -49,3 +49,12 @@ def test_evaluator_does_not_double_count_duplicate_translated_keywords():
 
     assert evaluator.evaluate("physics", "The force acts on the mass.") == 40
     assert evaluator.evaluate("math", "A fraction is part of mathematics.") == 20
+
+
+
+def test_evaluator_recognizes_french_computer_science_history_and_geography():
+    evaluator = AnswerEvaluator()
+
+    assert evaluator.evaluate("informatique", "Un algorithme utilise une boucle.") == 40
+    assert evaluator.evaluate("histoire", "La révolution a changé le royaume.") == 40
+    assert evaluator.evaluate("géographie", "Le climat d'un pays dépend de sa latitude.") == 40
