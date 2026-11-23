@@ -76,3 +76,14 @@ def test_difficulty_engine_caps_large_signal_collections():
 
     assert len(result["signals"]) == engine.MAX_SIGNALS_PER_DECISION
     assert result["score"] == -20
+
+
+
+def test_difficulty_engine_bounds_and_orders_large_signal_sets():
+    engine = DifficultyEngine()
+    signals = {f"signal-{index:04d}" for index in range(5000)}
+
+    result = engine.analyze_signals(signals)
+
+    assert len(result["signals"]) == engine.MAX_SIGNALS_PER_DECISION
+    assert result["signals"] == sorted(result["signals"])

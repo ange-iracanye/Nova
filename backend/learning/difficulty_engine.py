@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from typing import Any, Dict, List, Optional, Tuple
+import heapq
 import math
 import re
 
@@ -1037,7 +1038,7 @@ class DifficultyEngine:
             (list, tuple, set)
         ):
 
-            iterable = sorted(signals, key=str) if isinstance(signals, set) else signals
+            iterable = heapq.nsmallest(self.MAX_SIGNALS_PER_DECISION, signals, key=str) if isinstance(signals, set) else signals
             for signal in iterable:
                 if len(result["signals"]) >= self.MAX_SIGNALS_PER_DECISION:
                     break
