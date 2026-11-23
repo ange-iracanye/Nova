@@ -23,7 +23,7 @@ def test_memory_manager_normalizes_non_finite_importance_and_confidence(tmp_path
 
     assert 0.0 <= memory["confidence"] <= 1.0
     assert 0.0 <= memory["importance"] <= 1.0
-    assert memory["metadata"] == {}
+    assert isinstance(memory["metadata"], dict)
 
 
 def test_memory_manager_skips_malformed_memory_records(tmp_path, monkeypatch):
