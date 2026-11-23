@@ -1,6 +1,7 @@
 import json
 
 from backend.learning import understanding_quality
+from backend.learning.understanding import UnderstandingAnalyzer
 
 
 def test_understanding_quality_repairs_partial_subject_records(monkeypatch, tmp_path):
@@ -48,3 +49,31 @@ def test_understanding_quality_keeps_valid_learning_history(monkeypatch, tmp_pat
     assert result["confidence"] == 82
     assert result["history"] == [{"confidence": 80}]
     assert result["signals"] == [{"type": "clarification"}]
+
+
+
+def test_understanding_reset_subject_persists_deletion(monkeypatch, tmp_path):
+    path = tmp_path / "understanding.json"
+    monkeypatch.setattr(understanding_quality, "_file", lambda: path)
+    monkeypatch.setattr(understanding_quality, "_PATCHED", False)
+    understanding_quality.install_understanding_quality(UnderstandingAnalyzer)
+    analyzer = UnderstandingAnalyzer()
+    analyzer.analyze("Mathematics", "Can you explain algebra?", "Algebra uses variables.")
+
+    assert "Mathematics" in understanding_quality._load()
+    assert analyzer.reset_subject("Mathematics") is True
+    assert "Mathematics" not in understanding_quality._load()
+
+
+def test_understanding_reset_persists_clearing_all_subjects(monkeypatch, tmp_path):
+    path = tmp_path / "understanding.json"
+    monkeypatch.setattr(understanding_quality, "_file", lambda: path)
+    monkeypatch.setattr(understanding_quality, "_PATCHED", False)
+    understanding_quality.install_understanding_quality(UnderstandingAnalyzer)
+    analyzer = UnderstandingAnalyzer()
+    analyzer.analyze("Mathematics", "Can you explain algebra?", "Algebra uses variables.")
+    analyzer.analyze("Physics", "How does gravity work?", "Gravity is a force.")
+
+    analyzer.reset()
+
+    assert understanding_quality._load() == {}
