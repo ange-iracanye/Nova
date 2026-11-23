@@ -1,4 +1,5 @@
 import json
+import math
 import os
 import re
 from datetime import datetime
@@ -62,15 +63,8 @@ class UnderstandingAnalyzer:
     ):
         self.history = {}
 
-        self.history_limit = max(
-            5,
-            int(history_limit)
-        )
-
-        self.signal_limit = max(
-            5,
-            int(signal_limit)
-        )
+        self.history_limit = self._safe_limit(history_limit, 50)
+        self.signal_limit = self._safe_limit(signal_limit, 50)
 
         self.initial_confidence = self._clamp(
             initial_confidence
@@ -1708,6 +1702,14 @@ class UnderstandingAnalyzer:
             for signal in signals
         )
 
+    @staticmethod
+    def _safe_limit(value, default):
+        try:
+            limit = int(value)
+        except (TypeError, ValueError, OverflowError):
+            return default
+        return max(5, min(1000, limit))
+
     def _clamp(
         self,
         value,
@@ -1715,42 +1717,25 @@ class UnderstandingAnalyzer:
         maximum=100
     ):
         try:
-
-            value = float(
-                value
-            )
-
-        except (
-            TypeError,
-            ValueError
-        ):
-
+            value = float(value)
+        except (TypeError, ValueError, OverflowError):
             value = minimum
 
-        value = max(
-            minimum,
-            min(
-                maximum,
-                value
-            )
-        )
+        if not math.isfinite(value):
+            value = minimum
 
-        return int(
-            value
-        )
+        return int(max(minimum, min(maximum, value)))
 
     def _clamp_change(
         self,
         value,
         maximum=15
     ):
-        return max(
-            -maximum,
-            min(
-                maximum,
-                int(value)
-            )
-        )
+        try:
+            value = int(value)
+        except (TypeError, ValueError, OverflowError):
+            return 0
+        return max(-maximum, min(maximum, value))
 
     def _timestamp(
         self
