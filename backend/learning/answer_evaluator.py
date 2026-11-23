@@ -7,17 +7,55 @@ class AnswerEvaluator:
     KEYWORDS = {
         "physics": (
             "gravity", "force", "mass", "energy", "motion",
+            "gravité", "force", "masse", "énergie", "mouvement",
         ),
         "biology": (
             "cell", "plant", "photosynthesis", "dna", "organism",
+            "cellule", "plante", "photosynthèse", "adn", "organisme",
         ),
         "math": (
             "equation", "number", "solve", "variable", "formula",
+            "algebra", "geometry", "fraction", "integer", "derivative",
+            "équation", "nombre", "résoudre", "formule", "algèbre",
+            "géométrie", "fraction", "entier", "dérivée",
+        ),
+        "chemistry": (
+            "atom", "molecule", "element", "compound", "reaction",
+            "electron", "proton", "periodic", "bond", "solution",
+            "atome", "molécule", "élément", "composé", "réaction",
+            "électron", "proton", "liaison",
+        ),
+        "computer science": (
+            "algorithm", "variable", "function", "loop", "database",
+            "program", "code", "input", "output", "data",
+        ),
+        "history": (
+            "empire", "revolution", "century", "historical", "civilization",
+            "treaty", "war", "independence", "kingdom", "reform",
+        ),
+        "geography": (
+            "continent", "country", "climate", "population", "river",
+            "mountain", "ocean", "capital", "latitude", "longitude",
         ),
     }
     TOPIC_ALIASES = {
         "mathematics": "math",
+        "mathématiques": "math",
         "mathematical": "math",
+        "maths": "math",
+        "algebra": "math",
+        "geometry": "math",
+        "arithmetic": "math",
+        "calculus": "math",
+        "statistics": "math",
+        "chimie": "chemistry",
+        "chemistry": "chemistry",
+        "informatique": "computer science",
+        "computer science": "computer science",
+        "computer": "computer science",
+        "histoire": "history",
+        "geographie": "geography",
+        "géographie": "geography",
         "physique": "physics",
         "biologie": "biology",
     }
