@@ -159,6 +159,8 @@ class DifficultyEngine:
     # ============================================================
 
     MAX_HISTORY_PER_SUBJECT = 30
+    MAX_HISTORY_LIMIT = 500
+    MAX_SIGNALS_PER_DECISION = 100
 
     # ============================================================
     # DIFFICULTY MOVEMENT
@@ -202,12 +204,12 @@ class DifficultyEngine:
 
         try:
             max_history = int(max_history)
-        except (TypeError, ValueError):
+        except (TypeError, ValueError, OverflowError):
             max_history = self.MAX_HISTORY_PER_SUBJECT
 
         self.max_history = max(
             5,
-            max_history
+            min(self.MAX_HISTORY_LIMIT, max_history)
         )
 
         # Subject-specific history.
@@ -1003,10 +1005,10 @@ class DifficultyEngine:
         ):
 
             for key, value in signals.items():
+                if len(result["signals"]) >= self.MAX_SIGNALS_PER_DECISION:
+                    break
 
-                name = str(
-                    key
-                ).lower()
+                name = str(key).lower()[:200]
 
                 try:
 
@@ -1016,17 +1018,14 @@ class DifficultyEngine:
 
                 except (
                     TypeError,
-                    ValueError
+                    ValueError,
+                    OverflowError
                 ):
 
                     count = 1 if value else 0
 
-                for _ in range(
-                    max(
-                        0,
-                        count
-                    )
-                ):
+                remaining = self.MAX_SIGNALS_PER_DECISION - len(result["signals"])
+                for _ in range(min(remaining, max(0, count))):
 
                     result["signals"].append(
                         name
@@ -1041,15 +1040,12 @@ class DifficultyEngine:
             (list, tuple, set)
         ):
 
-            for signal in signals:
-
+            iterable = sorted(signals, key=str) if isinstance(signals, set) else signals
+            for signal in iterable:
+                if len(result["signals"]) >= self.MAX_SIGNALS_PER_DECISION:
+                    break
                 if signal is not None:
-
-                    result["signals"].append(
-                        str(
-                            signal
-                        ).strip().lower()
-                    )
+                    result["signals"].append(str(signal).strip().lower()[:200])
 
         # --------------------------------------------------------
         # STRING
@@ -1057,11 +1053,7 @@ class DifficultyEngine:
 
         else:
 
-            result["signals"].append(
-                str(
-                    signals
-                ).strip().lower()
-            )
+            result["signals"].append(str(signals).strip().lower()[:200])
 
         # --------------------------------------------------------
         # SCORING
@@ -1329,6 +1321,13 @@ class DifficultyEngine:
     # INCREASE LEVEL
     # ============================================================
 
+    def _normalize_level_steps(self, steps: Any) -> int:
+        try:
+            value = int(steps)
+        except (TypeError, ValueError, OverflowError):
+            return 1
+        return max(0, min(len(self.LEVELS), value))
+
     def increase_level(
         self,
         level: str,
@@ -1343,10 +1342,7 @@ class DifficultyEngine:
         )
 
         return self.level_from_index(
-            current + max(
-                0,
-                int(steps)
-            )
+            current + self._normalize_level_steps(steps)
         )
 
     # ============================================================
@@ -1367,10 +1363,7 @@ class DifficultyEngine:
         )
 
         return self.level_from_index(
-            current - max(
-                0,
-                int(steps)
-            )
+            current - self._normalize_level_steps(steps)
         )
 
     # ============================================================
