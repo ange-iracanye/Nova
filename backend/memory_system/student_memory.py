@@ -1,6 +1,7 @@
 import json
 import hashlib
 import math
+from copy import deepcopy
 from pathlib import Path
 from datetime import datetime
 
@@ -470,4 +471,4 @@ class StudentMemory:
 
     def get(self):
 
-        return self.memory
+        return deepcopy(self.memory)

@@ -59,3 +59,13 @@ def test_student_memory_normalizes_existing_concept_counters_and_scores(tmp_path
     assert concept["confidence"] == 50
     assert concept["attempts"] == 1
     assert concept["first_seen"] == "2026-01-01"
+
+
+
+def test_student_memory_get_returns_detached_snapshot(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    memory = StudentMemory("snapshot@example.com")
+    snapshot = memory.get()
+    snapshot["facts"].append({"text": "injected"})
+
+    assert memory.get()["facts"] == []
