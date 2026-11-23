@@ -36,16 +36,26 @@ def _load_local() -> dict[str, Any]:
     try:
         import json
         value = json.loads(SECURITY_FILE.read_text(encoding="utf-8"))
-        return value if isinstance(value, dict) else {"users": {}}
-    except (OSError, ValueError):
+        if not isinstance(value, dict) or not isinstance(value.get("users"), dict):
+            return {"users": {}}
+        users = {
+            str(email).strip().lower(): record
+            for email, record in value["users"].items()
+            if isinstance(email, str) and isinstance(record, dict)
+        }
+        return {"users": users}
+    except (OSError, ValueError, TypeError, UnicodeError):
         return {"users": {}}
 
 
 def _save_local(value: dict[str, Any]) -> None:
     import json
+    value = value if isinstance(value, dict) else {}
+    users = value.get("users")
+    value["users"] = users if isinstance(users, dict) else {}
     SECURITY_FILE.parent.mkdir(parents=True, exist_ok=True)
     temporary = SECURITY_FILE.with_suffix(".tmp")
-    temporary.write_text(json.dumps(value, indent=2), encoding="utf-8")
+    temporary.write_text(json.dumps(value, indent=2, allow_nan=False), encoding="utf-8")
     temporary.replace(SECURITY_FILE)
 
 
@@ -93,8 +103,9 @@ def _record(email: str) -> dict[str, Any]:
                 "email_change_target": row[6], "email_change_token_hash": row[7], "email_change_expires_at": row[8],
             }
         return {"email": email, "email_verified": False}
-    data = _load_local()["users"]
-    return dict(data.get(email) or {"email": email, "email_verified": False})
+    users = _load_local().get("users", {})
+    record = users.get(email) if isinstance(users, dict) else None
+    return dict(record) if isinstance(record, dict) else {"email": email, "email_verified": False}
 
 
 def _save_record(record: dict[str, Any]) -> None:
@@ -121,7 +132,11 @@ def _save_record(record: dict[str, Any]) -> None:
             conn.commit()
         return
     data = _load_local()
-    data.setdefault("users", {})[email] = record
+    users = data.get("users")
+    if not isinstance(users, dict):
+        users = {}
+        data["users"] = users
+    users[email] = dict(record)
     _save_local(data)
 
 
