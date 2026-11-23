@@ -62,3 +62,19 @@ def test_memory_retriever_recency_accepts_naive_iso_timestamps():
     score = retriever.recency_score("2026-11-23T12:00:00")
 
     assert 0.0 <= score <= 1.0
+
+
+
+def test_memory_retriever_search_handles_provider_specific_exceptions():
+    class ProviderError(Exception):
+        pass
+
+    class UnavailableEmbedder:
+        def encode(self, query):
+            raise ProviderError("provider is unavailable")
+
+    store = _MemoryStore({"facts": [{"content": "Algebra", "embedding": [1.0]}]})
+    retriever = MemoryRetriever(store, UnavailableEmbedder())
+
+    assert retriever.search("student@example.com", "algebra") == []
+    assert store.saved is None

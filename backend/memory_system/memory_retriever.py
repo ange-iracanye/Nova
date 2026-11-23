@@ -180,7 +180,9 @@ class MemoryRetriever:
                 return []
             encoded = self.embedding_model.encode(query)
             query_embedding = encoded.tolist() if hasattr(encoded, "tolist") else list(encoded)
-        except (AttributeError, TypeError, ValueError, RuntimeError):
+        except Exception:
+            # Embedding providers and backing stores may raise SDK-specific
+            # exceptions. Retrieval should fail closed without breaking chat.
             return []
 
         candidates = []
