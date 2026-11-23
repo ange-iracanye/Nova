@@ -48,7 +48,7 @@ def test_persistent_session_repairs_malformed_json_and_values(monkeypatch, tmp_p
     assert result["waiting_answer"] is False
     assert result["score"] == 0
     assert result["questions"] == 0
-    assert result["last_question"] == "7"
+    assert result["last_question"] is None
 
 
 def test_persistent_session_rejects_invalid_scores_and_questions(monkeypatch, tmp_path):
