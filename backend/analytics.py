@@ -82,13 +82,15 @@ def initialize() -> None:
 
 
 def record_event(email: str, event_type: str, path: str) -> None:
-    if not DATABASE_URL or not email or psycopg is None:
+    normalized_email = str(email or "").strip().lower()
+    if not DATABASE_URL or not normalized_email or psycopg is None:
         return
+    normalized_event = str(event_type or "unknown").strip()[:80] or "unknown"
     try:
         with _connect() as conn:
             conn.execute(
                 "INSERT INTO nova_analytics_events(user_key, event_type, path) VALUES (%s, %s, %s)",
-                (_user_key(email), event_type[:80], _canonical_route(path)),
+                (_user_key(normalized_email), normalized_event, _canonical_route(path)),
             )
             conn.commit()
     except Exception as exc:
