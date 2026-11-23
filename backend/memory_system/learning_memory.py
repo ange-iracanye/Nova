@@ -1,15 +1,24 @@
+import hashlib
 import json
 from pathlib import Path
 from datetime import datetime
+
+from backend.user_context import get_active_user
 
 
 class LearningMemory:
 
     def __init__(self):
 
-        self.file = Path(
-            "data/memory/learning_memory.json"
-        )
+        base_path = Path("data/memory")
+        email = get_active_user()
+        if email:
+            user_id = hashlib.sha256(email.strip().lower().encode("utf-8")).hexdigest()
+            self.file = base_path / "learning" / f"{user_id}.json"
+        else:
+            # Preserve the legacy anonymous store without ever migrating it
+            # into a signed-in student's private file.
+            self.file = base_path / "learning_memory.json"
 
         self.file.parent.mkdir(
             parents=True,
