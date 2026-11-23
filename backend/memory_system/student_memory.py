@@ -1,5 +1,6 @@
 import json
 import hashlib
+import math
 from pathlib import Path
 from datetime import datetime
 
@@ -35,9 +36,11 @@ class StudentMemory:
                     )
                 )
 
-            except Exception:
+            except (OSError, ValueError, TypeError, UnicodeError):
 
                 self.memory = self.default()
+
+            self.memory = self._normalize_memory(self.memory)
 
         else:
 
@@ -113,10 +116,59 @@ class StudentMemory:
 
 
     # =====================================
+    # NORMALIZE PERSISTED DATA
+    # =====================================
+
+    def _normalize_memory(self, value):
+        result = self.default()
+        if not isinstance(value, dict):
+            return result
+
+        for key in ("concepts_learned", "preferences", "progress"):
+            item = value.get(key)
+            result[key] = item if isinstance(item, dict) else {}
+
+        concepts = {}
+        for subject, records in result["concepts_learned"].items():
+            if isinstance(records, dict):
+                concepts[str(subject)] = {
+                    str(name): record
+                    for name, record in records.items()
+                    if isinstance(record, dict)
+                }
+        result["concepts_learned"] = concepts
+
+        for key in ("mistakes", "goals", "strengths", "weaknesses", "facts", "explicit_memories"):
+            item = value.get(key)
+            result[key] = item if isinstance(item, list) else []
+
+        stats = value.get("statistics")
+        result["statistics"] = {
+            **result["statistics"],
+            **(stats if isinstance(stats, dict) else {}),
+        }
+        result["version"] = 1
+        return result
+
+    @staticmethod
+    def _json_safe(value):
+        if isinstance(value, dict):
+            return {str(key): StudentMemory._json_safe(item) for key, item in value.items()}
+        if isinstance(value, (list, tuple)):
+            return [StudentMemory._json_safe(item) for item in value]
+        if isinstance(value, float) and not math.isfinite(value):
+            return None
+        if value is None or isinstance(value, (str, int, float, bool)):
+            return value
+        return None
+
+    # =====================================
     # SAVE
     # =====================================
 
     def save(self):
+
+        self.memory = self._normalize_memory(self.memory)
 
         self.memory[
             "statistics"
@@ -178,9 +230,10 @@ class StudentMemory:
         temporary.write_text(
 
             json.dumps(
-                self.memory,
+                self._json_safe(self.memory),
                 indent=4,
-                ensure_ascii=False
+                ensure_ascii=False,
+                allow_nan=False,
             ),
 
             encoding="utf-8"
