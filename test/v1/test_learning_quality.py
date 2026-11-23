@@ -65,3 +65,35 @@ def test_learning_quality_persists_strict_json_and_bounds_history(tmp_path, monk
 
     saved = json.loads(path.read_text(encoding="utf-8"))
     assert len(saved["mistakes"]) == 500
+
+
+
+def test_learning_memory_storage_isolated_between_active_students(monkeypatch, tmp_path):
+    monkeypatch.chdir(tmp_path)
+    active = {"email": "first@example.com"}
+    monkeypatch.setattr(
+        learning_quality,
+        "get_active_user",
+        lambda: active["email"],
+    )
+    monkeypatch.setattr(
+        learning_quality,
+        "set_active_user",
+        lambda email: active.update(email=email),
+    )
+    monkeypatch.setattr(learning_quality, "_PATCHED", False)
+    learning_quality.install_learning_quality(
+        type("MemoryManagerStub", (), {"remember": lambda *a, **k: None}),
+        LearningMemory,
+    )
+    memory = LearningMemory()
+
+    memory.record_attempt("Mathematics", 80, correct=True)
+    active["email"] = "second@example.com"
+
+    assert memory.get()["subjects"] == {}
+    memory.record_attempt("Physics", 70, correct=False)
+    assert set(memory.get()["subjects"]) == {"Physics"}
+
+    active["email"] = "first@example.com"
+    assert set(memory.get()["subjects"]) == {"Mathematics"}
