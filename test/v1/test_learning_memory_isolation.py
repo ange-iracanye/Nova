@@ -1,6 +1,8 @@
+import hashlib
 import json
 
 from backend.memory_system.learning_memory import LearningMemory
+from backend.user_context import user_context
 
 
 def test_learning_memory_recovers_from_invalid_root_and_nested_records(tmp_path, monkeypatch):
@@ -71,3 +73,28 @@ def test_learning_memory_normalizes_existing_concept_attempts_and_confidence(tmp
     assert concept["confidence"] == 90
     assert concept["attempts"] == 1
     assert concept["first_seen"] is None
+
+
+
+def test_learning_memory_uses_distinct_files_for_each_active_student(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+
+    with user_context("Student.One@example.com"):
+        first = LearningMemory()
+    with user_context("student.two@example.com"):
+        second = LearningMemory()
+
+    assert first.file != second.file
+    assert first.file.name == hashlib.sha256(b"student.one@example.com").hexdigest() + ".json"
+    assert second.file.name == hashlib.sha256(b"student.two@example.com").hexdigest() + ".json"
+
+
+def test_learning_memory_normalizes_active_user_email(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+
+    with user_context("  Student@example.com  "):
+        first = LearningMemory()
+    with user_context("student@example.com"):
+        second = LearningMemory()
+
+    assert first.file == second.file
