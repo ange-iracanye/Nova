@@ -51,3 +51,13 @@ def test_get_returns_independent_snapshot():
 
     assert manager.get()["subject"] == "Biology"
     assert manager.get()["questions"] == 0
+
+
+
+def test_session_score_rejects_finite_addition_that_overflows():
+    manager = SessionManager()
+    manager.start("Mathematics", "Algebra", "practice")
+
+    assert manager.add_score(1e308) == 1e308
+    assert manager.add_score(1e308) == 1e308
+    assert math.isfinite(manager.get()["score"])

@@ -142,9 +142,12 @@ def install_session_quality(SessionManager):
             return self.session["score"]
         if not math.isfinite(increment):
             return self.session["score"]
-        self.session["score"] += increment
+        updated_score = self.session["score"] + increment
+        if not math.isfinite(updated_score):
+            return self.session["score"]
+        self.session["score"] = updated_score
         _save(self.session)
-        return self.session["score"]
+        return updated_score
 
     def waiting(self):
         self.session = _load()

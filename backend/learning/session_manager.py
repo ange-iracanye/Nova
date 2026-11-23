@@ -59,8 +59,11 @@ class SessionManager:
             return self.session["score"]
         if not math.isfinite(increment):
             return self.session["score"]
-        self.session["score"] += increment
-        return self.session["score"]
+        updated_score = self.session["score"] + increment
+        if not math.isfinite(updated_score):
+            return self.session["score"]
+        self.session["score"] = updated_score
+        return updated_score
 
     def waiting(self):
         return bool(self.session.get("waiting_answer"))
