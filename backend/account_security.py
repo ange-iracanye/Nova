@@ -152,7 +152,12 @@ def _send_email(to: str, subject: str, body: str) -> bool:
             print(f"[Nova account security] {subject} for {to}:\n{body}", flush=True)
             return True
         return False
-    port = int(os.getenv("NOVA_SMTP_PORT", "587"))
+    try:
+        port = int(os.getenv("NOVA_SMTP_PORT", "587"))
+    except (TypeError, ValueError, OverflowError):
+        port = 587
+    if not 1 <= port <= 65535:
+        port = 587
     username = os.getenv("NOVA_SMTP_USER", "").strip()
     password = os.getenv("NOVA_SMTP_PASSWORD", "")
     use_ssl = os.getenv("NOVA_SMTP_SSL", "false").strip().lower() == "true"
