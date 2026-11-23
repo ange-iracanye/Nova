@@ -67,3 +67,23 @@ def test_conversation_manager_normalizes_malformed_persisted_users_and_messages(
     assert conversation["messages"] == [{"role": "user", "text": "Algebra"}]
     assert manager.get("student@example.com", "invalid-id") is None
     assert manager.list("broken@example.com") == {}
+
+
+
+def test_conversation_manager_sanitizes_non_finite_legacy_message_metadata(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("NOVA_CONVERSATIONS_FILE", "data/conversations.json")
+    manager = ConversationManager()
+    conversation_id = manager.create("student@example.com")
+    conversation = manager.data["users"]["student@example.com"]["conversations"][conversation_id]
+    conversation["messages"] = [{
+        "role": "user",
+        "text": "Algebra",
+        "legacy_score": float("nan"),
+    }]
+
+    manager.save()
+
+    saved = json.loads(manager.file.read_text(encoding="utf-8"))
+    message = saved["users"]["student@example.com"]["conversations"][conversation_id]["messages"][0]
+    assert message["legacy_score"] is None
