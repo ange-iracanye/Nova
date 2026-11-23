@@ -71,3 +71,14 @@ def test_persistent_session_get_returns_snapshot(monkeypatch, tmp_path):
     snapshot["subject"] = "Injected"
 
     assert manager.get()["subject"] == "Biology"
+
+
+
+def test_persistent_session_score_rejects_finite_addition_that_overflows(monkeypatch, tmp_path):
+    _install(monkeypatch, tmp_path)
+    manager = DummySessionManager()
+    manager.start("Mathematics", "Algebra", "practice")
+
+    assert manager.add_score(1e308) == 1e308
+    assert manager.add_score(1e308) == 1e308
+    assert manager.get()["score"] == 1e308
