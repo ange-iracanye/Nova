@@ -1659,7 +1659,9 @@ class UnderstandingAnalyzer:
 
         except (
             OSError,
-            json.JSONDecodeError
+            ValueError,
+            TypeError,
+            UnicodeError
         ):
 
             return False
