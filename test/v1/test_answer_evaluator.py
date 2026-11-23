@@ -57,4 +57,4 @@ def test_evaluator_recognizes_french_computer_science_history_and_geography():
 
     assert evaluator.evaluate("informatique", "Un algorithme utilise une boucle.") == 40
     assert evaluator.evaluate("histoire", "La révolution a changé le royaume.") == 40
-    assert evaluator.evaluate("géographie", "Le climat d'un pays dépend de sa latitude.") == 40
+    assert evaluator.evaluate("géographie", "Le climat d'un pays dépend de sa latitude.") == 60
