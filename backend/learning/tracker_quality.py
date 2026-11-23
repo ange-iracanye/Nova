@@ -70,6 +70,7 @@ def _load():
             }
             for entry in history
             if isinstance(entry, dict)
+            and isinstance(entry.get("difficulty"), str)
             and entry.get("difficulty") in {"easy", "medium", "hard"}
         ][-100:]
         record["total"] = max(
