@@ -3,38 +3,48 @@ import json
 from backend.learning import understanding_quality
 
 
-def test_understanding_quality_rejects_malformed_history_root(monkeypatch, tmp_path):
-    path = tmp_path / "understanding.json"
-    monkeypatch.setattr(understanding_quality, "_file", lambda: path)
-    path.write_text(json.dumps(["invalid"]), encoding="utf-8")
-
-    assert understanding_quality._load() == {}
-
-
-def test_understanding_quality_filters_invalid_records_and_global_key(monkeypatch, tmp_path):
+def test_understanding_quality_repairs_partial_subject_records(monkeypatch, tmp_path):
     path = tmp_path / "understanding.json"
     monkeypatch.setattr(understanding_quality, "_file", lambda: path)
     path.write_text(json.dumps({
-        "Mathematics": {"confidence": 80},
-        "broken": "not-a-record",
-        "__global__": {"private": True},
+        "Mathematics": {
+            "attempts": "invalid",
+            "confidence": float("nan"),
+            "understanding": 72,
+            "engagement": float("inf"),
+            "history": "broken",
+            "question_types": {"why": "3", "how": "invalid"},
+        }
     }), encoding="utf-8")
 
-    assert understanding_quality._load() == {
-        "Mathematics": {"confidence": 80}
-    }
+    result = understanding_quality._load()["Mathematics"]
+
+    assert result["attempts"] == 0
+    assert result["confidence"] == 50
+    assert result["understanding"] == 72
+    assert result["engagement"] == 50
+    assert result["history"] == []
+    assert result["question_types"] == {"why": 3, "how": 0}
+    assert result["recommended_action"] == "Continue monitoring."
 
 
-def test_understanding_quality_sanitizes_non_finite_values_on_save(monkeypatch, tmp_path):
+def test_understanding_quality_keeps_valid_learning_history(monkeypatch, tmp_path):
     path = tmp_path / "understanding.json"
     monkeypatch.setattr(understanding_quality, "_file", lambda: path)
+    path.write_text(json.dumps({
+        "Physics": {
+            "attempts": 4,
+            "confidence": 82,
+            "understanding": 75,
+            "engagement": 60,
+            "history": [{"confidence": 80}],
+            "signals": [{"type": "clarification"}],
+        }
+    }), encoding="utf-8")
 
-    understanding_quality._save({
-        "Mathematics": {"confidence": float("nan"), "history": [float("inf"), 80]},
-        "__global__": {"ignored": True},
-    })
+    result = understanding_quality._load()["Physics"]
 
-    saved = json.loads(path.read_text(encoding="utf-8"))
-    assert saved == {
-        "Mathematics": {"confidence": None, "history": [None, 80]}
-    }
+    assert result["attempts"] == 4
+    assert result["confidence"] == 82
+    assert result["history"] == [{"confidence": 80}]
+    assert result["signals"] == [{"type": "clarification"}]

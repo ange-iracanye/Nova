@@ -23,6 +23,59 @@ def _file():
     return base / f"{uid}.json"
 
 
+def _safe_count(value):
+    try:
+        return max(0, int(value or 0))
+    except (TypeError, ValueError, OverflowError):
+        return 0
+
+
+def _safe_score(value, default=50):
+    try:
+        score = float(value)
+    except (TypeError, ValueError, OverflowError):
+        return default
+    if not math.isfinite(score):
+        return default
+    return max(0, min(100, int(score)))
+
+
+def _normalize_record(value):
+    defaults = {
+        "attempts": 0,
+        "confidence": 50,
+        "understanding": 50,
+        "engagement": 50,
+        "difficulty": "medium",
+        "learning_state": "developing",
+        "trend": "stable",
+        "mistakes": [],
+        "signals": [],
+        "last_signals": [],
+        "question_types": {},
+        "history": [],
+        "recommended_action": "Continue monitoring.",
+    }
+    if not isinstance(value, dict):
+        return defaults
+    result = dict(value)
+    result["attempts"] = _safe_count(value.get("attempts"))
+    for key in ("confidence", "understanding", "engagement"):
+        result[key] = _safe_score(value.get(key, defaults[key]), defaults[key])
+    for key in ("difficulty", "learning_state", "trend", "recommended_action"):
+        item = value.get(key)
+        result[key] = item.strip() if isinstance(item, str) and item.strip() else defaults[key]
+    for key in ("mistakes", "signals", "last_signals", "history"):
+        item = value.get(key)
+        result[key] = [entry for entry in item if isinstance(entry, dict)] if isinstance(item, list) else []
+    question_types = value.get("question_types")
+    result["question_types"] = {
+        str(key): _safe_count(count)
+        for key, count in question_types.items()
+    } if isinstance(question_types, dict) else {}
+    return _json_safe(result)
+
+
 def _json_safe(value):
     if isinstance(value, dict):
         return {
@@ -50,7 +103,7 @@ def _load():
     if not isinstance(value, dict):
         return {}
     return {
-        str(key): _json_safe(item)
+        str(key): _normalize_record(item)
         for key, item in value.items()
         if isinstance(key, str) and key != "__global__" and isinstance(item, dict)
     }
