@@ -1,53 +1,66 @@
-import hashlib
 import json
 
 from backend.learning_graph import LearningGraph
 
 
-def _user_file(tmp_path, email):
-    uid = hashlib.sha256(email.encode("utf-8")).hexdigest()
-    return tmp_path / "data" / "learning" / "users" / f"{uid}.json"
-
-
-def test_learning_graph_repairs_malformed_subject_and_topic_buckets(tmp_path, monkeypatch):
+def test_learning_graph_repairs_malformed_nested_records(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
-    email = "student@example.com"
-    path = _user_file(tmp_path, email)
-    path.parent.mkdir(parents=True)
+    graph = LearningGraph("graph-repair@example.com")
+    path = graph._user_path()
+    path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps({
-        "version": 3,
+        "version": 2,
         "subjects": {
-            "Mathematics": "broken",
-            "Physics": {"mastery": 20, "topics": "broken"},
+            "Mathematics": {
+                "mastery": float("nan"),
+                "topics": {
+                    "Algebra": {
+                        "mastery": float("inf"),
+                        "times_studied": "bad",
+                        "correct_answers": 3,
+                        "wrong_answers": 1,
+                        "last_review": None,
+                    },
+                    "broken": "not-a-record",
+                },
+            },
+            "broken": "not-a-subject",
         },
     }), encoding="utf-8")
 
-    graph = LearningGraph(email)
-    graph.add_topic("Mathematics", "Algebra")
-    graph.update_topic("Mathematics", "Algebra", True)
-    graph.add_topic("Physics", "Motion")
-    graph.update_topic("Physics", "Motion", False)
+    result = graph.get()
 
-    result = graph.get()["subjects"]
-    assert result["Mathematics"]["topics"]["Algebra"]["times_studied"] == 1
-    assert result["Physics"]["topics"]["Motion"]["wrong_answers"] == 1
+    assert result["version"] == 3
+    assert result["subjects"]["Mathematics"]["mastery"] == 0
+    assert result["subjects"]["Mathematics"]["topics"]["Algebra"] == {
+        "mastery": 0,
+        "times_studied": 4,
+        "correct_answers": 3,
+        "wrong_answers": 1,
+        "last_review": "",
+    }
+    assert "broken" not in result["subjects"]["Mathematics"]["topics"]
 
 
-def test_learning_graph_synthesis_safely_handles_malformed_progress(tmp_path, monkeypatch):
+def test_learning_graph_update_normalizes_names_and_boolean_strings(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
-    email = "student@example.com"
-    progress_dir = tmp_path / "data" / "memory" / "progress"
-    progress_dir.mkdir(parents=True)
-    uid = hashlib.sha256(email.encode("utf-8")).hexdigest()
-    (progress_dir / f"{uid}.json").write_text(json.dumps({
-        "Mathematics": {
-            "Algebra": {"attempts": "invalid", "confidence": "nan"},
-            "Geometry": {"attempts": 3, "confidence": 80},
-        }
-    }), encoding="utf-8")
+    graph = LearningGraph("graph-update@example.com")
 
-    graph = LearningGraph(email).get()["subjects"]["Mathematics"]["topics"]
-    assert graph["Algebra"]["times_studied"] == 0
-    assert graph["Algebra"]["mastery"] == 0
-    assert graph["Geometry"]["times_studied"] == 3
-    assert graph["Geometry"]["mastery"] == 80
+    assert graph.update_topic(" Mathematics ", " Algebra ", "false") is True
+    result = graph.get()["subjects"]["Mathematics"]["topics"]["Algebra"]
+
+    assert result["times_studied"] == 1
+    assert result["correct_answers"] == 0
+    assert result["wrong_answers"] == 1
+
+
+def test_learning_graph_rejects_empty_topic_and_returns_snapshot(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    graph = LearningGraph("graph-snapshot@example.com")
+
+    assert graph.update_topic("Mathematics", "  ", True) is False
+    graph.add_topic("Mathematics", "Algebra")
+    snapshot = graph.get()
+    snapshot["subjects"]["Mathematics"]["topics"]["Algebra"]["mastery"] = 99
+
+    assert graph.get()["subjects"]["Mathematics"]["topics"]["Algebra"]["mastery"] == 0

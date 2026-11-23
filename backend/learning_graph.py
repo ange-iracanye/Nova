@@ -1,6 +1,7 @@
 import hashlib
 import json
 import math
+from copy import deepcopy
 from pathlib import Path
 
 from backend.user_context import get_active_user
@@ -21,6 +22,24 @@ def _safe_confidence(value):
     if not math.isfinite(confidence):
         return 0.0
     return max(0.0, min(100.0, confidence))
+
+
+def _json_safe(value):
+    if isinstance(value, dict):
+        return {str(key): _json_safe(item) for key, item in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_json_safe(item) for item in value]
+    if isinstance(value, float) and not math.isfinite(value):
+        return None
+    if value is None or isinstance(value, (str, int, float, bool)):
+        return value
+    return None
+
+
+def _safe_bool(value):
+    if isinstance(value, str):
+        return value.strip().lower() in {"1", "true", "yes", "on"}
+    return bool(value)
 
 
 class LearningGraph:
@@ -59,17 +78,46 @@ class LearningGraph:
     def _default(self):
         return {"version": 3, "subjects": {}}
 
+    def _normalize_graph(self, graph):
+        if not isinstance(graph, dict) or not isinstance(graph.get("subjects"), dict):
+            return self._default()
+        normalized = self._default()
+        for subject, node in graph["subjects"].items():
+            if not isinstance(subject, str) or not subject.strip() or not isinstance(node, dict):
+                continue
+            topics = node.get("topics")
+            topics = topics if isinstance(topics, dict) else {}
+            normalized_topics = {}
+            for topic, data in topics.items():
+                if not isinstance(topic, str) or not topic.strip() or not isinstance(data, dict):
+                    continue
+                correct = _safe_count(data.get("correct_answers"))
+                wrong = _safe_count(data.get("wrong_answers"))
+                normalized_topics[topic.strip()] = {
+                    "mastery": round(_safe_confidence(data.get("mastery", 0)), 1),
+                    "times_studied": max(_safe_count(data.get("times_studied")), correct + wrong),
+                    "correct_answers": correct,
+                    "wrong_answers": wrong,
+                    "last_review": str(data.get("last_review") or ""),
+                }
+            normalized["subjects"][subject.strip()] = {
+                "mastery": round(_safe_confidence(node.get("mastery", 0)), 1),
+                "topics": normalized_topics,
+            }
+        normalized["version"] = 3
+        return normalized
+
     def _load(self):
         path = self._user_path()
         if not path.exists():
             return self._synthesize_from_progress()
         try:
             graph = json.loads(path.read_text(encoding="utf-8"))
-            if isinstance(graph, dict) and isinstance(graph.get("subjects"), dict):
-                return graph
-        except Exception:
-            pass
-        return self._synthesize_from_progress()
+        except (OSError, ValueError, TypeError, UnicodeError):
+            return self._synthesize_from_progress()
+        if not isinstance(graph, dict) or not isinstance(graph.get("subjects"), dict):
+            return self._synthesize_from_progress()
+        return self._normalize_graph(graph)
 
     def _synthesize_from_progress(self):
         graph = self._default()
@@ -120,7 +168,7 @@ class LearningGraph:
         path.parent.mkdir(parents=True, exist_ok=True)
         temporary = path.with_suffix(".tmp")
         temporary.write_text(
-            json.dumps(self.graph, indent=4, ensure_ascii=False),
+            json.dumps(_json_safe(self.graph), indent=4, ensure_ascii=False, allow_nan=False),
             encoding="utf-8",
         )
         temporary.replace(path)
@@ -164,12 +212,16 @@ class LearningGraph:
         self.save()
 
     def update_topic(self, subject, topic, correct):
+        subject = str(subject or "").strip()
+        topic = str(topic or "").strip()
+        if not subject or not topic:
+            return False
         self._refresh()
         self.add_topic(subject, topic)
         self._refresh()
         data = self.graph["subjects"][subject]["topics"][topic]
         data["times_studied"] = _safe_count(data.get("times_studied")) + 1
-        if correct:
+        if _safe_bool(correct):
             data["correct_answers"] = _safe_count(data.get("correct_answers")) + 1
         else:
             data["wrong_answers"] = _safe_count(data.get("wrong_answers")) + 1
@@ -177,7 +229,8 @@ class LearningGraph:
         if total:
             data["mastery"] = round(data["correct_answers"] / total * 100, 1)
         self.save()
+        return True
 
     def get(self):
         self.graph = self._load()
-        return self.graph
+        return deepcopy(self.graph)
