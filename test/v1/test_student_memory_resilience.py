@@ -69,3 +69,16 @@ def test_student_memory_get_returns_detached_snapshot(tmp_path, monkeypatch):
     snapshot["facts"].append({"text": "injected"})
 
     assert memory.get()["facts"] == []
+
+
+
+def test_student_memory_fact_confidence_is_normalized_and_finite(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    memory = StudentMemory("facts@example.com")
+
+    memory.add_fact("A useful fact", confidence=float("nan"))
+    memory.add_fact("A second fact", confidence=85)
+    memory.add_fact("A third fact", confidence=1.5)
+
+    facts = memory.get()["facts"]
+    assert [item["confidence"] for item in facts] == [0.8, 0.85, 1.0]

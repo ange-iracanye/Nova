@@ -174,6 +174,18 @@ class StudentMemory:
         return max(0.0, min(100.0, confidence))
 
     @staticmethod
+    def _safe_probability(value, default=0.8):
+        try:
+            probability = float(value)
+        except (TypeError, ValueError, OverflowError):
+            return default
+        if not math.isfinite(probability):
+            return default
+        if probability > 1:
+            probability /= 100
+        return max(0.0, min(1.0, probability))
+
+    @staticmethod
     def _json_safe(value):
         if isinstance(value, dict):
             return {str(key): StudentMemory._json_safe(item) for key, item in value.items()}
@@ -391,7 +403,7 @@ class StudentMemory:
                 subject,
 
             "confidence":
-                confidence,
+                self._safe_probability(confidence),
 
             "timestamp":
                 datetime.now()
