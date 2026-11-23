@@ -431,11 +431,8 @@ class LearningMemory:
         subject
     ):
 
-        return self.data[
-            "subjects"
-        ].get(
-            subject
-        )
+        value = self.data["subjects"].get(subject)
+        return deepcopy(value) if isinstance(value, dict) else None
 
 
     # =====================================
@@ -453,11 +450,8 @@ class LearningMemory:
         )
 
 
-        return self.data[
-            "concepts"
-        ].get(
-            key
-        )
+        value = self.data["concepts"].get(key)
+        return deepcopy(value) if isinstance(value, dict) else None
 
 
     # =====================================

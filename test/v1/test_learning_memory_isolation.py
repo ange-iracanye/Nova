@@ -98,3 +98,20 @@ def test_learning_memory_normalizes_active_user_email(tmp_path, monkeypatch):
         second = LearningMemory()
 
     assert first.file == second.file
+
+
+
+def test_learning_memory_subject_and_concept_accessors_return_snapshots(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    with user_context("accessors@example.com"):
+        memory = LearningMemory()
+        memory.record_attempt("Mathematics", 75)
+        memory.update_concept("Mathematics", "Algebra", 80)
+
+        subject = memory.get_subject("Mathematics")
+        concept = memory.get_concept("Mathematics", "Algebra")
+        subject["confidence"] = 0
+        concept["confidence"] = 0
+
+        assert memory.get_subject("Mathematics")["confidence"] == 75
+        assert memory.get_concept("Mathematics", "Algebra")["confidence"] == 80
