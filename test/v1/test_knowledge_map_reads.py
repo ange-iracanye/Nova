@@ -65,3 +65,26 @@ def test_knowledge_map_category_results_return_normalized_confidence(tmp_path, m
 
     assert len(results) == 1
     assert results[0]["confidence"] == 100
+
+
+
+def test_knowledge_map_read_methods_return_detached_data(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    knowledge = KnowledgeMap()
+    knowledge.map = {
+        "mathematics": {
+            "algebra": {
+                "confidence": 75,
+                "history": [{"score": 80}],
+            }
+        }
+    }
+
+    topic = knowledge.get_topic("mathematics", "algebra")
+    subject = knowledge.get_subject("mathematics")
+    topic["history"][0]["score"] = 0
+    subject["algebra"]["confidence"] = 0
+
+    stored = knowledge.map["mathematics"]["algebra"]
+    assert stored["confidence"] == 75
+    assert stored["history"][0]["score"] == 80

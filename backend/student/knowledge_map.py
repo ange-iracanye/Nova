@@ -1,6 +1,7 @@
 import json
 import hashlib
 import math
+from copy import deepcopy
 from pathlib import Path
 from datetime import datetime
 
@@ -477,7 +478,7 @@ class KnowledgeMap:
         subject_data = self.map.get(subject, {})
         if not isinstance(subject_data, dict):
             return None
-        return subject_data.get(topic)
+        return deepcopy(subject_data.get(topic))
 
     # =====================================
     # GET SUBJECT
@@ -497,7 +498,7 @@ class KnowledgeMap:
             return {}
 
         data = self.map.get(subject, {})
-        return dict(data) if isinstance(data, dict) else {}
+        return deepcopy(data) if isinstance(data, dict) else {}
 
     # =====================================
     # GET SUBJECT CONFIDENCE
