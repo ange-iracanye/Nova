@@ -109,7 +109,9 @@ class ProgressTracker:
             target = canonical_subject(subject)
             if target != subject: changed = True
             bucket = merged.setdefault(target, {})
-            if not isinstance(topics, dict): continue
+            if not isinstance(topics, dict):
+                changed = True
+                continue
             for topic, data in topics.items():
                 if topic not in bucket:
                     if isinstance(data, dict):
@@ -124,6 +126,7 @@ class ProgressTracker:
                     changed = True
                     continue
                 if not isinstance(incoming, dict):
+                    changed = True
                     continue
                 old_attempts = _safe_count(old.get("attempts"))
                 new_attempts = _safe_count(incoming.get("attempts"))

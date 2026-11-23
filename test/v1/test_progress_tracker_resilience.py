@@ -170,3 +170,25 @@ def test_progress_tracker_sanitizes_non_finite_legacy_metadata_on_save(tmp_path,
     topic = saved["Mathematics"]["Algebra"]
     assert topic["legacy_score"] is None
     assert topic["metadata"]["old_value"] is None
+
+
+
+def test_progress_tracker_persists_repair_of_malformed_subject_buckets(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    tracker = ProgressTracker("broken-bucket@example.com")
+    tracker.progress = {
+        "Mathematics": "not-a-topic-map",
+        "Physics": {
+            "Motion": {"attempts": 2, "confidence": 70},
+            "invalid-topic": None,
+        },
+    }
+    tracker._save()
+
+    result = tracker.get()
+
+    assert result == {
+        "Mathematics": {},
+        "Physics": {"Motion": {"attempts": 2, "confidence": 70}},
+    }
+    assert json.loads(tracker.file.read_text(encoding="utf-8")) == result
