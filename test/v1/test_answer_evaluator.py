@@ -31,3 +31,27 @@ def test_answer_evaluator_caps_score_at_one_hundred():
         "physics",
         "gravity, force, mass, energy and motion",
     ) == 100
+
+
+
+def test_evaluator_supports_common_math_topic_aliases():
+    evaluator = AnswerEvaluator()
+
+    assert evaluator.evaluate("Algebra", "The equation has a variable.") == 40
+    assert evaluator.evaluate("calculus", "A derivative is a rate of change.") == 20
+
+
+def test_evaluator_supports_additional_school_subjects():
+    evaluator = AnswerEvaluator()
+
+    assert evaluator.evaluate("chemistry", "An atom has an electron and proton.") == 40
+    assert evaluator.evaluate("history", "The revolution changed the empire.") == 40
+    assert evaluator.evaluate("geography", "The river crosses the country.") == 40
+    assert evaluator.evaluate("computer science", "An algorithm uses a loop.") == 40
+
+
+def test_evaluator_supports_french_subject_aliases():
+    evaluator = AnswerEvaluator()
+
+    assert evaluator.evaluate("chimie", "An atom is part of a molecule.") == 40
+    assert evaluator.evaluate("géographie", "A continent has many countries.") == 40
