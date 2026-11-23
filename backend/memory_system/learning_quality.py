@@ -9,7 +9,7 @@ from copy import deepcopy
 from datetime import datetime
 from pathlib import Path
 
-from backend.user_context import get_active_user, user_context
+from backend.user_context import get_active_user, set_active_user, user_context
 
 _PATCHED = False
 
