@@ -38,7 +38,11 @@ def _user_key(email: str) -> str:
 
 def _canonical_route(path: str) -> str:
     """Persist route categories, never dynamic path segments such as email addresses."""
-    normalized = str(path or "").split("?", 1)[0]
+    normalized = str(path or "").split("?", 1)[0].split("#", 1)[0]
+    normalized = "/" + "/".join(
+        segment for segment in normalized.split("/") if segment
+    )
+    normalized = normalized.rstrip("/").lower() or "/"
     for prefix in TRACKED_PREFIXES:
         if normalized == prefix or normalized.startswith(prefix + "/"):
             return prefix
