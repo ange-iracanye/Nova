@@ -24,6 +24,21 @@ class SessionManager:
         }
 
     @staticmethod
+    def _safe_count(value: Any) -> int:
+        try:
+            return max(0, int(value or 0))
+        except (TypeError, ValueError, OverflowError):
+            return 0
+
+    @staticmethod
+    def _safe_score(value: Any) -> float:
+        try:
+            score = float(value)
+        except (TypeError, ValueError, OverflowError):
+            return 0.0
+        return score if math.isfinite(score) else 0.0
+
+    @staticmethod
     def _label(value: Any) -> str | None:
         if value is None:
             return None
@@ -46,7 +61,7 @@ class SessionManager:
             return False
         self.session["waiting_answer"] = True
         self.session["last_question"] = normalized
-        self.session["questions"] += 1
+        self.session["questions"] = self._safe_count(self.session.get("questions")) + 1
         return True
 
     def finish_question(self):
@@ -59,9 +74,10 @@ class SessionManager:
             return self.session["score"]
         if not math.isfinite(increment):
             return self.session["score"]
-        updated_score = self.session["score"] + increment
+        current_score = self._safe_score(self.session.get("score"))
+        updated_score = current_score + increment
         if not math.isfinite(updated_score):
-            return self.session["score"]
+            return current_score
         self.session["score"] = updated_score
         return updated_score
 

@@ -61,3 +61,15 @@ def test_session_score_rejects_finite_addition_that_overflows():
     assert manager.add_score(1e308) == 1e308
     assert manager.add_score(1e308) == 1e308
     assert math.isfinite(manager.get()["score"])
+
+
+
+def test_session_manager_repairs_public_state_before_next_update():
+    manager = SessionManager()
+    manager.session["questions"] = "broken"
+    manager.session["score"] = float("nan")
+
+    assert manager.ask("Solve x + 1 = 3") is True
+    assert manager.add_score(2) == 2
+    assert manager.get()["questions"] == 1
+    assert manager.get()["score"] == 2
