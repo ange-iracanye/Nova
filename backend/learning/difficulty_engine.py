@@ -677,22 +677,20 @@ class DifficultyEngine:
         # NUMERIC
         # --------------------------------------------------------
 
+        if isinstance(performance, bool):
+            return None
+
         if isinstance(
             performance,
             (int, float)
         ):
 
             try:
+                value = float(performance)
+            except (TypeError, ValueError, OverflowError):
+                return None
 
-                value = float(
-                    performance
-                )
-
-            except (
-                TypeError,
-                ValueError
-            ):
-
+            if not math.isfinite(value):
                 return None
 
             if 0 <= value <= 1:
