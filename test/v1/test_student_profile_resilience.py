@@ -89,3 +89,21 @@ def test_student_profile_get_returns_detached_snapshot(tmp_path, monkeypatch):
     snapshot["topics_seen"].append("Injected")
 
     assert "Injected" not in profile.get()["topics_seen"]
+
+
+
+def test_student_profile_sanitizes_non_finite_extra_fields_on_save(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    profile = StudentProfile("profile-nan@example.com")
+    profile.profile["legacy_metrics"] = {
+        "confidence": float("nan"),
+        "history": [float("inf"), 75],
+    }
+
+    profile.save()
+
+    saved = json.loads(profile._file().read_text(encoding="utf-8"))
+    assert saved["legacy_metrics"] == {
+        "confidence": None,
+        "history": [None, 75],
+    }

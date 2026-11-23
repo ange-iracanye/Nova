@@ -7,6 +7,18 @@ from pathlib import Path
 from backend.user_context import get_active_user
 
 
+def _json_safe(value):
+    if isinstance(value, dict):
+        return {str(key): _json_safe(item) for key, item in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_json_safe(item) for item in value]
+    if isinstance(value, float) and not math.isfinite(value):
+        return None
+    if value is None or isinstance(value, (str, int, float, bool)):
+        return value
+    return None
+
+
 def _safe_count(value):
     try:
         return max(0, int(value or 0))
@@ -95,7 +107,10 @@ class StudentProfile:
         file = self._file()
         file.parent.mkdir(parents=True, exist_ok=True)
         temporary = file.with_suffix(".tmp")
-        temporary.write_text(json.dumps(self.profile, indent=4, ensure_ascii=False), encoding="utf-8")
+        temporary.write_text(
+            json.dumps(_json_safe(self.profile), indent=4, ensure_ascii=False, allow_nan=False),
+            encoding="utf-8",
+        )
         temporary.replace(file)
 
     def add_question(self, topic=None):
