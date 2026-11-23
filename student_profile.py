@@ -1,6 +1,7 @@
 import hashlib
 import json
 import math
+from copy import deepcopy
 from pathlib import Path
 
 from backend.user_context import get_active_user
@@ -49,11 +50,46 @@ class StudentProfile:
                 value = json.loads(file.read_text(encoding="utf-8"))
                 if isinstance(value, dict):
                     self.profile = value
+                    self._normalize()
                     return
             except Exception:
                 pass
         self.profile = self._default()
         self.save()
+
+    def _normalize(self):
+        defaults = self._default()
+        changed = False
+        for key in ("name", "level"):
+            value = self.profile.get(key)
+            normalized = str(value).strip() if value is not None else ""
+            if not normalized:
+                normalized = defaults[key]
+            if self.profile.get(key) != normalized:
+                self.profile[key] = normalized
+                changed = True
+        for key in ("strengths", "weaknesses", "topics_seen"):
+            raw = self.profile.get(key)
+            values = raw if isinstance(raw, list) else []
+            normalized = []
+            seen = set()
+            for item in values:
+                if not isinstance(item, str):
+                    continue
+                item = item.strip()
+                marker = item.casefold()
+                if item and marker not in seen:
+                    normalized.append(item)
+                    seen.add(marker)
+            if raw != normalized:
+                self.profile[key] = normalized
+                changed = True
+        count = _safe_count(self.profile.get("questions_asked"))
+        if self.profile.get("questions_asked") != count:
+            self.profile["questions_asked"] = count
+            changed = True
+        if changed:
+            self.save()
 
     def save(self):
         file = self._file()
@@ -65,19 +101,21 @@ class StudentProfile:
     def add_question(self, topic=None):
         self._load()
         self.profile["questions_asked"] = _safe_count(self.profile.get("questions_asked")) + 1
-        if topic:
+        normalized_topic = str(topic or "").strip()
+        if normalized_topic:
             topics = self.profile.get("topics_seen")
             if not isinstance(topics, list):
                 topics = []
                 self.profile["topics_seen"] = topics
-            if topic not in topics:
-                topics.append(str(topic))
+            if normalized_topic.casefold() not in {item.casefold() for item in topics if isinstance(item, str)}:
+                topics.append(normalized_topic)
         self.save()
 
     def set_name(self, name):
         self._load()
-        if name:
-            self.profile["name"] = str(name).strip()
+        normalized = str(name or "").strip()
+        if normalized:
+            self.profile["name"] = normalized
             self.save()
 
     def _learning_snapshot(self):
@@ -119,4 +157,4 @@ class StudentProfile:
         snapshot["questions"] = _safe_count(snapshot.get("questions_asked"))
         snapshot["strengths"] = strengths
         snapshot["weaknesses"] = weaknesses
-        return snapshot
+        return deepcopy(snapshot)

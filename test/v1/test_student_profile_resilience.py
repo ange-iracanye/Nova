@@ -45,3 +45,47 @@ def test_student_profile_question_count_is_safe_for_large_invalid_values(tmp_pat
     profile.save()
 
     assert profile.get()["questions"] == 0
+
+
+
+def test_student_profile_repairs_malformed_profile_fields(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    profile = StudentProfile("profile-repair@example.com")
+    profile.profile.update({
+        "name": "   ",
+        "level": None,
+        "questions_asked": "bad",
+        "topics_seen": [" Algebra ", "algebra", None, 7, "Geometry"],
+        "strengths": "broken",
+        "weaknesses": ["Physics", "", "physics"],
+    })
+    profile.save()
+
+    snapshot = profile.get()
+
+    assert snapshot["name"] == "Student"
+    assert snapshot["level"] == "beginner"
+    assert snapshot["questions"] == 0
+    assert snapshot["topics_seen"] == ["Algebra", "Geometry"]
+    assert snapshot["strengths"] == []
+    assert snapshot["weaknesses"] == ["Physics"]
+
+
+def test_student_profile_add_question_deduplicates_topics_case_insensitively(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    profile = StudentProfile("topic-dedupe@example.com")
+
+    profile.add_question("Algebra")
+    profile.add_question(" algebra ")
+
+    assert profile.profile["questions_asked"] == 2
+    assert profile.profile["topics_seen"] == ["Algebra"]
+
+
+def test_student_profile_get_returns_detached_snapshot(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    profile = StudentProfile("profile-snapshot@example.com")
+    snapshot = profile.get()
+    snapshot["topics_seen"].append("Injected")
+
+    assert "Injected" not in profile.get()["topics_seen"]
