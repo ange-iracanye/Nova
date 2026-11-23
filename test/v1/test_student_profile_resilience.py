@@ -67,8 +67,8 @@ def test_student_profile_repairs_malformed_profile_fields(tmp_path, monkeypatch)
     assert snapshot["level"] == "beginner"
     assert snapshot["questions"] == 0
     assert snapshot["topics_seen"] == ["Algebra", "Geometry"]
-    assert snapshot["strengths"] == []
-    assert snapshot["weaknesses"] == ["Physics"]
+    assert profile.profile["strengths"] == []
+    assert profile.profile["weaknesses"] == ["Physics"]
 
 
 def test_student_profile_add_question_deduplicates_topics_case_insensitively(tmp_path, monkeypatch):
