@@ -1,73 +1,91 @@
+import hashlib
 import json
 
-from backend.learning import session_quality
+from student_profile import StudentProfile
 
 
-class DummySessionManager:
-    def __init__(self):
-        self.session = {}
+def test_student_profile_repairs_question_counters_and_topic_lists(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    profile = StudentProfile("counter-test@example.com")
+    profile.profile["questions_asked"] = "not-a-number"
+    profile.profile["topics_seen"] = "broken"
+    profile.save()
+
+    profile.add_question("Algebra")
+
+    assert profile.profile["questions_asked"] == 1
+    assert profile.profile["topics_seen"] == ["Algebra"]
 
 
-def _install(monkeypatch, tmp_path):
-    path = tmp_path / "session.json"
-    monkeypatch.setattr(session_quality, "_file", lambda: path)
-    monkeypatch.setattr(session_quality, "_PATCHED", False)
-    session_quality.install_session_quality(DummySessionManager)
-    return path
-
-
-def test_persistent_session_resets_state_when_started(monkeypatch, tmp_path):
-    _install(monkeypatch, tmp_path)
-    manager = DummySessionManager()
-    manager.start("Mathematics", "Algebra", "practice")
-    manager.ask("Solve x + 1 = 3")
-    manager.add_score(5)
-
-    result = manager.start("Physics", "Motion", "exam")
-
-    assert result["subject"] == "Physics"
-    assert result["score"] == 0
-    assert result["questions"] == 0
-    assert result["waiting_answer"] is False
-
-
-def test_persistent_session_repairs_malformed_json_and_values(monkeypatch, tmp_path):
-    path = _install(monkeypatch, tmp_path)
-    path.write_text(json.dumps({
-        "subject": ["bad"],
-        "waiting_answer": "false",
-        "score": float("inf"),
-        "questions": "invalid",
-        "last_question": 7,
+def test_student_profile_learning_snapshot_ignores_non_finite_confidence(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    email = "profile-test@example.com"
+    progress_dir = tmp_path / "data" / "memory" / "progress"
+    progress_dir.mkdir(parents=True)
+    user_id = hashlib.sha256(email.encode("utf-8")).hexdigest()
+    (progress_dir / f"{user_id}.json").write_text(json.dumps({
+        "Mathematics": {
+            "Algebra": {"confidence": float("inf")},
+            "Geometry": {"confidence": 85},
+            "Fractions": {"confidence": "invalid"},
+        }
     }), encoding="utf-8")
 
-    manager = DummySessionManager()
-    result = manager.get()
+    profile = StudentProfile(email)
+    snapshot = profile.get()
 
-    assert result["subject"] is None
-    assert result["waiting_answer"] is False
-    assert result["score"] == 0
-    assert result["questions"] == 0
-    assert result["last_question"] == "7"
+    assert snapshot["strengths"] == ["Mathematics / Geometry"]
+    assert snapshot["weaknesses"] == []
 
 
-def test_persistent_session_rejects_invalid_scores_and_questions(monkeypatch, tmp_path):
-    _install(monkeypatch, tmp_path)
-    manager = DummySessionManager()
-    manager.start("Biology", "Cells", "practice")
+def test_student_profile_question_count_is_safe_for_large_invalid_values(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    profile = StudentProfile("infinite-counter@example.com")
+    profile.profile["questions_asked"] = float("inf")
+    profile.save()
 
-    assert manager.ask("  ") is False
-    assert manager.add_score(float("nan")) == 0
-    assert manager.add_score("invalid") == 0
-    assert manager.get()["questions"] == 0
+    assert profile.get()["questions"] == 0
 
 
-def test_persistent_session_get_returns_snapshot(monkeypatch, tmp_path):
-    _install(monkeypatch, tmp_path)
-    manager = DummySessionManager()
-    manager.start("Biology", "Cells", "practice")
 
-    snapshot = manager.get()
-    snapshot["subject"] = "Injected"
+def test_student_profile_repairs_malformed_profile_fields(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    profile = StudentProfile("profile-repair@example.com")
+    profile.profile.update({
+        "name": "   ",
+        "level": None,
+        "questions_asked": "bad",
+        "topics_seen": [" Algebra ", "algebra", None, 7, "Geometry"],
+        "strengths": "broken",
+        "weaknesses": ["Physics", "", "physics"],
+    })
+    profile.save()
 
-    assert manager.get()["subject"] == "Biology"
+    snapshot = profile.get()
+
+    assert snapshot["name"] == "Student"
+    assert snapshot["level"] == "beginner"
+    assert snapshot["questions"] == 0
+    assert snapshot["topics_seen"] == ["Algebra", "Geometry"]
+    assert snapshot["strengths"] == []
+    assert snapshot["weaknesses"] == ["Physics"]
+
+
+def test_student_profile_add_question_deduplicates_topics_case_insensitively(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    profile = StudentProfile("topic-dedupe@example.com")
+
+    profile.add_question("Algebra")
+    profile.add_question(" algebra ")
+
+    assert profile.profile["questions_asked"] == 2
+    assert profile.profile["topics_seen"] == ["Algebra"]
+
+
+def test_student_profile_get_returns_detached_snapshot(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    profile = StudentProfile("profile-snapshot@example.com")
+    snapshot = profile.get()
+    snapshot["topics_seen"].append("Injected")
+
+    assert "Injected" not in profile.get()["topics_seen"]
