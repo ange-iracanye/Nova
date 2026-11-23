@@ -107,3 +107,16 @@ def test_student_profile_sanitizes_non_finite_extra_fields_on_save(tmp_path, mon
         "confidence": None,
         "history": [None, 75],
     }
+
+
+
+def test_student_profiles_are_isolated_by_authenticated_email(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    first = StudentProfile("first-profile@example.com")
+    second = StudentProfile("second-profile@example.com")
+
+    first.add_question("Algebra")
+
+    assert first.get()["questions"] == 1
+    assert second.get()["questions"] == 0
+    assert first._file() != second._file()
