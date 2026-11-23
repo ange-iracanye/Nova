@@ -104,9 +104,7 @@ class LearningAnalyzer:
 
         for topic in valid_topics:
 
-            normalized_topic = (
-                topic.lower()
-            )
+            normalized_topic = topic.casefold()
 
             if normalized_topic in counts:
 
@@ -295,8 +293,8 @@ class LearningAnalyzer:
         ):
 
             if (
-                stored_topic.lower()
-                == topic.lower()
+                stored_topic.casefold()
+                == topic.casefold()
             ):
 
                 if count >= self.STRENGTH_THRESHOLD:
