@@ -100,15 +100,7 @@ class MemoryManager:
     def add_memory(self, email, text, memory_type="episode", subject=None, conversation_id=None, importance=0.5, confidence=0.8, metadata=None, formatted_text=None):
         if not text: return None
         data = self.load(email); now = datetime.now().isoformat()
-        try:
-            confidence = float(confidence)
-        except (TypeError, ValueError, OverflowError):
-            confidence = 0.8
-        if not math.isfinite(confidence):
-            confidence = 0.8
-        if confidence > 1:
-            confidence /= 100
-        confidence = max(0.0, min(1.0, confidence))
+        confidence = _safe_unit_value(confidence, 0.8)
 
         importance = _safe_unit_value(importance, 0.5)
         search_text = (formatted_text or f"Subject: {subject or ''}\nUser: {text}\nNova:").strip()
@@ -125,10 +117,7 @@ class MemoryManager:
         self._write(self.user_file(email), data); return memory
 
     def remember(self, email, user_message, assistant_message, subject=None, confidence=None, conversation_id=None):
-        try: confidence = 0.7 if confidence is None else float(confidence)
-        except (TypeError, ValueError): confidence = 0.7
-        if confidence > 1: confidence /= 100
-        confidence = max(0.0, min(1.0, confidence))
+        confidence = _safe_unit_value(0.7 if confidence is None else confidence, 0.7)
         search_text = f"Subject: {subject or ''}\nUser: {user_message}\nNova: {assistant_message}".strip()
         self.add_memory(email, user_message, "episode", subject, conversation_id, importance=0.45, confidence=confidence, formatted_text=search_text)
         for item in self.extractor.extract(user_message, subject=subject, conversation_id=conversation_id):

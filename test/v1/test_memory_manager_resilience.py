@@ -64,3 +64,34 @@ def test_memory_unit_value_helper_rejects_non_finite_values():
     assert _safe_unit_value(float("nan"), 0.8) == 0.8
     assert _safe_unit_value(float("inf"), 0.5) == 0.5
     assert _safe_unit_value(140, 0.5) == 1.0
+
+
+
+def test_memory_manager_remember_normalizes_invalid_confidence(tmp_path, monkeypatch):
+    manager = _manager(tmp_path, monkeypatch)
+    manager.extractor.extract = lambda *args, **kwargs: []
+
+    manager.remember(
+        "student@example.com",
+        "I am revising geometry",
+        "We reviewed triangles",
+        confidence=float("nan"),
+    )
+
+    stored = manager.load("student@example.com")["memories"]
+    assert stored[0]["confidence"] == 0.7
+
+
+def test_memory_manager_remember_clamps_percentage_confidence(tmp_path, monkeypatch):
+    manager = _manager(tmp_path, monkeypatch)
+    manager.extractor.extract = lambda *args, **kwargs: []
+
+    manager.remember(
+        "student@example.com",
+        "I am revising geometry",
+        "We reviewed triangles",
+        confidence=140,
+    )
+
+    stored = manager.load("student@example.com")["memories"]
+    assert stored[0]["confidence"] == 1.0
