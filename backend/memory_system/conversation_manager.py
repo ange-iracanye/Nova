@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from copy import deepcopy
 import os
 import threading
 import uuid
@@ -59,7 +60,7 @@ class ConversationManager:
             self.file.parent.mkdir(parents=True, exist_ok=True)
             temporary = self.file.with_suffix(self.file.suffix + ".tmp")
             temporary.write_text(
-                json.dumps(self.data, ensure_ascii=False, separators=(",", ":")),
+                json.dumps(self.data, ensure_ascii=False, separators=(",", ":"), allow_nan=False),
                 encoding="utf-8",
             )
             temporary.replace(self.file)
@@ -96,15 +97,20 @@ class ConversationManager:
             self._ensure_fresh_locked()
             user = self._user(email)
             conversations = user["conversations"]
-            return dict(
+            return deepcopy(dict(
                 sorted(
                     conversations.items(),
                     key=lambda item: item[1].get("updated_at", "") if isinstance(item[1], dict) else "",
                     reverse=True,
                 )
-            )
+            ))
 
     def add_message(self, email, cid, role, text):
+        if not isinstance(text, str) or not text.strip():
+            return False
+        role = str(role or "").strip().lower()
+        if role not in {"user", "assistant", "system", "tool"}:
+            return False
         with _DATA_LOCK:
             self._ensure_fresh_locked()
             user = self._user(email)
@@ -142,7 +148,8 @@ class ConversationManager:
         with _DATA_LOCK:
             self._ensure_fresh_locked()
             user = self._user(email)
-            return user["conversations"].get(cid)
+            conversation = user["conversations"].get(cid)
+            return deepcopy(conversation) if isinstance(conversation, dict) else None
 
     def rename(self, email, cid, title):
         with _DATA_LOCK:
@@ -151,7 +158,7 @@ class ConversationManager:
             if cid not in user["conversations"]:
                 return False
             title = str(title or "").strip().replace("\n", " ")
-            if not title:
+            if not title or len(title) > 100:
                 return False
             conversation = user["conversations"][cid]
             if not isinstance(conversation, dict):
