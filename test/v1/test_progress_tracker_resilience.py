@@ -117,3 +117,33 @@ def test_progress_tracker_repairs_malformed_alias_topic_during_merge(tmp_path, m
     topic = tracker.get()["Technology"]["Basics"]
     assert topic["attempts"] == 2
     assert topic["confidence"] == 70
+
+
+
+def test_progress_tracker_repairs_non_mapping_topic_data(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    tracker = ProgressTracker("repair-topic@example.com")
+    tracker.progress = {
+        "Mathematics": {
+            "broken": "not-an-object",
+            "valid": {"attempts": 2, "confidence": 75},
+        }
+    }
+
+    tracker._merge_subject_aliases()
+
+    assert tracker.progress["Mathematics"]["broken"] == {}
+    assert tracker.progress["Mathematics"]["valid"]["confidence"] == 75
+
+
+def test_progress_tracker_get_returns_an_independent_snapshot(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    tracker = ProgressTracker("snapshot@example.com")
+    tracker.update("Mathematics", "Algebra", 80)
+
+    snapshot = tracker.get()
+    snapshot["Mathematics"]["Algebra"]["confidence"] = 0
+    snapshot["Physics"] = {}
+
+    assert tracker.get()["Mathematics"]["Algebra"]["confidence"] != 0
+    assert "Physics" not in tracker.progress

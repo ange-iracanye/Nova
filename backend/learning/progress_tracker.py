@@ -1,6 +1,7 @@
 import json
 import hashlib
 import math
+from copy import deepcopy
 import re
 from pathlib import Path
 from datetime import datetime
@@ -96,7 +97,12 @@ class ProgressTracker:
             if not isinstance(topics, dict): continue
             for topic, data in topics.items():
                 if topic not in bucket:
-                    bucket[topic] = data; continue
+                    if isinstance(data, dict):
+                        bucket[topic] = dict(data)
+                    else:
+                        bucket[topic] = {}
+                        changed = True
+                    continue
                 old, incoming = bucket[topic], data
                 if not isinstance(old, dict):
                     bucket[topic] = incoming if isinstance(incoming, dict) else {}
@@ -149,4 +155,4 @@ class ProgressTracker:
 
     def get(self):
         self._merge_subject_aliases()
-        return self.progress
+        return deepcopy(self.progress)
