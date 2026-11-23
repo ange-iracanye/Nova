@@ -36,3 +36,26 @@ def test_student_memory_save_repairs_invalid_nested_records_and_non_finite_value
     }
     assert saved["facts"][0]["confidence"] is None
     assert saved["statistics"]["total_concepts"] == 1
+
+
+
+def test_student_memory_normalizes_existing_concept_counters_and_scores(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    memory = StudentMemory("concepts@example.com")
+    memory.memory["concepts_learned"] = {
+        "Mathematics": {
+            "Algebra": {
+                "confidence": float("nan"),
+                "attempts": "broken",
+                "first_seen": "2026-01-01",
+            }
+        }
+    }
+    memory.save()
+    restored = StudentMemory("concepts@example.com")
+    restored.learn_concept("Mathematics", "Algebra", float("inf"))
+
+    concept = restored.memory["concepts_learned"]["Mathematics"]["Algebra"]
+    assert concept["confidence"] == 50
+    assert concept["attempts"] == 1
+    assert concept["first_seen"] == "2026-01-01"

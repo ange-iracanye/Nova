@@ -132,7 +132,12 @@ class StudentMemory:
         for subject, records in result["concepts_learned"].items():
             if isinstance(records, dict):
                 concepts[str(subject)] = {
-                    str(name): record
+                    str(name): {
+                        "confidence": self._safe_confidence(record.get("confidence", 50)),
+                        "attempts": self._safe_count(record.get("attempts")),
+                        "first_seen": record.get("first_seen") if isinstance(record.get("first_seen"), str) else None,
+                        "last_seen": record.get("last_seen") if isinstance(record.get("last_seen"), str) else None,
+                    }
                     for name, record in records.items()
                     if isinstance(record, dict)
                 }
@@ -149,6 +154,23 @@ class StudentMemory:
         }
         result["version"] = 1
         return result
+
+    @staticmethod
+    def _safe_count(value):
+        try:
+            return max(0, int(value or 0))
+        except (TypeError, ValueError, OverflowError):
+            return 0
+
+    @staticmethod
+    def _safe_confidence(value):
+        try:
+            confidence = float(value)
+        except (TypeError, ValueError, OverflowError):
+            return 50.0
+        if not math.isfinite(confidence):
+            return 50.0
+        return max(0.0, min(100.0, confidence))
 
     @staticmethod
     def _json_safe(value):
@@ -284,7 +306,7 @@ class StudentMemory:
             concepts[concept] = {
 
                 "confidence":
-                    confidence,
+                    self._safe_confidence(confidence),
 
                 "attempts":
                     1,
@@ -298,13 +320,9 @@ class StudentMemory:
 
         else:
 
-            concepts[concept][
-                "confidence"
-            ] = confidence
+            concepts[concept]["confidence"] = self._safe_confidence(confidence)
 
-            concepts[concept][
-                "attempts"
-            ] += 1
+            concepts[concept]["attempts"] = self._safe_count(concepts[concept].get("attempts")) + 1
 
             concepts[concept][
                 "last_seen"
