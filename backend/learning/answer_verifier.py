@@ -2,42 +2,33 @@ import re
 
 
 class AnswerVerifier:
+    """Correct a narrow set of deterministic answer claims."""
+
+    MAX_FIBONACCI_INDEX = 1000
 
     def verify(self, question, answer):
+        if not isinstance(question, str) or not isinstance(answer, str):
+            return answer
 
-        question_lower = question.lower()
-
-        # Fibonacci verification
         match = re.search(
             r"fibonacci\s*\(\s*(\d+)\s*\)",
-            question_lower
+            question.casefold(),
         )
+        if not match:
+            return answer
 
-        if match:
-            n = int(match.group(1))
+        n = int(match.group(1))
+        if n > self.MAX_FIBONACCI_INDEX:
+            return answer
 
-            if n < 0:
-                return answer
+        a, b = 0, 1
+        for _ in range(n):
+            a, b = b, a + b
 
-            a, b = 0, 1
-
-            for _ in range(n):
-                a, b = b, a + b
-
-            expected = a
-
-            # Look for a claim like "Fibonacci(8) is 21"
-            number_matches = re.findall(
-                r"(?:is|equals|means)\s+(\d+)",
-                answer.lower()
-            )
-
-            if number_matches:
-                claimed = int(number_matches[0])
-
-                if claimed != expected:
-                    return (
-                        f"Fibonacci({n}) = {expected}."
-                    )
-
+        number_matches = re.findall(
+            r"(?:is|equals|means)\s+(\d+)",
+            answer.casefold(),
+        )
+        if number_matches and int(number_matches[0]) != a:
+            return f"Fibonacci({n}) = {a}."
         return answer
