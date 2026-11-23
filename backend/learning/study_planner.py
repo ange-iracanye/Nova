@@ -61,6 +61,15 @@ class StudyPlanner:
     def recommend(self, profile):
         profile = profile if isinstance(profile, dict) else {}
         weaknesses = self._topics(profile.get("weaknesses", []))
+        due = self._topics(profile.get("due_topics", []))
+        new_topics = self._topics(profile.get("new_topics", []))
+        strengths = self._topics(profile.get("strengths", []))
         if weaknesses:
-            return "Today's recommendation: review " + weaknesses[0]
+            return "Today's recommendation: practice " + weaknesses[0]
+        if due:
+            return "Today's recommendation: review " + due[0]
+        if new_topics:
+            return "Today's recommendation: explore " + new_topics[0]
+        if strengths:
+            return "Today's recommendation: reinforce " + strengths[0]
         return "Today's recommendation: learn a new topic."

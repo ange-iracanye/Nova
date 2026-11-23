@@ -43,7 +43,7 @@ def test_recommend_preserves_legacy_response_contract():
     planner = StudyPlanner()
 
     assert planner.recommend({"weaknesses": ["Algebra"]}) == (
-        "Today's recommendation: review Algebra"
+        "Today's recommendation: practice Algebra"
     )
     assert planner.recommend("invalid") == (
         "Today's recommendation: learn a new topic."
@@ -62,3 +62,30 @@ def test_study_plan_includes_new_topics_before_strength_maintenance():
     assert [item["topic"] for item in plan] == ["Chemistry", "Biology"]
     assert plan[0]["action"] == "learn"
     assert plan[1]["action"] == "reinforce"
+
+
+
+def test_study_recommendation_prioritizes_due_reviews_before_strengths():
+    planner = StudyPlanner()
+
+    assert planner.recommend({
+        "due_topics": ["Geometry"],
+        "strengths": ["Biology"],
+    }) == "Today's recommendation: review Geometry"
+
+
+def test_study_recommendation_uses_new_topic_when_no_review_is_due():
+    planner = StudyPlanner()
+
+    assert planner.recommend({
+        "new_topics": ["Astronomy"],
+        "strengths": ["Biology"],
+    }) == "Today's recommendation: explore Astronomy"
+
+
+def test_study_recommendation_falls_back_to_reinforcing_strengths():
+    planner = StudyPlanner()
+
+    assert planner.recommend({"strengths": ["Biology"]}) == (
+        "Today's recommendation: reinforce Biology"
+    )
