@@ -48,3 +48,17 @@ def test_recommend_preserves_legacy_response_contract():
     assert planner.recommend("invalid") == (
         "Today's recommendation: learn a new topic."
     )
+
+
+
+def test_study_plan_includes_new_topics_before_strength_maintenance():
+    planner = StudyPlanner()
+
+    plan = planner.build_plan({
+        "new_topics": ["Chemistry"],
+        "strengths": ["Biology"],
+    })
+
+    assert [item["topic"] for item in plan] == ["Chemistry", "Biology"]
+    assert plan[0]["action"] == "learn"
+    assert plan[1]["action"] == "reinforce"

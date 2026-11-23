@@ -32,6 +32,7 @@ class StudyPlanner:
 
         weaknesses = self._topics(profile.get("weaknesses", []))
         due = self._topics(profile.get("due_topics", []))
+        new_topics = self._topics(profile.get("new_topics", []))
         strengths = self._topics(profile.get("strengths", []))
         plan: list[dict[str, str]] = []
         seen: set[str] = set()
@@ -46,6 +47,7 @@ class StudyPlanner:
 
         add(weaknesses, "practice", "Needs more practice")
         add(due, "review", "Ready for a spaced review")
+        add(new_topics, "learn", "New topic to explore")
         add(strengths, "reinforce", "Maintain a strong topic")
 
         if not plan:
