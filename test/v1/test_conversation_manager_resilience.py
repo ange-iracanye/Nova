@@ -37,3 +37,33 @@ def test_conversation_title_normalizes_non_string_input(tmp_path, monkeypatch):
 
     assert manager.generate_title(None) == "New Chat"
     assert manager.generate_title(123) == "123"
+
+
+
+def test_conversation_manager_normalizes_malformed_persisted_users_and_messages(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("NOVA_CONVERSATIONS_FILE", "data/conversations.json")
+    path = tmp_path / "data" / "conversations.json"
+    path.parent.mkdir(parents=True)
+    path.write_text(json.dumps({
+        "users": {
+            "STUDENT@example.com": {
+                "conversations": {
+                    "valid-id": {
+                        "title": "   ",
+                        "messages": [None, "broken", {"role": "user", "text": "Algebra"}],
+                    },
+                    "invalid-id": "not-a-conversation",
+                }
+            },
+            "broken@example.com": "not-a-user",
+        }
+    }), encoding="utf-8")
+
+    manager = ConversationManager()
+    conversation = manager.get("student@example.com", "valid-id")
+
+    assert conversation["title"] == "New Chat"
+    assert conversation["messages"] == [{"role": "user", "text": "Algebra"}]
+    assert manager.get("student@example.com", "invalid-id") is None
+    assert manager.list("broken@example.com") == {}

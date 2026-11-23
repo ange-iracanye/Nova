@@ -45,8 +45,30 @@ class ConversationManager:
             self.data = loaded if isinstance(loaded, dict) else {"users": {}}
         except (json.JSONDecodeError, OSError, UnicodeError):
             self.data = {"users": {}}
-        if not isinstance(self.data.get("users"), dict):
-            self.data["users"] = {}
+        raw_users = self.data.get("users")
+        normalized_users = {}
+        if isinstance(raw_users, dict):
+            for email, user in raw_users.items():
+                if not isinstance(email, str) or not isinstance(user, dict):
+                    continue
+                raw_conversations = user.get("conversations")
+                if not isinstance(raw_conversations, dict):
+                    continue
+                conversations = {}
+                for cid, conversation in raw_conversations.items():
+                    if not isinstance(cid, str) or not isinstance(conversation, dict):
+                        continue
+                    normalized = dict(conversation)
+                    messages = normalized.get("messages")
+                    normalized["messages"] = (
+                        [message for message in messages if isinstance(message, dict)]
+                        if isinstance(messages, list) else []
+                    )
+                    title = normalized.get("title")
+                    normalized["title"] = title if isinstance(title, str) and title.strip() else "New Chat"
+                    conversations[cid] = normalized
+                normalized_users[email.strip().lower()] = {"conversations": conversations}
+        self.data = {"users": normalized_users}
         self._file_signature = self._signature_locked()
 
     def _ensure_fresh_locked(self) -> None:
