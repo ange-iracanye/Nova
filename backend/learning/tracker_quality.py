@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 from pathlib import Path
 
 from backend.user_context import get_active_user
@@ -22,21 +23,41 @@ def _file():
     return base / f"{uid}.json"
 
 
+def _json_safe(value):
+    if isinstance(value, dict):
+        return {str(key): _json_safe(item) for key, item in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_json_safe(item) for item in value]
+    if isinstance(value, float) and not math.isfinite(value):
+        return None
+    if value is None or isinstance(value, (str, int, float, bool)):
+        return value
+    return None
+
+
 def _load():
     file = _file()
     if not file.exists():
         return {}
     try:
         value = json.loads(file.read_text(encoding="utf-8"))
-        return value if isinstance(value, dict) else {}
-    except Exception:
+    except (OSError, ValueError, TypeError, UnicodeError):
         return {}
+    if not isinstance(value, dict):
+        return {}
+    return {
+        str(key): _json_safe(item)
+        for key, item in value.items()
+        if isinstance(key, str) and isinstance(item, dict)
+    }
 
 
 def _save(data):
     file = _file()
+    file.parent.mkdir(parents=True, exist_ok=True)
+    clean = _json_safe(data if isinstance(data, dict) else {})
     temporary = file.with_suffix(".tmp")
-    temporary.write_text(json.dumps(data, indent=4, ensure_ascii=False), encoding="utf-8")
+    temporary.write_text(json.dumps(clean, indent=4, ensure_ascii=False, allow_nan=False), encoding="utf-8")
     temporary.replace(file)
 
 
