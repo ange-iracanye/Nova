@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 from pathlib import Path
 
 from backend.user_context import get_active_user
@@ -22,26 +23,49 @@ def _file():
     return base / f"{uid}.json"
 
 
+def _json_safe(value):
+    if isinstance(value, dict):
+        return {
+            str(key): _json_safe(item)
+            for key, item in value.items()
+            if key != "__global__"
+        }
+    if isinstance(value, (list, tuple)):
+        return [_json_safe(item) for item in value]
+    if isinstance(value, float) and not math.isfinite(value):
+        return None
+    if value is None or isinstance(value, (str, int, float, bool)):
+        return value
+    return None
+
+
 def _load():
     file = _file()
     if not file.exists():
         return {}
     try:
         value = json.loads(file.read_text(encoding="utf-8"))
-        return value if isinstance(value, dict) else {}
-    except Exception:
+    except (OSError, ValueError, TypeError, UnicodeError):
         return {}
+    if not isinstance(value, dict):
+        return {}
+    return {
+        str(key): _json_safe(item)
+        for key, item in value.items()
+        if isinstance(key, str) and key != "__global__" and isinstance(item, dict)
+    }
 
 
 def _save(history):
     file = _file()
+    history = history if isinstance(history, dict) else {}
     clean = {
-        key: value
+        key: _json_safe(value)
         for key, value in history.items()
-        if key != "__global__" and isinstance(value, dict)
+        if isinstance(key, str) and key != "__global__" and isinstance(value, dict)
     }
     temporary = file.with_suffix(".tmp")
-    temporary.write_text(json.dumps(clean, indent=4, ensure_ascii=False), encoding="utf-8")
+    temporary.write_text(json.dumps(clean, indent=4, ensure_ascii=False, allow_nan=False), encoding="utf-8")
     temporary.replace(file)
 
 
