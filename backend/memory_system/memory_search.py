@@ -376,7 +376,7 @@ class MemorySearch:
         minimum_score=0.20
     ):
 
-        if not memories:
+        if not memories or not isinstance(query, str) or not query.strip():
             return []
 
         try:

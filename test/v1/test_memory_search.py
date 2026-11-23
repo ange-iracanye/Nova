@@ -81,3 +81,16 @@ def test_memory_search_diversity_handles_unhashable_metadata():
     )
 
     assert len(results) == 3
+
+
+
+def test_memory_search_returns_no_results_for_empty_or_non_text_queries():
+    engine = MemorySearch()
+    memories = [
+        {"text": "Algebra revision", "type": "fact", "importance": 1.0}
+    ]
+
+    assert engine.search(memories, "") == []
+    assert engine.search(memories, "   ") == []
+    assert engine.search(memories, None) == []
+    assert engine.search(memories, 123) == []
