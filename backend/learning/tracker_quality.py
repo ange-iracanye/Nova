@@ -23,6 +23,13 @@ def _file():
     return base / f"{uid}.json"
 
 
+def _safe_count(value):
+    try:
+        return max(0, int(value or 0))
+    except (TypeError, ValueError, OverflowError):
+        return 0
+
+
 def _json_safe(value):
     if isinstance(value, dict):
         return {str(key): _json_safe(item) for key, item in value.items()}
@@ -45,11 +52,32 @@ def _load():
         return {}
     if not isinstance(value, dict):
         return {}
-    return {
-        str(key): _json_safe(item)
-        for key, item in value.items()
-        if isinstance(key, str) and isinstance(item, dict)
-    }
+    normalized = {}
+    for key, item in value.items():
+        if not isinstance(key, str) or not isinstance(item, dict):
+            continue
+        record = {
+            level: _safe_count(item.get(level))
+            for level in ("easy", "medium", "hard")
+        }
+        history = item.get("history")
+        if not isinstance(history, list):
+            history = []
+        record["history"] = [
+            {
+                "difficulty": entry["difficulty"],
+                "timestamp": str(entry.get("timestamp") or ""),
+            }
+            for entry in history
+            if isinstance(entry, dict)
+            and entry.get("difficulty") in {"easy", "medium", "hard"}
+        ][-100:]
+        record["total"] = max(
+            _safe_count(item.get("total")),
+            record["easy"] + record["medium"] + record["hard"],
+        )
+        normalized[key] = record
+    return normalized
 
 
 def _save(data):

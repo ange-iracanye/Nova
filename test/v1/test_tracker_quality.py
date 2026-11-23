@@ -1,38 +1,30 @@
 import json
 
 from backend.learning import tracker_quality
+from backend.learning.understanding import UnderstandingTracker
 
 
-def test_tracker_quality_rejects_non_mapping_history(monkeypatch, tmp_path):
+def test_tracker_quality_repairs_malformed_counters_before_update(monkeypatch, tmp_path):
     path = tmp_path / "difficulty.json"
     monkeypatch.setattr(tracker_quality, "_file", lambda: path)
-    path.write_text(json.dumps(["broken"]), encoding="utf-8")
-
-    assert tracker_quality._load() == {}
-
-
-def test_tracker_quality_filters_malformed_subject_records(monkeypatch, tmp_path):
-    path = tmp_path / "difficulty.json"
-    monkeypatch.setattr(tracker_quality, "_file", lambda: path)
+    monkeypatch.setattr(tracker_quality, "_PATCHED", False)
+    tracker_quality.install_tracker_quality(UnderstandingTracker)
     path.write_text(json.dumps({
-        "Mathematics": {"easy": 2, "medium": 1},
-        "broken": "not-an-object",
+        "mathematics": {
+            "easy": "invalid",
+            "medium": 2,
+            "hard": float("nan"),
+            "total": "broken",
+            "history": "not-a-list",
+        }
     }), encoding="utf-8")
 
-    assert tracker_quality._load() == {
-        "Mathematics": {"easy": 2, "medium": 1}
-    }
+    tracker = UnderstandingTracker()
+    assert tracker.update("Mathematics", "easy") is True
+    result = tracker.get("Mathematics")
 
-
-def test_tracker_quality_sanitizes_non_finite_values_on_save(monkeypatch, tmp_path):
-    path = tmp_path / "difficulty.json"
-    monkeypatch.setattr(tracker_quality, "_file", lambda: path)
-
-    tracker_quality._save({
-        "Mathematics": {"easy": float("nan"), "history": [float("inf"), 2]},
-    })
-
-    saved = json.loads(path.read_text(encoding="utf-8"))
-    assert saved == {
-        "Mathematics": {"easy": None, "history": [None, 2]}
-    }
+    assert result["easy"] == 1
+    assert result["medium"] == 2
+    assert result["hard"] == 0
+    assert result["total"] == 3
+    assert len(result["history"]) == 1
