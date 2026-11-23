@@ -12,6 +12,18 @@ _SUBJECT_ALIASES = {
     "math": "Mathematics", "mathematics": "Mathematics", "maths": "Mathematics", "algebra": "Mathematics", "calculus": "Mathematics", "geometry": "Mathematics", "statistics": "Mathematics", "stats": "Mathematics", "physics": "Physics", "biology": "Biology", "chemistry": "Chemistry", "geography": "Geography", "history": "History", "tech": "Technology", "technology": "Technology", "computer science": "Technology", "programming": "Technology", "coding": "Technology", "economics": "Economics", "economy": "Economics", "business": "Business", "management": "Business", "entrepreneurship": "Business", "psychology": "Psychology", "sociology": "Sociology", "philosophy": "Philosophy", "phylosophy": "Philosophy", "literature": "Literature", "english literature": "Literature", "language": "Languages", "languages": "Languages", "linguistics": "Languages", "french": "Languages", "français": "Languages", "english": "Languages", "spanish": "Languages", "german": "Languages", "italian": "Languages", "arabic": "Languages", "japanese": "Languages", "chinese": "Languages", "law": "Law", "legal studies": "Law", "political science": "Political Science", "politics": "Political Science", "government": "Political Science", "civics": "Political Science", "art": "Art", "fine art": "Art", "visual arts": "Art", "music": "Music",
 }
 
+def _json_safe(value):
+    if isinstance(value, dict):
+        return {str(key): _json_safe(item) for key, item in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_json_safe(item) for item in value]
+    if isinstance(value, float) and not math.isfinite(value):
+        return None
+    if value is None or isinstance(value, (str, int, float, bool)):
+        return value
+    return None
+
+
 def _safe_count(value):
     try:
         return max(0, int(value or 0))
@@ -85,7 +97,10 @@ class ProgressTracker:
 
     def _save(self):
         temporary = self.file.with_suffix(".tmp")
-        temporary.write_text(json.dumps(self.progress, indent=4, ensure_ascii=False), encoding="utf-8")
+        temporary.write_text(
+            json.dumps(_json_safe(self.progress), indent=4, ensure_ascii=False, allow_nan=False),
+            encoding="utf-8",
+        )
         temporary.replace(self.file)
 
     def _merge_subject_aliases(self):

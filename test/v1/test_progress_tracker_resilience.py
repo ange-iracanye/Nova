@@ -147,3 +147,26 @@ def test_progress_tracker_get_returns_an_independent_snapshot(tmp_path, monkeypa
 
     assert tracker.get()["Mathematics"]["Algebra"]["confidence"] != 0
     assert "Physics" not in tracker.progress
+
+
+
+def test_progress_tracker_sanitizes_non_finite_legacy_metadata_on_save(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    tracker = ProgressTracker("nan-metadata@example.com")
+    tracker.progress = {
+        "Mathematics": {
+            "Algebra": {
+                "attempts": 1,
+                "confidence": 70,
+                "legacy_score": float("nan"),
+                "metadata": {"old_value": float("inf")},
+            }
+        }
+    }
+
+    tracker.update("Mathematics", "Algebra", 80)
+
+    saved = json.loads(tracker.file.read_text(encoding="utf-8"))
+    topic = saved["Mathematics"]["Algebra"]
+    assert topic["legacy_score"] is None
+    assert topic["metadata"]["old_value"] is None
