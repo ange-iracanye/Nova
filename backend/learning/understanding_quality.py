@@ -132,6 +132,7 @@ def install_understanding_quality(UnderstandingAnalyzer):
     original_reset_subject = UnderstandingAnalyzer.reset_subject
     original_reset = UnderstandingAnalyzer.reset
     original_import_data = UnderstandingAnalyzer.import_data
+    original_get_recent_history = UnderstandingAnalyzer.get_recent_history
 
     def analyze(self, subject, question, answer):
         self.history = _load()
@@ -162,9 +163,14 @@ def install_understanding_quality(UnderstandingAnalyzer):
             self.history = _load()
         return result
 
+    def get_recent_history(self, subject, limit=10):
+        self.history = _load()
+        return original_get_recent_history(self, subject, limit)
+
     UnderstandingAnalyzer.analyze = analyze
     UnderstandingAnalyzer.get = get
     UnderstandingAnalyzer.reset_subject = reset_subject
     UnderstandingAnalyzer.reset = reset
     UnderstandingAnalyzer.import_data = import_data
+    UnderstandingAnalyzer.get_recent_history = get_recent_history
     _PATCHED = True

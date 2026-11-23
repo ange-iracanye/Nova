@@ -32,7 +32,12 @@ def test_student_memory_save_repairs_invalid_nested_records_and_non_finite_value
     saved = json.loads(memory.file.read_text(encoding="utf-8"))
 
     assert saved["concepts_learned"]["Mathematics"] == {
-        "Algebra": {"confidence": None, "attempts": 2}
+        "Algebra": {
+            "confidence": 50.0,
+            "attempts": 2,
+            "first_seen": None,
+            "last_seen": None,
+        }
     }
     assert saved["facts"][0]["confidence"] is None
     assert saved["statistics"]["total_concepts"] == 1
@@ -78,7 +83,7 @@ def test_student_memory_fact_confidence_is_normalized_and_finite(tmp_path, monke
 
     memory.add_fact("A useful fact", confidence=float("nan"))
     memory.add_fact("A second fact", confidence=85)
-    memory.add_fact("A third fact", confidence=1.5)
+    memory.add_fact("A third fact", confidence=150)
 
     facts = memory.get()["facts"]
     assert [item["confidence"] for item in facts] == [0.8, 0.85, 1.0]

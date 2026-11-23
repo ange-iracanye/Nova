@@ -60,9 +60,9 @@ def test_understanding_reset_subject_persists_deletion(monkeypatch, tmp_path):
     analyzer = UnderstandingAnalyzer()
     analyzer.analyze("Mathematics", "Can you explain algebra?", "Algebra uses variables.")
 
-    assert "Mathematics" in understanding_quality._load()
+    assert "mathematics" in understanding_quality._load()
     assert analyzer.reset_subject("Mathematics") is True
-    assert "Mathematics" not in understanding_quality._load()
+    assert "mathematics" not in understanding_quality._load()
 
 
 def test_understanding_reset_persists_clearing_all_subjects(monkeypatch, tmp_path):

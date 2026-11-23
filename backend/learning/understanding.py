@@ -1516,12 +1516,9 @@ class UnderstandingAnalyzer:
         subject,
         limit=10
     ):
-        data = self.get(
-            subject
-        )
-
-        if not data:
-
+        subject_key = self._normalize_subject(subject)
+        data = self.history.get(subject_key)
+        if not isinstance(data, dict):
             return []
 
         history = data.get("history", [])
