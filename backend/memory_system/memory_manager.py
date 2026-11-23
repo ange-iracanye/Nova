@@ -83,6 +83,7 @@ class MemoryManager:
         return memory
 
     def _write(self, file, data):
+        file.parent.mkdir(parents=True, exist_ok=True)
         temporary = file.with_suffix(".tmp")
         temporary.write_text(
             json.dumps(_json_safe(data), indent=2, ensure_ascii=False, allow_nan=False),
