@@ -3,6 +3,22 @@ from datetime import datetime, timezone
 
 
 class MemoryRetriever:
+    MAX_RESULTS = 50
+
+    @staticmethod
+    def _number(value, default=0.0):
+        try:
+            number = float(value)
+        except (TypeError, ValueError, OverflowError):
+            return default
+        return number if math.isfinite(number) else default
+
+    @staticmethod
+    def _count(value):
+        try:
+            return max(0, int(value or 0))
+        except (TypeError, ValueError, OverflowError):
+            return 0
 
     def __init__(
         self,
@@ -29,32 +45,29 @@ class MemoryRetriever:
         b
     ):
 
-        if not a or not b:
+        if a is None or b is None:
             return 0.0
 
+        try:
+            if len(a) != len(b) or len(a) == 0:
+                return 0.0
+            vector_a = [float(value) for value in a]
+            vector_b = [float(value) for value in b]
+            if not all(math.isfinite(value) for value in vector_a + vector_b):
+                return 0.0
 
-        dot = sum(
-            x * y
-            for x, y in zip(a, b)
-        )
+            dot = math.fsum(x * y for x, y in zip(vector_a, vector_b))
+            norm_a = math.sqrt(math.fsum(x * x for x in vector_a))
+            norm_b = math.sqrt(math.fsum(y * y for y in vector_b))
+            if norm_a == 0 or norm_b == 0:
+                return 0.0
 
-
-        norm_a = math.sqrt(
-            sum(x * x for x in a)
-        )
-
-        norm_b = math.sqrt(
-            sum(x * x for x in b)
-        )
-
-
-        if norm_a == 0 or norm_b == 0:
+            score = dot / (norm_a * norm_b)
+            if not math.isfinite(score):
+                return 0.0
+            return max(-1.0, min(1.0, score))
+        except (TypeError, ValueError, OverflowError):
             return 0.0
-
-
-        return dot / (
-            norm_a * norm_b
-        )
 
 
     # =====================================
@@ -76,13 +89,11 @@ class MemoryRetriever:
                 timestamp
             )
 
-            now = datetime.now(
-                timezone.utc
-            )
+            if created.tzinfo is None:
+                created = created.replace(tzinfo=timezone.utc)
 
-            days = (
-                now - created
-            ).total_seconds() / 86400
+            now = datetime.now(timezone.utc)
+            days = max(0.0, (now - created).total_seconds() / 86400)
 
 
             return max(
@@ -107,38 +118,17 @@ class MemoryRetriever:
         memory
     ):
 
-        importance = (
-            memory.get(
-                "importance",
-                50
-            ) / 100
-        )
+        if not isinstance(memory, dict):
+            return 0.0
 
-
-        confidence = (
-            memory.get(
-                "confidence",
-                1
-            )
-        )
-
-
-        recency = (
-            self.recency_score(
-                memory.get(
-                    "created_at"
-                )
-            )
-        )
-
-
-        access = min(
-            memory.get(
-                "access_count",
-                0
-            ) / 10,
-            1
-        )
+        semantic = max(-1.0, min(1.0, self._number(semantic)))
+        importance = max(0.0, min(1.0, self._number(memory.get("importance", 50), 50) / 100))
+        confidence = self._number(memory.get("confidence", 1), 1)
+        if confidence > 1:
+            confidence /= 100
+        confidence = max(0.0, min(1.0, confidence))
+        recency = self.recency_score(memory.get("created_at"))
+        access = min(self._count(memory.get("access_count")) / 10, 1.0)
 
 
         return (
@@ -174,18 +164,24 @@ class MemoryRetriever:
         limit=12
     ):
 
-        memory = (
-            self.memory_manager
-            .load(user_email)
-        )
+        try:
+            limit = int(limit)
+        except (TypeError, ValueError, OverflowError):
+            return []
+        if limit <= 0:
+            return []
+        limit = min(limit, self.MAX_RESULTS)
+        if not isinstance(query, str) or not query.strip():
+            return []
 
-
-        query_embedding = (
-            self.embedding_model
-            .encode(query)
-            .tolist()
-        )
-
+        try:
+            memory = self.memory_manager.load(user_email)
+            if not isinstance(memory, dict):
+                return []
+            encoded = self.embedding_model.encode(query)
+            query_embedding = encoded.tolist() if hasattr(encoded, "tolist") else list(encoded)
+        except (AttributeError, TypeError, ValueError, RuntimeError):
+            return []
 
         candidates = []
 
@@ -205,18 +201,15 @@ class MemoryRetriever:
 
         for category in categories:
 
-            for item in memory.get(
-                category,
-                []
-            ):
+            items = memory.get(category, [])
+            if not isinstance(items, list):
+                continue
+            for item in items:
+                if not isinstance(item, dict):
+                    continue
 
-                content = item.get(
-                    "content",
-                    ""
-                )
-
-
-                if not content:
+                content = item.get("content", "")
+                if not isinstance(content, str) or not content.strip():
                     continue
 
 
@@ -269,14 +262,7 @@ class MemoryRetriever:
             ]
 
 
-            memory_item[
-                "access_count"
-            ] = (
-                memory_item.get(
-                    "access_count",
-                    0
-                ) + 1
-            )
+            memory_item["access_count"] = self._count(memory_item.get("access_count")) + 1
 
 
             memory_item[
