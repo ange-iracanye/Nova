@@ -54,9 +54,14 @@ def test_learning_quality_normalizes_concepts_and_returns_detached_records(tmp_p
 
 def test_learning_quality_persists_strict_json_and_bounds_history(tmp_path, monkeypatch):
     path = _install(monkeypatch, tmp_path, "strict-learning@example.com")
+    data = learning_quality._load("strict-learning@example.com")
+    data["mistakes"] = [
+        {"subject": "Math", "concept": "Algebra", "description": str(index)}
+        for index in range(510)
+    ]
+    learning_quality._save("strict-learning@example.com", data)
     memory = LearningMemory()
-    for index in range(510):
-        memory.record_mistake("Math", "Algebra", f"mistake {index}")
+    memory.record_mistake("Math", "Algebra", "latest")
 
     saved = json.loads(path.read_text(encoding="utf-8"))
     assert len(saved["mistakes"]) == 500
