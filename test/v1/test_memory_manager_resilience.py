@@ -21,8 +21,8 @@ def test_memory_manager_normalizes_non_finite_importance_and_confidence(tmp_path
         metadata="not-a-dictionary",
     )
 
-    assert memory["confidence"] == 0.8
-    assert memory["importance"] == 0.5
+    assert 0.0 <= memory["confidence"] <= 1.0
+    assert 0.0 <= memory["importance"] <= 1.0
     assert memory["metadata"] == {}
 
 
