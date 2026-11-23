@@ -170,3 +170,16 @@ def test_progress_tracker_sanitizes_non_finite_legacy_metadata_on_save(tmp_path,
     topic = saved["Mathematics"]["Algebra"]
     assert topic["legacy_score"] is None
     assert topic["metadata"]["old_value"] is None
+
+
+
+def test_progress_tracker_updates_existing_topic_case_insensitively(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    tracker = ProgressTracker("topic-casefold@example.com")
+
+    tracker.update("Mathematics", "Algebra", 60)
+    tracker.update("Mathematics", " algebra ", 80)
+
+    topics = tracker.get()["Mathematics"]
+    assert list(topics) == ["Algebra"]
+    assert topics["Algebra"]["attempts"] == 2

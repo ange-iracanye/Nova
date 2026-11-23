@@ -152,6 +152,15 @@ class ProgressTracker:
         if not isinstance(bucket, dict):
             bucket = {}
             self.progress[subject] = bucket
+        existing_topic = next(
+            (
+                key for key in bucket
+                if isinstance(key, str) and key.casefold() == topic.casefold()
+            ),
+            None,
+        )
+        if existing_topic is not None:
+            topic = existing_topic
         if topic not in bucket or not isinstance(bucket.get(topic), dict):
             bucket[topic] = {"attempts": 0, "confidence": 50, "mastered": False, "first_seen": datetime.now().isoformat(), "last_seen": None, "difficulty_easy": 0, "difficulty_medium": 0, "difficulty_hard": 0}
         data = bucket[topic]
