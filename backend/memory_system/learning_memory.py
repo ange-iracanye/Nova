@@ -120,11 +120,18 @@ class LearningMemory:
 
         concepts = value.get("concepts")
         if isinstance(concepts, dict):
-            result["concepts"] = {
-                str(key): self._json_safe(record)
-                for key, record in concepts.items()
-                if isinstance(record, dict)
-            }
+            for key, record in concepts.items():
+                if not isinstance(record, dict):
+                    continue
+                result["concepts"][str(key)] = {
+                    "subject": record.get("subject") if isinstance(record.get("subject"), str) else "",
+                    "concept": record.get("concept") if isinstance(record.get("concept"), str) else "",
+                    "confidence": self._safe_confidence(record.get("confidence", 50)),
+                    "attempts": self._safe_count(record.get("attempts")),
+                    "difficulty": record.get("difficulty") if isinstance(record.get("difficulty"), str) else None,
+                    "first_seen": record.get("first_seen") if isinstance(record.get("first_seen"), str) else None,
+                    "last_seen": record.get("last_seen") if isinstance(record.get("last_seen"), str) else None,
+                }
 
         for key in ("mistakes", "successful_strategies", "failed_strategies"):
             items = value.get(key)

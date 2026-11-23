@@ -50,3 +50,24 @@ def test_learning_memory_get_returns_detached_snapshot(tmp_path, monkeypatch):
         snapshot["subjects"]["injected"] = {}
 
     assert "injected" not in memory.get()["subjects"]
+
+
+
+def test_learning_memory_normalizes_existing_concept_attempts_and_confidence(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    with user_context("concepts@example.com"):
+        memory = LearningMemory()
+        memory.data["concepts"]["Mathematics::Algebra"] = {
+            "subject": "Mathematics",
+            "concept": "Algebra",
+            "confidence": float("inf"),
+            "attempts": "broken",
+        }
+        memory.save()
+        restored = LearningMemory()
+        restored.update_concept("Mathematics", "Algebra", 90)
+
+    concept = restored.get_concept("Mathematics", "Algebra")
+    assert concept["confidence"] == 90
+    assert concept["attempts"] == 1
+    assert concept["first_seen"] is None
