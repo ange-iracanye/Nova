@@ -95,3 +95,16 @@ def test_memory_manager_remember_clamps_percentage_confidence(tmp_path, monkeypa
 
     stored = manager.load("student@example.com")["memories"]
     assert stored[0]["confidence"] == 1.0
+
+
+
+def test_memory_manager_persists_strict_json_for_legacy_non_finite_values(tmp_path, monkeypatch):
+    manager = _manager(tmp_path, monkeypatch)
+    path = manager.user_file("strict-json@example.com")
+    manager._write(path, {
+        "score": float("nan"),
+        "metadata": {"legacy": float("inf")},
+    })
+
+    saved = json.loads(path.read_text(encoding="utf-8"))
+    assert saved == {"score": None, "metadata": {"legacy": None}}

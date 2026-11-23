@@ -13,6 +13,18 @@ from backend.memory_system.memory_extractor import MemoryExtractor
 from backend.memory_system.memory_search import MemorySearch
 
 
+def _json_safe(value):
+    if isinstance(value, dict):
+        return {str(key): _json_safe(item) for key, item in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_json_safe(item) for item in value]
+    if isinstance(value, float) and not math.isfinite(value):
+        return None
+    if value is None or isinstance(value, (str, int, float, bool)):
+        return value
+    return None
+
+
 def _safe_count(value):
     try:
         return max(0, int(value or 0))
@@ -72,7 +84,10 @@ class MemoryManager:
 
     def _write(self, file, data):
         temporary = file.with_suffix(".tmp")
-        temporary.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
+        temporary.write_text(
+            json.dumps(_json_safe(data), indent=2, ensure_ascii=False, allow_nan=False),
+            encoding="utf-8",
+        )
         temporary.replace(file)
 
     def _load_embedder(self):
@@ -105,7 +120,7 @@ class MemoryManager:
         importance = _safe_unit_value(importance, 0.5)
         search_text = (formatted_text or f"Subject: {subject or ''}\nUser: {text}\nNova:").strip()
         embedding = self.search_engine.embed(search_text) or self._embed(search_text)
-        memory = {"id": hashlib.sha256((email + now + text).encode("utf-8")).hexdigest(), "type": memory_type, "text": search_text, "subject": subject, "conversation_id": conversation_id, "importance": importance, "confidence": confidence, "created_at": now, "last_recalled": None, "recall_count": 0, "metadata": metadata if isinstance(metadata, dict) else {}, "embedding": embedding}
+        memory = {"id": hashlib.sha256((email + now + text).encode("utf-8")).hexdigest(), "type": memory_type, "text": search_text, "subject": subject, "conversation_id": conversation_id, "importance": importance, "confidence": confidence, "created_at": now, "last_recalled": None, "recall_count": 0, "metadata": _json_safe(metadata) if isinstance(metadata, dict) else {}, "embedding": _json_safe(embedding)}
         normalized = search_text.lower().strip()
         for existing in data["memories"]:
             if str(existing.get("text", "")).lower().strip() == normalized:
