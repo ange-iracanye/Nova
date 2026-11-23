@@ -1,0 +1,50 @@
+from backend.learning.study_planner import StudyPlanner
+
+
+def test_study_plan_prioritizes_weaknesses_then_due_reviews():
+    planner = StudyPlanner()
+
+    plan = planner.build_plan({
+        "weaknesses": ["Algebra", "Fractions"],
+        "due_topics": ["Algebra", "Geometry"],
+        "strengths": ["Biology"],
+    })
+
+    assert [item["topic"] for item in plan] == [
+        "Algebra", "Fractions", "Geometry", "Biology"
+    ]
+    assert plan[0]["action"] == "practice"
+    assert plan[2]["action"] == "review"
+
+
+def test_study_plan_normalizes_duplicates_and_limits_output():
+    planner = StudyPlanner()
+
+    plan = planner.build_plan({
+        "weaknesses": [" Algebra ", "algebra", None, 3, "Geometry"],
+        "due_topics": ["Physics"],
+    }, limit=2)
+
+    assert [item["topic"] for item in plan] == ["Algebra", "Geometry"]
+
+
+def test_study_plan_handles_invalid_profile_and_limit():
+    planner = StudyPlanner()
+
+    assert planner.build_plan(None) == [{
+        "topic": "Choose a new topic",
+        "action": "explore",
+        "reason": "No learning history is available yet",
+    }]
+    assert len(planner.build_plan({"weaknesses": ["A", "B"]}, limit=float("inf"))) == 2
+
+
+def test_recommend_preserves_legacy_response_contract():
+    planner = StudyPlanner()
+
+    assert planner.recommend({"weaknesses": ["Algebra"]}) == (
+        "Today's recommendation: review Algebra"
+    )
+    assert planner.recommend("invalid") == (
+        "Today's recommendation: learn a new topic."
+    )
