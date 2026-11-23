@@ -680,10 +680,7 @@ class DifficultyEngine:
         if isinstance(performance, bool):
             return None
 
-        if isinstance(
-            performance,
-            (int, float)
-        ):
+        if isinstance(performance, (int, float, str)):
 
             try:
                 value = float(performance)

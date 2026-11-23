@@ -32,3 +32,12 @@ def test_confidence_normalization_remains_finite():
 
     assert math.isfinite(engine.normalize_confidence(float("nan")))
     assert engine.normalize_confidence(float("nan")) == engine.DEFAULT_CONFIDENCE
+
+
+
+def test_performance_normalization_accepts_numeric_strings():
+    engine = DifficultyEngine()
+
+    assert engine.normalize_performance("85") == 85
+    assert engine.normalize_performance("0.85") == 85
+    assert engine.normalize_performance("not-a-number") is None
