@@ -99,8 +99,14 @@ class MemoryExtractor:
         conversation_id=None
     ):
 
+        if not isinstance(text, str):
+            return []
+        text = text.strip()
         if not text:
             return []
+        # Bound regex work and prevent a single oversized message from
+        # generating an unbounded number of candidate memories.
+        text = text[:20000]
 
         memories = []
 
