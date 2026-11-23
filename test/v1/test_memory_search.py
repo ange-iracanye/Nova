@@ -63,3 +63,21 @@ def test_diverse_search_validates_limit_before_expanding_candidates():
     assert search.search_diverse(memories, "algebra", limit=-3) == []
     assert search.search_diverse(memories, "algebra", limit=0) == []
     assert len(search.search_diverse(memories, "algebra", limit=1)) == 1
+
+
+
+def test_memory_search_diversity_handles_unhashable_metadata():
+    engine = MemorySearch()
+    memories = [
+        {"text": "algebra practice", "subject": ["Mathematics"], "type": ["learning"]},
+        {"text": "geometry revision", "subject": {"name": "Mathematics"}, "type": {"kind": "learning"}},
+        {"text": "biology notes", "subject": "Biology", "type": "fact"},
+    ]
+
+    results = engine.search_diverse(
+        memories,
+        "algebra geometry biology",
+        limit=3,
+    )
+
+    assert len(results) == 3

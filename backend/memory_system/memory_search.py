@@ -469,14 +469,9 @@ class MemorySearch:
 
             memory = result["memory"]
 
-            subject = memory.get(
-                "subject"
-            )
-
-            memory_type = memory.get(
-                "type",
-                "episode"
-            )
+            raw_subject = memory.get("subject")
+            subject = str(raw_subject).strip() if raw_subject is not None else None
+            memory_type = str(memory.get("type", "episode") or "episode").strip().lower()
 
             if (
                 subject
