@@ -179,7 +179,7 @@ class MemoryExtractor:
             match = re.search(
 
                 r"^\s*(?:remember that|remember this|"
-                r"don't forget that|keep in mind that)\s+(.+?)"
+                r"don't forget that|keep in mind that|souviens-toi que|souvenez-vous que|n'oublie pas que|n’oublie pas que)\s+(.+?)"
                 r"\s*$",
 
                 sentence,
@@ -204,7 +204,7 @@ class MemoryExtractor:
 
             match = re.search(
 
-                r"^\s*my goal is\s+(?:to\s+)?(.+?)\s*$",
+                r"^\s*(?:my goal is\s+(?:to\s+)?|mon objectif est\s+(?:de\s+)?)(.+?)\s*$",
 
                 sentence,
 
@@ -224,7 +224,7 @@ class MemoryExtractor:
 
             match = re.search(
 
-                r"^\s*i(?:'m| am)?\s+planning to\s+(.+?)\s*$",
+                r"^\s*(?:i(?:'m| am)?\s+planning to|je prévois de|je compte)\s+(.+?)\s*$",
 
                 sentence,
 
@@ -248,7 +248,7 @@ class MemoryExtractor:
 
             match = re.search(
 
-                r"^\s*i(?:'m| am)\s+trying to\s+(.+?)\s*$",
+                r"^\s*(?:i(?:'m| am)\s+trying to|j'essaie de|je tente de)\s+(.+?)\s*$",
 
                 sentence,
 
@@ -273,16 +273,22 @@ class MemoryExtractor:
             preference_patterns = [
 
                 r"^\s*i prefer\s+(.+?)\s*$",
+                r"^\s*je préfère\s+(.+?)\s*$",
 
                 r"^\s*i like\s+(.+?)\s*$",
+                r"^\s*j'aime\s+(.+?)\s*$",
 
                 r"^\s*i don't like\s+(.+?)\s*$",
+                r"^\s*je n'aime pas\s+(.+?)\s*$",
 
                 r"^\s*i hate\s+(.+?)\s*$",
+                r"^\s*je déteste\s+(.+?)\s*$",
 
                 r"^\s*i want\s+(.+?)\s*$",
+                r"^\s*je veux\s+(.+?)\s*$",
 
                 r"^\s*i need\s+(.+?)\s*$",
+                r"^\s*j'ai besoin de\s+(.+?)\s*$",
 
                 r"^\s*i usually\s+(.+?)\s*$",
 
@@ -328,6 +334,7 @@ class MemoryExtractor:
 
                 (
                     r"^\s*my name is\s+(.+?)\s*$",
+                    r"^\s*je m'appelle\s+(.+?)\s*$",
                     "fact"
                 ),
 
@@ -343,11 +350,13 @@ class MemoryExtractor:
 
                 (
                     r"^\s*i study\s+(.+?)\s*$",
+                    r"^\s*j'étudie\s+(.+?)\s*$",
                     "fact"
                 ),
 
                 (
                     r"^\s*i'm studying\s+(.+?)\s*$",
+                    r"^\s*je suis étudiant en\s+(.+?)\s*$",
                     "fact"
                 ),
 
@@ -358,16 +367,19 @@ class MemoryExtractor:
 
                 (
                     r"^\s*i live in\s+(.+?)\s*$",
+                    r"^\s*j'habite à\s+(.+?)\s*$",
                     "fact"
                 ),
 
                 (
                     r"^\s*i use\s+(.+?)\s*$",
+                    r"^\s*j'utilise\s+(.+?)\s*$",
                     "fact"
                 ),
 
                 (
                     r"^\s*i have\s+(.+?)\s*$",
+                    r"^\s*j'ai\s+(.+?)\s*$",
                     "fact"
                 )
             ]
