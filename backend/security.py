@@ -97,7 +97,11 @@ def _session_expiry_epoch(value) -> float | None:
     if isinstance(value, bool):
         return None
     if isinstance(value, (int, float)):
-        return float(value) if value > 0 and value < float("inf") else None
+        try:
+            epoch = float(value)
+        except (TypeError, ValueError, OverflowError):
+            return None
+        return epoch if epoch > 0 and epoch < float("inf") else None
     if isinstance(value, datetime):
         expires_at = value
     elif isinstance(value, str):
