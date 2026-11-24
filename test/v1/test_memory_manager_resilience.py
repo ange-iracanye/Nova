@@ -108,3 +108,26 @@ def test_memory_manager_persists_strict_json_for_legacy_non_finite_values(tmp_pa
 
     saved = json.loads(path.read_text(encoding="utf-8"))
     assert saved == {"score": None, "metadata": {"legacy": None}}
+
+
+def test_memory_manager_rejects_invalid_identity_and_memory_payloads(tmp_path, monkeypatch):
+    manager = _manager(tmp_path, monkeypatch)
+
+    assert manager.add_memory(None, "Algebra revision") is None
+    assert manager.add_memory("student@example.com", 123) is None
+    assert manager.add_memory("student@example.com", "Algebra", memory_type="unknown") is None
+    assert manager.add_memory("   ", "Algebra revision") is None
+
+
+def test_memory_manager_bounds_persisted_memory_text(tmp_path, monkeypatch):
+    manager = _manager(tmp_path, monkeypatch)
+
+    memory = manager.add_memory(
+        "STUDENT@example.com",
+        "x" * 25000,
+        formatted_text="y" * 25000,
+    )
+
+    assert memory is not None
+    assert len(memory["text"]) == 20000
+    assert manager.user_file("student@example.com").exists()
