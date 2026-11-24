@@ -82,3 +82,25 @@ def test_memory_extractor_normalizes_typographic_french_apostrophes():
         ("fact", "Camille"),
         ("explicit_memory", "je révise"),
     ]
+
+
+def test_memory_extractor_deduplicates_repeated_memories_case_insensitively():
+    extractor = MemoryExtractor()
+
+    result = extractor.extract(
+        "Je préfère les explications courtes. je préfère les explications courtes."
+    )
+
+    assert len(result) == 1
+    assert result[0]["text"] == "les explications courtes"
+
+
+def test_memory_extractor_caps_candidates_per_message():
+    extractor = MemoryExtractor()
+    message = " ".join(
+        f"Je préfère la méthode numéro {index}." for index in range(75)
+    )
+
+    result = extractor.extract(message)
+
+    assert len(result) == 50
