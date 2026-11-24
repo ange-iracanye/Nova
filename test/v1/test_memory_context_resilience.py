@@ -45,3 +45,17 @@ def test_conversation_context_sorts_malformed_timestamps_safely(tmp_path, monkey
 
     assert "CURRENT CONVERSATION" in context
     assert "RELEVANT PREVIOUS CONVERSATION" in context
+
+
+def test_conversation_text_bounds_message_count_and_body_size():
+    conversation = {
+        "messages": [
+            {"role": "user", "text": "x" * 5000}
+            for _ in range(250)
+        ]
+    }
+
+    text = MemoryManager._conversation_text(conversation)
+
+    assert len(text.splitlines()) == 200
+    assert all(len(line.split(": ", 1)[1]) == 4000 for line in text.splitlines())
