@@ -71,3 +71,14 @@ def test_memory_extractor_recognizes_french_intentions():
     assert len(result) == 1
     assert result[0]["type"] == "goal"
     assert result[0]["text"] == "mieux organiser mes révisions"
+
+
+def test_memory_extractor_normalizes_typographic_french_apostrophes():
+    extractor = MemoryExtractor()
+
+    result = extractor.extract("Je m’appelle Camille. N’oublie pas que je révise.")
+
+    assert [(item["type"], item["text"]) for item in result] == [
+        ("fact", "Camille"),
+        ("explicit_memory", "je révise"),
+    ]
