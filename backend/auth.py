@@ -69,14 +69,21 @@ def _verify_scrypt(password: str, encoded: str) -> bool:
         scheme, n, r, p, salt_text, digest_text = encoded.split("$", 5)
         if scheme != PASSWORD_SCHEME:
             return False
+        # Stored hashes are data, not trusted configuration. Enforce the
+        # parameters Nova itself emits before invoking the memory-hard KDF.
+        if (int(n), int(r), int(p)) != (SCRYPT_N, SCRYPT_R, SCRYPT_P):
+            return False
+        salt = _b64decode(salt_text)
         expected = _b64decode(digest_text)
+        if len(salt) != SALT_BYTES or len(expected) != KEY_BYTES:
+            return False
         actual = hashlib.scrypt(
             password.encode("utf-8"),
-            salt=_b64decode(salt_text),
-            n=int(n),
-            r=int(r),
-            p=int(p),
-            dklen=len(expected),
+            salt=salt,
+            n=SCRYPT_N,
+            r=SCRYPT_R,
+            p=SCRYPT_P,
+            dklen=KEY_BYTES,
             maxmem=64 * 1024 * 1024,
         )
         return secrets.compare_digest(actual, expected)
