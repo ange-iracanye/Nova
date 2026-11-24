@@ -90,6 +90,32 @@ def apply_security_headers(response: Response) -> Response:
     return response
 
 
+def _session_expiry_epoch(value) -> float | None:
+    """Normalize supported session expiry values; reject malformed timestamps."""
+    from datetime import datetime, timezone
+
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, (int, float)):
+        return float(value) if value > 0 and value < float("inf") else None
+    if isinstance(value, datetime):
+        expires_at = value
+    elif isinstance(value, str):
+        try:
+            expires_at = datetime.fromisoformat(value.strip().replace("Z", "+00:00"))
+        except ValueError:
+            return None
+    else:
+        return None
+
+    if expires_at.tzinfo is None:
+        expires_at = expires_at.replace(tzinfo=timezone.utc)
+    try:
+        return expires_at.timestamp()
+    except (OverflowError, OSError, ValueError):
+        return None
+
+
 def authenticate_session(request: Request, sessions: dict, lock) -> dict:
     token = get_cookie_session_token(request)
     if not token:
@@ -106,8 +132,8 @@ def authenticate_session(request: Request, sessions: dict, lock) -> dict:
         if not isinstance(session, dict):
             raise HTTPException(status_code=401, detail="Invalid or expired session.")
 
-        expires_at = session.get("expires_at")
-        if not expires_at:
+        expires_at = _session_expiry_epoch(session.get("expires_at"))
+        if expires_at is None or expires_at <= now:
             sessions.pop(token, None)
             raise HTTPException(status_code=401, detail="Invalid or expired session.")
 
