@@ -29,6 +29,9 @@ def _request(token="session-token"):
     [
         (datetime.now(timezone.utc) - timedelta(seconds=1)).isoformat(),
         time.time() - 1,
+        10**1000,
+        float("inf"),
+        float("nan"),
         "not-a-timestamp",
         None,
         "",
