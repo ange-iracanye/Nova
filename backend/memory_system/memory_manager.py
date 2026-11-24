@@ -129,7 +129,7 @@ class MemoryManager:
         if isinstance(formatted_text, str) and formatted_text.strip():
             search_text = formatted_text.strip()[:20000]
         else:
-            search_text = f"Subject: {subject or ''}\\nUser: {text}\\nNova:"[:20000]
+            search_text = f"Subject: {subject or ''}\nUser: {text}\nNova:"[:20000]
 
         data = self.load(email); now = datetime.now().isoformat()
         confidence = _safe_unit_value(confidence, 0.8)
