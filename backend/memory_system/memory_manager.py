@@ -202,7 +202,7 @@ class MemoryManager:
         if not isinstance(conversations, dict) or not conversations:
             return ""
         ordered = [item for item in conversations.values() if isinstance(item, dict)]
-        ordered.sort(key=lambda item: item.get("updated_at", ""), reverse=True)
+        ordered.sort(key=lambda item: str(item.get("updated_at") or ""), reverse=True)
         if not ordered:
             return ""
         current = ordered[0]
@@ -226,7 +226,7 @@ class MemoryManager:
             if not messages: continue
             text = self._conversation_text(conversation); relevance = self._keyword_score(query, text)
             if relevance <= 0 and not temporal_query: continue
-            candidates.append((max(relevance, 0.01) if temporal_query else relevance, conversation.get("updated_at", ""), conversation, messages))
+            candidates.append((max(relevance, 0.01) if temporal_query else relevance, str(conversation.get("updated_at") or ""), conversation, messages))
         candidates.sort(key=lambda item: (item[0], item[1]), reverse=True)
 
         for relevance, _, conversation, messages in candidates[:6]:
