@@ -104,6 +104,9 @@ class MemoryExtractor:
         text = text.strip()
         if not text:
             return []
+        # Treat typographic and straight apostrophes consistently in French
+        # contractions (for example, "je m'appelle" and "je m’appelle").
+        text = text.replace("’", "'")
         # Bound regex work and prevent a single oversized message from
         # generating an unbounded number of candidate memories.
         text = text[:20000]
