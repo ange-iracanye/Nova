@@ -114,12 +114,26 @@ class MemoryManager:
             print("Memory embedding failed:", error); return None
 
     def add_memory(self, email, text, memory_type="episode", subject=None, conversation_id=None, importance=0.5, confidence=0.8, metadata=None, formatted_text=None):
-        if not text: return None
+        if not isinstance(email, str) or not email.strip() or len(email) > 320:
+            return None
+        if not isinstance(text, str) or not text.strip():
+            return None
+        memory_type = str(memory_type or "episode").strip().lower()
+        if memory_type not in {"episode", "fact", "preference", "goal", "learning", "explicit_memory"}:
+            return None
+
+        email = email.strip().lower()
+        text = text.strip()[:20000]
+        subject = subject.strip()[:120] if isinstance(subject, str) else None
+        conversation_id = conversation_id.strip()[:256] if isinstance(conversation_id, str) else None
+        if isinstance(formatted_text, str) and formatted_text.strip():
+            search_text = formatted_text.strip()[:20000]
+        else:
+            search_text = f"Subject: {subject or ''}\\nUser: {text}\\nNova:"[:20000]
+
         data = self.load(email); now = datetime.now().isoformat()
         confidence = _safe_unit_value(confidence, 0.8)
-
         importance = _safe_unit_value(importance, 0.5)
-        search_text = (formatted_text or f"Subject: {subject or ''}\nUser: {text}\nNova:").strip()
         embedding = self.search_engine.embed(search_text) or self._embed(search_text)
         memory = {"id": hashlib.sha256((email + now + text).encode("utf-8")).hexdigest(), "type": memory_type, "text": search_text, "subject": subject, "conversation_id": conversation_id, "importance": importance, "confidence": confidence, "created_at": now, "last_recalled": None, "recall_count": 0, "metadata": _json_safe(metadata) if isinstance(metadata, dict) else {}, "embedding": _json_safe(embedding)}
         normalized = search_text.lower().strip()
