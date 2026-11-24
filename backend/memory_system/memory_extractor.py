@@ -112,6 +112,7 @@ class MemoryExtractor:
         text = text[:20000]
 
         memories = []
+        seen_memories = set()
 
         # =====================================
         # SPLIT INTO SENTENCES
@@ -140,8 +141,13 @@ class MemoryExtractor:
             if not value:
                 return
 
-            if len(value) < 2:
+            if len(value) < 2 or len(memories) >= 50:
                 return
+
+            identity = (memory_type, value.casefold())
+            if identity in seen_memories:
+                return
+            seen_memories.add(identity)
 
             memories.append({
 
