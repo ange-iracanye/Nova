@@ -182,9 +182,12 @@ class MemoryManager:
         messages = conversation.get("messages", [])
         if not isinstance(messages, list):
             return ""
+        # Keep relevance scoring bounded even when a conversation has a
+        # very long transcript or contains unusually large message bodies.
+        bounded_messages = messages[-200:]
         return "\n".join(
-            f"{m.get('role', 'user').title()}: {m.get('text', '')}"
-            for m in messages
+            f"{str(m.get('role', 'user'))[:20].title()}: {str(m.get('text', ''))[:4000]}"
+            for m in bounded_messages
             if isinstance(m, dict)
         )
 
