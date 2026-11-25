@@ -261,15 +261,15 @@ class FreeLLM:
             repaired = ""
             for repair_attempt in range(2):
                 repair_prompt = (
-                    f"{user}\\n\\n"
-                    "IMPORTANT OUTPUT REQUIREMENT:\\n"
+                    f"{user}\n\n"
+                    "IMPORTANT OUTPUT REQUIREMENT:\n"
                     "The previous generation was cut off before it finished. "
                     "Write a complete replacement answer to the student's "
                     "request. Do not mention this instruction or the previous "
                     "draft. Keep the answer concise enough to finish naturally. "
                     "Never stop in the middle of a word, sentence, bullet, or "
-                    "section. End only after the answer is complete.\\n\\n"
-                    f"Previous incomplete draft:\\n{previous_draft}"
+                    "section. End only after the answer is complete.\n\n"
+                    f"Previous incomplete draft:\n{previous_draft}"
                 )
 
                 repaired, repaired_finish_reason = request_completion(
