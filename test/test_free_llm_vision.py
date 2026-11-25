@@ -83,3 +83,76 @@ def test_free_llm_adds_sentence_spacing_and_heading_quality_rules(monkeypatch):
     assert "Never concatenate adjacent words" in system
     assert "Every sentence must have a complete grammatical structure" in system
     assert "Keep headings short and proportionate" in system
+
+
+def test_free_llm_retries_repair_when_provider_reports_max_tokens(monkeypatch):
+    responses = [
+        {"choices": [{"message": {"content": "Incomplete first draft"}, "finish_reason": "length"}]},
+        {"choices": [{"message": {"content": "Still incomplete"}, "finish_reason": "max_tokens"}]},
+        {"choices": [{"message": {"content": "A complete final answer."}, "finish_reason": "stop"}]},
+    ]
+    payloads = []
+
+    class QueueResponse:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return False
+
+        def read(self):
+            return json.dumps(responses.pop(0)).encode()
+
+    def fake_urlopen(request, timeout=90):
+        payloads.append(json.loads(request.data.decode()))
+        return QueueResponse()
+
+    monkeypatch.setattr(free_llm_module, "urlopen", fake_urlopen)
+    llm = FreeLLM(max_retries=0)
+    llm.api_key = "test-key"
+
+    answer = llm._generate(
+        "You are Nova.",
+        "Explain this topic completely.",
+        llm.get_generation_settings("low"),
+        "openrouter/free",
+    )
+
+    assert answer == "A complete final answer."
+    assert len(payloads) == 3
+    assert "Still incomplete" in payloads[2]["messages"][1]["content"]
+
+
+def test_free_llm_withholds_answer_if_repair_is_truncated_twice(monkeypatch):
+    responses = [
+        {"choices": [{"message": {"content": "Incomplete first draft"}, "finish_reason": "length"}]},
+        {"choices": [{"message": {"content": "Incomplete repair one"}, "finish_reason": "max_tokens"}]},
+        {"choices": [{"message": {"content": "Incomplete repair two"}, "finish_reason": "length"}]},
+    ]
+
+    class QueueResponse:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return False
+
+        def read(self):
+            return json.dumps(responses.pop(0)).encode()
+
+    monkeypatch.setattr(
+        free_llm_module,
+        "urlopen",
+        lambda request, timeout=90: QueueResponse(),
+    )
+    llm = FreeLLM(max_retries=0)
+    llm.api_key = "test-key"
+
+    import pytest
+    with pytest.raises(RuntimeError, match="repeatedly truncated"):
+        llm._generate(
+            "You are Nova.",
+            "Explain this topic completely.",
+            llm.get_generation_settings("low"),
+            "openrouter/free",
+        )
