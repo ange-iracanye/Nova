@@ -31,3 +31,48 @@ def test_answer_evaluator_caps_score_at_one_hundred():
         "physics",
         "gravity, force, mass, energy and motion",
     ) == 100
+
+
+
+def test_evaluator_recognizes_french_answers_for_supported_subjects():
+    evaluator = AnswerEvaluator()
+
+    assert evaluator.evaluate("mathématiques", "Une équation contient une variable.") == 40
+    assert evaluator.evaluate("physique", "La gravité agit sur la masse et le mouvement.") == 60
+    assert evaluator.evaluate("biologie", "La cellule contient de l'ADN.") == 40
+    assert evaluator.evaluate("chimie", "Une molécule contient un atome et une liaison.") == 60
+
+
+
+def test_evaluator_does_not_double_count_duplicate_translated_keywords():
+    evaluator = AnswerEvaluator()
+
+    assert evaluator.evaluate("physics", "The force acts on the mass.") == 40
+    assert evaluator.evaluate("math", "A fraction is part of mathematics.") == 20
+
+
+
+def test_evaluator_recognizes_french_computer_science_history_and_geography():
+    evaluator = AnswerEvaluator()
+
+    assert evaluator.evaluate("informatique", "Un algorithme utilise une boucle.") == 40
+    assert evaluator.evaluate("histoire", "La révolution a changé le royaume.") == 40
+    assert evaluator.evaluate("géographie", "Le climat d'un pays dépend de sa latitude.") == 60
+
+
+def test_answer_evaluator_rejects_oversized_inputs():
+    evaluator = AnswerEvaluator()
+
+    assert evaluator.evaluate("physics", "gravity " + ("x" * 12000)) == 0
+    assert evaluator.evaluate("p" * 121, "gravity and force") == 0
+
+
+def test_answer_evaluator_handles_objects_with_failing_string_conversion():
+    class BrokenString:
+        def __str__(self):
+            raise RuntimeError("cannot stringify")
+
+    evaluator = AnswerEvaluator()
+
+    assert evaluator.evaluate("physics", BrokenString()) == 0
+    assert evaluator.evaluate(BrokenString(), "gravity") == 0

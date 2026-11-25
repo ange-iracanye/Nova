@@ -9,7 +9,7 @@ from copy import deepcopy
 from datetime import datetime
 from pathlib import Path
 
-from backend.user_context import set_active_user, get_active_user
+from backend.user_context import get_active_user, set_active_user, user_context
 
 _PATCHED = False
 
@@ -139,8 +139,8 @@ def install_learning_quality(MemoryManager, LearningMemory):
     original_remember = MemoryManager.remember
 
     def remember(self, email, *args, **kwargs):
-        set_active_user(email)
-        return original_remember(self, email, *args, **kwargs)
+        with user_context(email):
+            return original_remember(self, email, *args, **kwargs)
 
     MemoryManager.remember = remember
 

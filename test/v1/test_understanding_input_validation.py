@@ -1,3 +1,6 @@
+import json
+
+from backend.learning import understanding_quality
 from backend.learning.understanding import UnderstandingAnalyzer
 
 
@@ -29,3 +32,38 @@ def test_understanding_analyzer_clamps_non_finite_values_safely():
     assert analyzer._clamp(float("inf")) == 0
     assert analyzer._clamp(150) == 100
     assert analyzer._clamp_change(float("inf")) == 0
+
+
+
+def test_recent_understanding_history_rejects_malformed_collections(monkeypatch, tmp_path):
+    path = tmp_path / "understanding.json"
+    monkeypatch.setattr(understanding_quality, "_file", lambda: path)
+    monkeypatch.setattr(understanding_quality, "_PATCHED", False)
+    path.write_text(json.dumps({"mathematics": {"history": "not-a-list"}}), encoding="utf-8")
+    understanding_quality.install_understanding_quality(UnderstandingAnalyzer)
+    analyzer = UnderstandingAnalyzer()
+
+    assert analyzer.get_recent_history("mathematics") == []
+
+
+def test_recent_understanding_history_filters_invalid_entries_and_bounds_limit(monkeypatch, tmp_path):
+    path = tmp_path / "understanding.json"
+    monkeypatch.setattr(understanding_quality, "_file", lambda: path)
+    monkeypatch.setattr(understanding_quality, "_PATCHED", False)
+    path.write_text(json.dumps({
+        "mathematics": {
+            "history": [
+                {"confidence": 60},
+                "invalid",
+                None,
+                {"confidence": 80},
+            ]
+        }
+    }), encoding="utf-8")
+    understanding_quality.install_understanding_quality(UnderstandingAnalyzer)
+    analyzer = UnderstandingAnalyzer()
+
+    assert analyzer.get_recent_history("mathematics", float("inf")) == [
+        {"confidence": 60},
+        {"confidence": 80},
+    ]

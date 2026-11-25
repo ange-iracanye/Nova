@@ -2,6 +2,7 @@ import json
 
 from backend.memory_system import learning_quality
 from backend.memory_system.learning_memory import LearningMemory
+from backend.user_context import get_active_user, user_context
 
 
 def _install(monkeypatch, tmp_path, email="learning-quality@example.com"):
@@ -97,3 +98,23 @@ def test_learning_memory_storage_isolated_between_active_students(monkeypatch, t
 
     active["email"] = "first@example.com"
     assert set(memory.get()["subjects"]) == {"Mathematics"}
+
+
+
+def test_learning_memory_remember_restores_previous_active_user_context(monkeypatch, tmp_path):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(learning_quality, "_PATCHED", False)
+
+    class MemoryManagerStub:
+        def remember(self, email):
+            return get_active_user()
+
+    learning_quality.install_learning_quality(MemoryManagerStub, LearningMemory)
+    manager = MemoryManagerStub()
+
+    with user_context("previous@example.com"):
+        observed = manager.remember("target@example.com")
+        after = get_active_user()
+
+    assert observed == "target@example.com"
+    assert after == "previous@example.com"

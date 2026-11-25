@@ -36,6 +36,7 @@ from typing import Any, Dict, Iterable, List, Mapping, Optional, Tuple
 # ============================================================
 
 INTENT_DETECTOR_VERSION = "2.0.0"
+MAX_INTENT_MESSAGE_LENGTH = 12000
 
 
 # ============================================================
@@ -490,6 +491,7 @@ class IntentDetector:
     # ========================================================
 
     @staticmethod
+    @staticmethod
     def normalize(
         message: Any,
     ) -> str:
@@ -497,22 +499,24 @@ class IntentDetector:
         if message is None:
             return ""
 
-        text = str(message)
+        try:
+            text = message if isinstance(message, str) else str(message)
+        except Exception:
+            return ""
 
-        text = text.replace(
-            "\u00a0",
-            " ",
+        if len(text) > MAX_INTENT_MESSAGE_LENGTH:
+            return ""
+
+        # Remove non-printing control characters while preserving whitespace
+        # that is normalized immediately afterwards.
+        text = "".join(
+            char for char in text
+            if char in "\t\n\r" or char.isprintable()
         )
-
-        text = re.sub(
-            r"\s+",
-            " ",
-            text,
-        )
-
+        text = text.replace("\u00a0", " ")
+        text = re.sub(r"\s+", " ", text)
         return text.strip()
 
-    # ========================================================
     # COMMANDS
     # ========================================================
 

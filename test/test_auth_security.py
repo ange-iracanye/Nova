@@ -87,5 +87,22 @@ class AuthSecurityTests(unittest.TestCase):
             auth.load_users()
 
 
+    def test_scrypt_verifier_rejects_untrusted_cost_parameters_before_derivation(self):
+        malicious_hash = "scrypt$999999999$8$1$YWJj$YWJj"
+
+        with patch.object(auth.hashlib, "scrypt") as derive:
+            self.assertFalse(auth.verify_password("password", malicious_hash))
+            derive.assert_not_called()
+
+    def test_scrypt_verifier_rejects_invalid_salt_and_digest_lengths(self):
+        invalid_salt = "scrypt$16384$8$1$YWJj$" + auth._b64encode(b"x" * auth.KEY_BYTES)
+        invalid_digest = "scrypt$16384$8$1$" + auth._b64encode(b"x" * auth.SALT_BYTES) + "$YWJj"
+
+        with patch.object(auth.hashlib, "scrypt") as derive:
+            self.assertFalse(auth.verify_password("password", invalid_salt))
+            self.assertFalse(auth.verify_password("password", invalid_digest))
+            derive.assert_not_called()
+
+
 if __name__ == "__main__":
     unittest.main()

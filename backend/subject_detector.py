@@ -572,24 +572,17 @@ class SubjectDetector:
         text
     ):
 
-        if not isinstance(
-            text,
-            str
-        ):
-
+        if not isinstance(text, str) or len(text) > 12000:
             return ""
 
-        text = text.lower().strip()
-
-        text = re.sub(
-            r"\s+",
-            " ",
-            text
+        text = "".join(
+            char for char in text
+            if char in "\t\n\r" or char.isprintable()
         )
-
+        text = text.casefold().strip()
+        text = re.sub(r"\s+", " ", text)
         return text
 
-    # =====================================
     # WORD MATCH
     # =====================================
 

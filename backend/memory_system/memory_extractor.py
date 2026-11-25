@@ -104,11 +104,15 @@ class MemoryExtractor:
         text = text.strip()
         if not text:
             return []
+        # Treat typographic and straight apostrophes consistently in French
+        # contractions (for example, "je m'appelle" and "je m’appelle").
+        text = text.replace("’", "'")
         # Bound regex work and prevent a single oversized message from
         # generating an unbounded number of candidate memories.
         text = text[:20000]
 
         memories = []
+        seen_memories = set()
 
         # =====================================
         # SPLIT INTO SENTENCES
@@ -137,8 +141,13 @@ class MemoryExtractor:
             if not value:
                 return
 
-            if len(value) < 2:
+            if len(value) < 2 or len(memories) >= 50:
                 return
+
+            identity = (memory_type, value.casefold())
+            if identity in seen_memories:
+                return
+            seen_memories.add(identity)
 
             memories.append({
 
@@ -179,7 +188,7 @@ class MemoryExtractor:
             match = re.search(
 
                 r"^\s*(?:remember that|remember this|"
-                r"don't forget that|keep in mind that)\s+(.+?)"
+                r"don't forget that|keep in mind that|souviens-toi que|souvenez-vous que|n'oublie pas que|n’oublie pas que)\s+(.+?)"
                 r"\s*$",
 
                 sentence,
@@ -204,7 +213,7 @@ class MemoryExtractor:
 
             match = re.search(
 
-                r"^\s*my goal is\s+(?:to\s+)?(.+?)\s*$",
+                r"^\s*(?:my goal is\s+(?:to\s+)?|mon objectif est\s+(?:de\s+|d')?)(.+?)\s*$",
 
                 sentence,
 
@@ -224,7 +233,7 @@ class MemoryExtractor:
 
             match = re.search(
 
-                r"^\s*i(?:'m| am)?\s+planning to\s+(.+?)\s*$",
+                r"^\s*(?:i(?:'m| am)?\s+planning to|je prévois de|je compte)\s+(.+?)\s*$",
 
                 sentence,
 
@@ -248,7 +257,7 @@ class MemoryExtractor:
 
             match = re.search(
 
-                r"^\s*i(?:'m| am)\s+trying to\s+(.+?)\s*$",
+                r"^\s*(?:i(?:'m| am)\s+trying to|j'essaie de|je tente de)\s+(.+?)\s*$",
 
                 sentence,
 
@@ -273,16 +282,22 @@ class MemoryExtractor:
             preference_patterns = [
 
                 r"^\s*i prefer\s+(.+?)\s*$",
+                r"^\s*je préfère\s+(.+?)\s*$",
 
                 r"^\s*i like\s+(.+?)\s*$",
+                r"^\s*j'aime\s+(.+?)\s*$",
 
                 r"^\s*i don't like\s+(.+?)\s*$",
+                r"^\s*je n'aime pas\s+(.+?)\s*$",
 
                 r"^\s*i hate\s+(.+?)\s*$",
+                r"^\s*je déteste\s+(.+?)\s*$",
 
                 r"^\s*i want\s+(.+?)\s*$",
+                r"^\s*je veux\s+(.+?)\s*$",
 
                 r"^\s*i need\s+(.+?)\s*$",
+                r"^\s*j'ai besoin de\s+(.+?)\s*$",
 
                 r"^\s*i usually\s+(.+?)\s*$",
 
@@ -325,53 +340,22 @@ class MemoryExtractor:
             # ---------------------------------
 
             fact_patterns = [
-
-                (
-                    r"^\s*my name is\s+(.+?)\s*$",
-                    "fact"
-                ),
-
-                (
-                    r"^\s*i am\s+(\d+)\s+years old\s*$",
-                    "fact"
-                ),
-
-                (
-                    r"^\s*i'm\s+(\d+)\s+years old\s*$",
-                    "fact"
-                ),
-
-                (
-                    r"^\s*i study\s+(.+?)\s*$",
-                    "fact"
-                ),
-
-                (
-                    r"^\s*i'm studying\s+(.+?)\s*$",
-                    "fact"
-                ),
-
-                (
-                    r"^\s*i am studying\s+(.+?)\s*$",
-                    "fact"
-                ),
-
-                (
-                    r"^\s*i live in\s+(.+?)\s*$",
-                    "fact"
-                ),
-
-                (
-                    r"^\s*i use\s+(.+?)\s*$",
-                    "fact"
-                ),
-
-                (
-                    r"^\s*i have\s+(.+?)\s*$",
-                    "fact"
-                )
+                (r"^\s*my name is\s+(.+?)\s*$", "fact"),
+                (r"^\s*je m'appelle\s+(.+?)\s*$", "fact"),
+                (r"^\s*i am\s+(\d+)\s+years old\s*$", "fact"),
+                (r"^\s*i'm\s+(\d+)\s+years old\s*$", "fact"),
+                (r"^\s*i study\s+(.+?)\s*$", "fact"),
+                (r"^\s*j'étudie\s+(.+?)\s*$", "fact"),
+                (r"^\s*i'm studying\s+(.+?)\s*$", "fact"),
+                (r"^\s*je suis étudiant en\s+(.+?)\s*$", "fact"),
+                (r"^\s*i am studying\s+(.+?)\s*$", "fact"),
+                (r"^\s*i live in\s+(.+?)\s*$", "fact"),
+                (r"^\s*j'habite à\s+(.+?)\s*$", "fact"),
+                (r"^\s*i use\s+(.+?)\s*$", "fact"),
+                (r"^\s*j'utilise\s+(.+?)\s*$", "fact"),
+                (r"^\s*i have\s+(.+?)\s*$", "fact"),
+                (r"^\s*j'ai\s+(.+?)\s*$", "fact"),
             ]
-
             for pattern, memory_type in fact_patterns:
 
                 match = re.search(

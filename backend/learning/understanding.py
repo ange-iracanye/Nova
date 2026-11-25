@@ -1516,34 +1516,24 @@ class UnderstandingAnalyzer:
         subject,
         limit=10
     ):
-        data = self.get(
-            subject
-        )
-
-        if not data:
-
+        subject_key = self._normalize_subject(subject)
+        data = self.history.get(subject_key)
+        if not isinstance(data, dict):
             return []
 
-        history = data.get(
-            "history",
-            []
-        )
+        history = data.get("history", [])
+        if not isinstance(history, list):
+            return []
 
         try:
-
-            limit = max(
-                1,
-                int(limit)
-            )
-
-        except (
-            TypeError,
-            ValueError
-        ):
-
+            limit = max(1, min(1000, int(limit)))
+        except (TypeError, ValueError, OverflowError):
             limit = 10
 
-        return history[-limit:]
+        return [
+            entry for entry in history[-limit:]
+            if isinstance(entry, dict)
+        ]
 
     # =========================================
     # RESET SUBJECT
@@ -1659,7 +1649,9 @@ class UnderstandingAnalyzer:
 
         except (
             OSError,
-            json.JSONDecodeError
+            ValueError,
+            TypeError,
+            UnicodeError
         ):
 
             return False
