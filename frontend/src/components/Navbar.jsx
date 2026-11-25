@@ -174,6 +174,15 @@ export default function Navbar() {
     );
 
 
+    const [profile, setProfile] = useState(() => {
+        try {
+            return JSON.parse(localStorage.getItem("nova_profile_preferences") || "{}") || {};
+        } catch {
+            return {};
+        }
+    });
+
+
     const [
         scrolled,
         setScrolled
@@ -230,6 +239,29 @@ export default function Navbar() {
             );
 
         }, []);
+
+
+    const refreshProfile = useCallback(() => {
+        try {
+            setProfile(JSON.parse(localStorage.getItem("nova_profile_preferences") || "{}") || {});
+        } catch {
+            setProfile({});
+        }
+    }, []);
+
+
+    useEffect(() => {
+        refreshProfile();
+        const syncProfile = () => refreshProfile();
+        window.addEventListener("storage", syncProfile);
+        window.addEventListener("nova-profile-changed", syncProfile);
+        window.addEventListener("nova-auth-changed", syncProfile);
+        return () => {
+            window.removeEventListener("storage", syncProfile);
+            window.removeEventListener("nova-profile-changed", syncProfile);
+            window.removeEventListener("nova-auth-changed", syncProfile);
+        };
+    }, [refreshProfile]);
 
 
     useEffect(() => {
@@ -1190,17 +1222,11 @@ export default function Navbar() {
                                             "
                                         >
 
-                                            <span
-                                                className="
-                                                    text-sm
-                                                    font-bold
-                                                    text-blue-300
-                                                "
-                                            >
-                                                {
-                                                    userInitial
-                                                }
-                                            </span>
+                                            {profile.avatar ? (
+                                                <img src={profile.avatar} alt="Your profile" className="h-full w-full object-cover" />
+                                            ) : (
+                                                <span className="text-sm font-bold text-blue-300">{userInitial}</span>
+                                            )}
 
                                         </div>
 
@@ -1701,26 +1727,8 @@ export default function Navbar() {
                                         "
                                     >
 
-                                        <div
-                                            className="
-                                                flex
-                                                h-10
-                                                w-10
-                                                shrink-0
-                                                items-center
-                                                justify-center
-                                                rounded-full
-                                                border
-                                                border-blue-400/20
-                                                bg-blue-500/10
-                                                text-sm
-                                                font-bold
-                                                text-blue-300
-                                            "
-                                        >
-                                            {
-                                                userInitial
-                                            }
+                                        <div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full border border-blue-400/20 bg-blue-500/10 text-sm font-bold text-blue-300">
+                                            {profile.avatar ? <img src={profile.avatar} alt="Your profile" className="h-full w-full object-cover" /> : userInitial}
                                         </div>
 
 
