@@ -1061,12 +1061,15 @@ def chat(
         request.message
     )
 
-    if not message:
+    if not message and not request.attachments:
 
         raise HTTPException(
             status_code=400,
-            detail="Message cannot be empty."
+            detail="Message or at least one attachment is required."
         )
+
+    if not message:
+        message = "Please analyze the attached file(s) and explain their contents."
 
     attachment_result = {"text": "", "images": [], "files": []}
     if request.attachments:
@@ -1256,12 +1259,15 @@ async def chat_stream(
         request.message
     )
 
-    if not message:
+    if not message and not request.attachments:
 
         raise HTTPException(
             status_code=400,
-            detail="Message cannot be empty."
+            detail="Message or at least one attachment is required."
         )
+
+    if not message:
+        message = "Please analyze the attached file(s) and explain their contents."
 
     attachment_result = {"text": "", "images": [], "files": []}
     if request.attachments:
@@ -1567,12 +1573,15 @@ async def demo_chat_stream(
         request.message
     )
 
-    if not message:
+    if not message and not request.attachments:
 
         raise HTTPException(
             status_code=400,
-            detail="Message cannot be empty."
+            detail="Message or at least one attachment is required."
         )
+
+    if not message:
+        message = "Please analyze the attached file(s) and explain their contents."
 
     attachment_result = {"text": "", "images": [], "files": []}
     if request.attachments:
