@@ -222,6 +222,36 @@ def _extract_text(name: str, extension: str, raw: bytes) -> str:
     return ""
 
 
+def _render_scanned_pdf_pages(name: str, raw: bytes) -> list[dict[str, str]]:
+    """Render up to three pages with no extractable text for vision-based reading."""
+    try:
+        import fitz
+        from pypdf import PdfReader
+        reader = PdfReader(io.BytesIO(raw), strict=False)
+        document = fitz.open(stream=raw, filetype="pdf")
+        rendered = []
+        for page_index, source_page in enumerate(reader.pages):
+            if len(rendered) >= 3:
+                break
+            try:
+                has_text = bool((source_page.extract_text() or "").strip())
+            except Exception:
+                has_text = False
+            if has_text:
+                continue
+            page = document.load_page(page_index)
+            pixmap = page.get_pixmap(matrix=fitz.Matrix(1.25, 1.25), alpha=False)
+            rendered.append({
+                "name": f"{name} · page {page_index + 1}",
+                "mime_type": "image/png",
+                "data": base64.b64encode(pixmap.tobytes("png")).decode("ascii"),
+            })
+        document.close()
+        return rendered
+    except Exception as exc:
+        raise AttachmentError(f"{name}: scanned PDF page rendering is unavailable.") from exc
+
+
 def _image_for_vision(name: str, extension: str, raw: bytes) -> dict[str, str]:
     try:
         from PIL import Image
@@ -268,23 +298,8 @@ def process_attachments(items: list[dict[str, Any]] | None) -> dict[str, Any]:
             images.append(_image_for_vision(name, extension, raw))
         else:
             extracted = _extract_text(name, extension, raw).strip()
-            if extension == ".pdf" and not extracted:
-                try:
-                    import fitz
-                    document = fitz.open(stream=raw, filetype="pdf")
-                    for page_number, page in enumerate(document, start=1):
-                        if page_number > 3:
-                            break
-                        pixmap = page.get_pixmap(matrix=fitz.Matrix(1.25, 1.25), alpha=False)
-                        png = pixmap.tobytes("png")
-                        images.append({
-                            "name": f"{name} · page {page_number}",
-                            "mime_type": "image/png",
-                            "data": base64.b64encode(png).decode("ascii"),
-                        })
-                    document.close()
-                except Exception as exc:
-                    raise AttachmentError(f"{name}: scanned PDF page rendering is unavailable.") from exc
+            if extension == ".pdf":
+                images.extend(_render_scanned_pdf_pages(name, raw))
             if extracted:
                 text_parts.append(f"[Document: {name}]\n{extracted}")
     combined = "\n\n".join(text_parts)
