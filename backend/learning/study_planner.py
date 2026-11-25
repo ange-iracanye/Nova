@@ -13,9 +13,15 @@ class StudyPlanner:
         result: list[str] = []
         seen: set[str] = set()
         for item in value:
+            if len(result) >= 100:
+                break
             if not isinstance(item, str):
                 continue
-            topic = item.strip()
+            topic = " ".join(item.split())[:160]
+            topic = "".join(
+                char for char in topic
+                if char.isprintable()
+            ).strip()
             key = topic.casefold()
             if topic and key not in seen:
                 result.append(topic)
