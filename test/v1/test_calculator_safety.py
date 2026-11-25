@@ -65,3 +65,17 @@ def test_calculator_rejects_excessively_nested_expressions(calculator):
 def test_calculator_rejects_expressions_with_too_many_ast_nodes(calculator):
     expression = "+".join(["1"] * 80)
     assert calculator.solve(expression) is None
+
+
+def test_calculator_enforces_integer_result_bit_limit(calculator):
+    assert calculator.solve("2 ** 511") == str(2 ** 511)
+    assert calculator.solve("2 ** 512") is None
+
+
+def test_calculator_supports_bounded_negative_exponents(calculator):
+    assert calculator.solve("2 ** -3") == "0.125"
+    assert calculator.solve("0 ** -1") is None
+
+
+def test_calculator_rejects_non_finite_float_results(calculator):
+    assert calculator.solve("1e308 * 1e308") is None
