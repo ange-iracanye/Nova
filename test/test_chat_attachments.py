@@ -123,3 +123,15 @@ def test_caps_extracted_document_text():
 def test_rejects_corrupt_image_data():
     with pytest.raises(AttachmentError, match="could not decode this image"):
         process_attachments([upload("broken.png", b"not an image")])
+
+
+def test_renders_scanned_pdf_pages_for_vision():
+    from pypdf import PdfWriter
+    writer = PdfWriter()
+    writer.add_blank_page(width=120, height=160)
+    buffer = io.BytesIO()
+    writer.write(buffer)
+    result = process_attachments([upload("scan.pdf", buffer.getvalue())])
+    assert len(result["images"]) == 1
+    assert result["images"][0]["name"] == "scan.pdf · page 1"
+    assert result["images"][0]["mime_type"] == "image/png"
