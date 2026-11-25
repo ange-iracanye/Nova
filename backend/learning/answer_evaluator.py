@@ -68,12 +68,19 @@ class AnswerEvaluator:
     def evaluate(self, expected_topic, answer):
         if expected_topic is None:
             return 50
-        topic = str(expected_topic).strip().casefold()
+        try:
+            topic = str(expected_topic).strip().casefold()
+            raw_answer = "" if answer is None else str(answer)
+        except Exception:
+            return 0
+        if len(topic) > 120 or len(raw_answer) > 12000:
+            return 0
+
         topic = self.TOPIC_ALIASES.get(topic, topic)
         keywords = self.KEYWORDS.get(topic)
         if not keywords:
             return 0
-        text = str(answer or "").casefold()
+        text = raw_answer.casefold()
         score = 0
         for word in dict.fromkeys(keywords):
             pattern = rf"(?<!\w){re.escape(word)}(?!\w)"
