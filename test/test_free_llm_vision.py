@@ -59,3 +59,27 @@ def test_free_llm_uses_vision_router_when_images_are_pending(monkeypatch):
     }])
     # The selected model is applied by answer(); this assertion protects the configured route.
     assert llm.pending_images[0]["mime_type"] == "image/png"
+
+
+def test_free_llm_adds_sentence_spacing_and_heading_quality_rules(monkeypatch):
+    captured = {}
+
+    def fake_urlopen(request, timeout=90):
+        captured["payload"] = json.loads(request.data.decode())
+        return FakeResponse()
+
+    monkeypatch.setattr(free_llm_module, "urlopen", fake_urlopen)
+    llm = FreeLLM(max_retries=0)
+    llm.api_key = "test-key"
+
+    answer = llm.answer(
+        "You are Nova, a helpful tutor.",
+        "Explique le cours de philosophie avec des phrases completes.",
+        "low",
+    )
+
+    system = captured["payload"]["messages"][0]["content"]
+    assert answer == "The image contains a blue square."
+    assert "Never concatenate adjacent words" in system
+    assert "Every sentence must have a complete grammatical structure" in system
+    assert "Keep headings short and proportionate" in system
