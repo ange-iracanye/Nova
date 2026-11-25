@@ -213,7 +213,7 @@ class MemoryExtractor:
 
             match = re.search(
 
-                r"^\s*(?:my goal is\s+(?:to\s+)?|mon objectif est\s+(?:de\s+)?)(.+?)\s*$",
+                r"^\s*(?:my goal is\s+(?:to\s+)?|mon objectif est\s+(?:de\s+|d')?)(.+?)\s*$",
 
                 sentence,
 
@@ -340,23 +340,22 @@ class MemoryExtractor:
             # ---------------------------------
 
             fact_patterns = [
-                (r"^\\s*my name is\\s+(.+?)\\s*$", "fact"),
-                (r"^\\s*je m'appelle\\s+(.+?)\\s*$", "fact"),
-                (r"^\\s*i am\\s+(\\d+)\\s+years old\\s*$", "fact"),
-                (r"^\\s*i'm\\s+(\\d+)\\s+years old\\s*$", "fact"),
-                (r"^\\s*i study\\s+(.+?)\\s*$", "fact"),
-                (r"^\\s*j'étudie\\s+(.+?)\\s*$", "fact"),
-                (r"^\\s*i'm studying\\s+(.+?)\\s*$", "fact"),
-                (r"^\\s*je suis étudiant en\\s+(.+?)\\s*$", "fact"),
-                (r"^\\s*i am studying\\s+(.+?)\\s*$", "fact"),
-                (r"^\\s*i live in\\s+(.+?)\\s*$", "fact"),
-                (r"^\\s*j'habite à\\s+(.+?)\\s*$", "fact"),
-                (r"^\\s*i use\\s+(.+?)\\s*$", "fact"),
-                (r"^\\s*j'utilise\\s+(.+?)\\s*$", "fact"),
-                (r"^\\s*i have\\s+(.+?)\\s*$", "fact"),
-                (r"^\\s*j'ai\\s+(.+?)\\s*$", "fact"),
+                (r"^\s*my name is\s+(.+?)\s*$", "fact"),
+                (r"^\s*je m'appelle\s+(.+?)\s*$", "fact"),
+                (r"^\s*i am\s+(\d+)\s+years old\s*$", "fact"),
+                (r"^\s*i'm\s+(\d+)\s+years old\s*$", "fact"),
+                (r"^\s*i study\s+(.+?)\s*$", "fact"),
+                (r"^\s*j'étudie\s+(.+?)\s*$", "fact"),
+                (r"^\s*i'm studying\s+(.+?)\s*$", "fact"),
+                (r"^\s*je suis étudiant en\s+(.+?)\s*$", "fact"),
+                (r"^\s*i am studying\s+(.+?)\s*$", "fact"),
+                (r"^\s*i live in\s+(.+?)\s*$", "fact"),
+                (r"^\s*j'habite à\s+(.+?)\s*$", "fact"),
+                (r"^\s*i use\s+(.+?)\s*$", "fact"),
+                (r"^\s*j'utilise\s+(.+?)\s*$", "fact"),
+                (r"^\s*i have\s+(.+?)\s*$", "fact"),
+                (r"^\s*j'ai\s+(.+?)\s*$", "fact"),
             ]
-
             for pattern, memory_type in fact_patterns:
 
                 match = re.search(
