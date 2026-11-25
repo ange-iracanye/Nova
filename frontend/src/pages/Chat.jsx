@@ -62,6 +62,10 @@ const API_URL = (
 const STREAM_TIMEOUT = 45000;
 const BACKEND_TIMEOUT = 5000;
 const MAX_INPUT = 12000;
+const MAX_ATTACHMENTS = 5;
+const MAX_FILE_BYTES = 8 * 1024 * 1024;
+const MAX_TOTAL_FILE_BYTES = 10 * 1024 * 1024;
+const SUPPORTED_FILE_EXTENSIONS = new Set(["pdf","docx","xlsx","xls","pptx","odt","ods","txt","md","markdown","csv","tsv","json","jsonl","xml","html","htm","rtf","py","js","jsx","ts","tsx","css","scss","sql","yaml","yml","toml","ini","log","java","c","cpp","h","cs","go","rs","sh","bat","ipynb","png","jpg","jpeg","webp","gif","bmp","tif","tiff"]);
 
 const STORAGE = {
   USER: "nova_user",
@@ -232,6 +236,7 @@ function normalizeMessage(message) {
     text: typeof message?.text === "string" ? message.text : "",
     streaming: Boolean(message?.streaming),
     error: Boolean(message?.error),
+    attachments: Array.isArray(message?.attachments) ? message.attachments.map((file) => ({ name: String(file?.name || "Attachment"), type: String(file?.type || "") })) : [],
   };
 }
 
@@ -463,9 +468,19 @@ function Message({
           )}
 
           {isUser ? (
-            <p className="whitespace-pre-wrap break-words text-sm leading-7">
-              {message.text}
-            </p>
+            <>
+              {Array.isArray(message.attachments) && message.attachments.length > 0 && (
+                <div className="mb-2 flex flex-wrap gap-1.5">
+                  {message.attachments.map((file, fileIndex) => (
+                    <span key={`${file.name}-${fileIndex}`} className="inline-flex max-w-full items-center gap-1.5 rounded-lg border border-white/20 bg-black/10 px-2 py-1 text-[11px]">
+                      <FileText size={12} className="shrink-0" />
+                      <span className="truncate">{file.name}</span>
+                    </span>
+                  ))}
+                </div>
+              )}
+              {message.text && <p className="whitespace-pre-wrap break-words text-sm leading-7">{message.text}</p>}
+            </>
           ) : message.text ? (
             <div className="nova-markdown text-sm leading-7">
               <ReactMarkdown
@@ -682,6 +697,7 @@ export default function Chat() {
   const demoSessionRef = useRef(null);
 
   const [input, setInput] = useState("");
+  const [attachments, setAttachments] = useState([]);
   const [loading, setLoading] = useState(false);
   const [sidebar, setSidebar] = useState(true);
   const [search, setSearch] = useState("");
@@ -712,6 +728,7 @@ export default function Chat() {
   const mountedRef = useRef(true);
   const generationRef = useRef(0);
   const textareaRef = useRef(null);
+  const fileInputRef = useRef(null);
 
   const currentUser = getUser();
 
@@ -1455,11 +1472,11 @@ const conversation =
 
   const send = useCallback(
     async (override = null) => {
-      const text = String(
-        override ?? input
-      ).trim();
+      const selectedAttachments = override === null ? attachments : [];
+      const typedText = String(override ?? input).trim();
+      const text = typedText || "Please analyze the attached file(s) and explain their contents.";
 
-      if (!text || loading) {
+      if ((!typedText && !selectedAttachments.length) || loading) {
         return;
       }
 
@@ -1488,10 +1505,12 @@ const conversation =
         {
           role: "user",
           text,
+          attachments: selectedAttachments.map((file) => ({ name: file.name, type: file.name.split(".").pop()?.toLowerCase() || "" })),
         },
       ]);
 
       setInput("");
+      setAttachments([]);
       removeStorage(
         draftKey(conversationId, mode)
       );
@@ -1535,6 +1554,7 @@ const conversation =
                 message: text,
                 session_id: session,
                 tutor_mode: mode,
+                attachments: selectedAttachments.map(({ name, mime_type, data }) => ({ name, mime_type, data })),
               }),
               signal:
                 controller.signal,
@@ -1588,6 +1608,7 @@ const conversation =
                 conversation_id:
                   currentId,
                 tutor_mode: mode,
+                attachments: selectedAttachments.map(({ name, mime_type, data }) => ({ name, mime_type, data })),
               }),
               signal:
                 controller.signal,
@@ -2165,6 +2186,38 @@ const conversation =
     },
     []
   );
+
+  const handleFilesSelected = useCallback(async (event) => {
+    const picked = Array.from(event.target.files || []);
+    event.target.value = "";
+    if (!picked.length) return;
+    if (attachments.length + picked.length > MAX_ATTACHMENTS) {
+      setError("You can attach up to " + MAX_ATTACHMENTS + " files per message.");
+      return;
+    }
+    let totalBytes = attachments.reduce((sum, file) => sum + file.size, 0);
+    const next = [...attachments];
+    for (const file of picked) {
+      const extension = file.name.split(".").pop()?.toLowerCase() || "";
+      if (!SUPPORTED_FILE_EXTENSIONS.has(extension)) { setError(file.name + ": this file type is not supported."); continue; }
+      if (!file.size || file.size > MAX_FILE_BYTES) { setError(file.name + ": each file must be smaller than 8 MB."); continue; }
+      if (totalBytes + file.size > MAX_TOTAL_FILE_BYTES) { setError("Attachments together must not exceed 10 MB."); break; }
+      try {
+        const dataUrl = await new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(String(reader.result || ""));
+          reader.onerror = () => reject(new Error("Could not read " + file.name + "."));
+          reader.readAsDataURL(file);
+        });
+        const separator = dataUrl.indexOf(",");
+        if (separator < 0) throw new Error("Could not encode " + file.name + ".");
+        next.push({ name: file.name, mime_type: file.type || "application/octet-stream", data: dataUrl.slice(separator + 1), size: file.size });
+        totalBytes += file.size;
+      } catch (fileError) { setError(fileError.message || "Could not read the selected file."); }
+    }
+    setAttachments(next);
+    if (next.length) setError("");
+  }, [attachments]);
 
   /* =======================================================
      ENTER
@@ -3128,6 +3181,18 @@ const conversation =
             </div>
 
             {/* COMPOSER */}
+            <input ref={fileInputRef} type="file" multiple accept=".pdf,.docx,.xlsx,.xls,.pptx,.odt,.ods,.txt,.md,.markdown,.csv,.tsv,.json,.jsonl,.xml,.html,.htm,.rtf,.py,.js,.jsx,.ts,.tsx,.css,.scss,.sql,.yaml,.yml,.toml,.ini,.log,.java,.c,.cpp,.h,.cs,.go,.rs,.sh,.bat,.ipynb,.png,.jpg,.jpeg,.webp,.gif,.bmp,.tif,.tiff" onChange={handleFilesSelected} className="hidden" aria-label="Choose files to attach" />
+            {attachments.length > 0 && (
+              <div className="mb-2 flex flex-wrap gap-2 px-1 pt-1">
+                {attachments.map((file, index) => (
+                  <span key={`${file.name}-${index}`} className="inline-flex max-w-full items-center gap-2 rounded-xl border border-white/10 bg-white/[.04] px-2.5 py-1.5 text-[11px] text-slate-300">
+                    <FileText size={13} className="shrink-0 text-sky-300" />
+                    <span className="max-w-[180px] truncate">{file.name}</span>
+                    <button type="button" onClick={() => setAttachments((current) => current.filter((_, itemIndex) => itemIndex !== index))} disabled={loading} className="rounded p-0.5 text-slate-500 hover:bg-white/10 hover:text-white" aria-label={`Remove ${file.name}`}><X size={12} /></button>
+                  </span>
+                ))}
+              </div>
+            )}
             <div
               className={`rounded-[22px] border bg-transparent p-2 shadow-2xl backdrop-blur-xl ${
                 loading
@@ -3136,6 +3201,7 @@ const conversation =
               }`}
             >
               <div className="flex items-end gap-2">
+                <button type="button" onClick={() => fileInputRef.current?.click()} disabled={loading || attachments.length >= MAX_ATTACHMENTS} className="mb-1 flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-white/10 bg-white/[.035] text-slate-300 transition hover:border-sky-400/30 hover:bg-white/[.08] disabled:cursor-not-allowed disabled:opacity-40" title="Attach files" aria-label="Attach files"><Plus size={19} /></button>
                 <textarea
                   ref={(element) => {
                     textareaRef.current =
@@ -3204,7 +3270,7 @@ const conversation =
                         send()
                       }
                       disabled={
-                        !input.trim() ||
+                        (!input.trim() && !attachments.length) ||
                         !online
                       }
                       className="flex h-11 w-11 items-center justify-center rounded-xl bg-white text-slate-950 transition hover:bg-slate-200 disabled:bg-white/[.07] disabled:text-slate-600"
