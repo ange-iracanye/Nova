@@ -89,3 +89,37 @@ def test_study_recommendation_falls_back_to_reinforcing_strengths():
     assert planner.recommend({"strengths": ["Biology"]}) == (
         "Today's recommendation: reinforce Biology"
     )
+
+
+def test_study_planner_bounds_topic_count_and_topic_length():
+    planner = StudyPlanner()
+    topics = [f"Topic {index}" for index in range(150)]
+    topics.append("X" * 500)
+
+    plan = planner.build_plan({"weaknesses": topics}, limit=20)
+
+    assert len(plan) == 20
+    assert all(len(item["topic"]) <= 160 for item in plan)
+
+
+def test_study_planner_normalizes_whitespace_and_control_characters():
+    planner = StudyPlanner()
+
+    plan = planner.build_plan({
+        "weaknesses": ["  Algebra\\n\\t basics  ", "Algebra basics"]
+    })
+
+    assert plan[0]["topic"] == "Algebra basics"
+    assert len(plan) == 1
+
+
+def test_study_planner_ignores_non_list_topic_collections():
+    planner = StudyPlanner()
+
+    plan = planner.build_plan({
+        "weaknesses": "Algebra",
+        "due_topics": {"Geometry"},
+        "new_topics": 42,
+    })
+
+    assert plan[0]["topic"] == "Choose a new topic"
