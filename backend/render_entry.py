@@ -27,11 +27,13 @@ def _origin(scope: dict[str, Any]) -> str:
 
 
 def _origin_is_allowed(origin: str) -> bool:
-    if not origin:
-        return False
-    if origin in _allowed_origins():
-        return True
-    return origin.startswith("https://")
+    """Allow only explicitly configured origins.
+
+    HTTPS alone is not a trust boundary: reflecting an arbitrary HTTPS
+    Origin while allowing credentials would let unrelated sites make
+    credentialed cross-origin requests to the API.
+    """
+    return bool(origin and origin in _allowed_origins())
 
 
 def _cors_headers(scope: dict[str, Any]) -> list[tuple[bytes, bytes]]:
