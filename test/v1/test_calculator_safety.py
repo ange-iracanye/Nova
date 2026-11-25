@@ -58,7 +58,7 @@ def test_calculator_rejects_oversized_expressions(calculator):
 
 
 def test_calculator_rejects_excessively_nested_expressions(calculator):
-    expression = "(" * 30 + "1" + ")" * 30
+    expression = "-" * 20 + "1"
     assert calculator.solve(expression) is None
 
 
