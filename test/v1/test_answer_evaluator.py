@@ -58,3 +58,21 @@ def test_evaluator_recognizes_french_computer_science_history_and_geography():
     assert evaluator.evaluate("informatique", "Un algorithme utilise une boucle.") == 40
     assert evaluator.evaluate("histoire", "La révolution a changé le royaume.") == 40
     assert evaluator.evaluate("géographie", "Le climat d'un pays dépend de sa latitude.") == 60
+
+
+def test_answer_evaluator_rejects_oversized_inputs():
+    evaluator = AnswerEvaluator()
+
+    assert evaluator.evaluate("physics", "gravity " + ("x" * 12000)) == 0
+    assert evaluator.evaluate("p" * 121, "gravity and force") == 0
+
+
+def test_answer_evaluator_handles_objects_with_failing_string_conversion():
+    class BrokenString:
+        def __str__(self):
+            raise RuntimeError("cannot stringify")
+
+    evaluator = AnswerEvaluator()
+
+    assert evaluator.evaluate("physics", BrokenString()) == 0
+    assert evaluator.evaluate(BrokenString(), "gravity") == 0
