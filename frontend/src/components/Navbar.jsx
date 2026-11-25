@@ -1326,30 +1326,22 @@ export default function Navbar() {
                                                 "
                                             >
 
-                                                <div
-                                                    className="
-                                                        text-[10px]
-                                                        font-semibold
-                                                        uppercase
-                                                        tracking-[0.18em]
-                                                        text-slate-600
-                                                    "
-                                                >
-                                                    Signed in as
-                                                </div>
-
-                                                <div
-                                                    className="
-                                                        mt-1
-                                                        truncate
-                                                        text-sm
-                                                        text-slate-300
-                                                    "
-                                                >
-                                                    {
-                                                        userEmail ||
-                                                        "Nova User"
-                                                    }
+                                                <div className="flex items-center gap-3">
+                                                    <div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-blue-400/20 bg-blue-500/10">
+                                                        {profile.avatar ? (
+                                                            <img src={profile.avatar} alt="Your profile" className="h-full w-full object-cover" />
+                                                        ) : (
+                                                            <span className="text-sm font-bold text-blue-300">{userInitial}</span>
+                                                        )}
+                                                    </div>
+                                                    <div className="min-w-0 flex-1">
+                                                        <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-600">
+                                                            Signed in as
+                                                        </div>
+                                                        <div className="mt-1 truncate text-sm text-slate-300">
+                                                            {userEmail || "Nova User"}
+                                                        </div>
+                                                    </div>
                                                 </div>
 
                                             </div>
