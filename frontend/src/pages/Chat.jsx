@@ -176,6 +176,16 @@ function getUser() {
   }
 }
 
+function getProfile() {
+  try {
+    const value = getStorage("nova_profile_preferences");
+    const profile = value ? JSON.parse(value) : {};
+    return profile && typeof profile === "object" ? profile : {};
+  } catch {
+    return {};
+  }
+}
+
 /* =========================================================
    HELPERS
    ========================================================= */
@@ -411,6 +421,7 @@ async function streamText(
 
 function Message({
   message,
+  avatarUrl,
   index,
   copy,
   regenerate,
@@ -440,7 +451,11 @@ function Message({
           }`}
         >
           {isUser ? (
-            <User size={17} />
+            avatarUrl ? (
+              <img src={avatarUrl} alt="Your profile" className="h-full w-full rounded-xl object-cover" />
+            ) : (
+              <User size={17} />
+            )
           ) : (
             <Sparkles size={17} />
           )}
@@ -520,6 +535,22 @@ function Message({
                         }
                       />
                     );
+                  },
+
+                  h1({ children }) {
+                    return <h2 className="my-4 text-base font-semibold leading-snug tracking-tight text-slate-100">{children}</h2>;
+                  },
+
+                  h2({ children }) {
+                    return <h3 className="my-3.5 text-[.95rem] font-semibold leading-snug text-slate-100">{children}</h3>;
+                  },
+
+                  h3({ children }) {
+                    return <h4 className="my-3 text-sm font-semibold leading-snug text-slate-200">{children}</h4>;
+                  },
+
+                  h4({ children }) {
+                    return <h5 className="my-2.5 text-sm font-medium leading-snug text-slate-200">{children}</h5>;
                   },
 
                   a({ children, ...props }) {
@@ -718,6 +749,7 @@ export default function Chat() {
       : navigator.onLine
   );
   const [draftSaved, setDraftSaved] = useState(false);
+  const [profile, setProfile] = useState(getProfile);
 
   const container = useRef(null);
   const end = useRef(null);
@@ -731,6 +763,19 @@ export default function Chat() {
   const fileInputRef = useRef(null);
 
   const currentUser = getUser();
+
+  useEffect(() => {
+    const syncProfile = () => setProfile(getProfile());
+    window.addEventListener("storage", syncProfile);
+    window.addEventListener("nova-profile-changed", syncProfile);
+    window.addEventListener("nova-auth-changed", syncProfile);
+    syncProfile();
+    return () => {
+      window.removeEventListener("storage", syncProfile);
+      window.removeEventListener("nova-profile-changed", syncProfile);
+      window.removeEventListener("nova-auth-changed", syncProfile);
+    };
+  }, []);
 
   const userLabel =
     currentUser?.name ||
@@ -2729,10 +2774,12 @@ const conversation =
               }
               className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left hover:bg-white/[.04]"
             >
-              <div className="flex h-8 w-8 items-center justify-center rounded-xl border border-white/10 bg-white/[.05] text-xs">
-                {userLabel
-                  .slice(0, 1)
-                  .toUpperCase()}
+              <div className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-white/10 bg-white/[.05] text-xs">
+                {profile.avatar ? (
+                  <img src={profile.avatar} alt="Your profile" className="h-full w-full object-cover" />
+                ) : (
+                  userLabel.slice(0, 1).toUpperCase()
+                )}
               </div>
 
               <div className="min-w-0 flex-1">
@@ -3125,6 +3172,7 @@ const conversation =
                       20
                     )}`}
                     message={message}
+                    avatarUrl={demo ? "" : profile.avatar}
                     index={index}
                     copy={copy}
                     regenerate={
@@ -3445,10 +3493,33 @@ const conversation =
 
           .nova-markdown h1,
           .nova-markdown h2,
-          .nova-markdown h3 {
-            margin: 1.2rem 0 .6rem;
+          .nova-markdown h3,
+          .nova-markdown h4,
+          .nova-markdown h5 {
+            max-width: 100%;
+            overflow-wrap: anywhere;
+            font-size: inherit;
             font-weight: 650;
+            line-height: 1.35;
             color: #f1f5f9;
+          }
+
+          .nova-markdown p,
+          .nova-markdown li,
+          .nova-markdown td,
+          .nova-markdown th {
+            overflow-wrap: anywhere;
+            word-break: normal;
+            white-space: normal;
+          }
+
+          .nova-markdown p {
+            line-height: 1.8;
+          }
+
+          .nova-markdown ul,
+          .nova-markdown ol {
+            line-height: 1.75;
           }
 
           .nova-markdown strong {
