@@ -549,7 +549,7 @@ class NovaCore:
     # LIMITS
     # =========================================================
 
-    MAX_MESSAGE_LENGTH = 20000
+    MAX_MESSAGE_LENGTH = 45000
 
     MAX_EMAIL_LENGTH = 320
 
