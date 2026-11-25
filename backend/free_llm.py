@@ -56,6 +56,11 @@ class FreeLLM:
         self.total_requests = 0
         self.successful_requests = 0
         self.failed_requests = 0
+        self.pending_images: list[dict[str, str]] = []
+
+    def set_pending_images(self, images: Optional[list[dict[str, str]]] = None) -> None:
+        """Attach validated, in-memory images to the next serialized chat request."""
+        self.pending_images = list(images or [])
 
     def get_generation_settings(self, creativity: str = "medium") -> Dict[str, float]:
         return dict(self.CREATIVITY_SETTINGS.get(str(creativity).strip().lower(), self.CREATIVITY_SETTINGS["medium"]))
@@ -157,11 +162,21 @@ class FreeLLM:
         )
 
         def request_completion(request_user: str, token_limit: int):
+            user_content: Any = request_user
+            if self.pending_images:
+                user_content = [{"type": "text", "text": request_user}]
+                for image in self.pending_images:
+                    user_content.append({
+                        "type": "image_url",
+                        "image_url": {
+                            "url": "data:" + image["mime_type"] + ";base64," + image["data"]
+                        }
+                    })
             payload = {
                 "model": model,
                 "messages": [
                     {"role": "system", "content": system},
-                    {"role": "user", "content": request_user}
+                    {"role": "user", "content": user_content}
                 ],
                 "temperature": settings["temperature"],
                 "top_p": settings["top_p"],
@@ -308,7 +323,11 @@ class FreeLLM:
             system = f"{system}\n\nFRESHNESS RULE: Live web context is attached to the user request. Prefer it over stale memory for current events, while still following the latest-message language rule."
 
         last_error: Optional[Exception] = None
-        models = [self.model] + ([self.fallback_model] if self.fallback_model and self.fallback_model != self.model else [])
+        if self.pending_images:
+            vision_model = os.getenv("NOVA_VISION_MODEL", self.FREE_ROUTER_MODEL).strip()
+            models = [vision_model] + ([self.fallback_model] if self.fallback_model and self.fallback_model != vision_model else [])
+        else:
+            models = [self.model] + ([self.fallback_model] if self.fallback_model and self.fallback_model != self.model else [])
         for model in models:
             for attempt in range(self.max_retries + 1):
                 try:
