@@ -15,7 +15,7 @@ PDF text is extracted page by page. Image-only PDFs are rendered to a small numb
 - Maximum five files per message.
 - Maximum 8 MB per file and 10 MB combined raw file data.
 - Maximum 40 PDF pages; up to three scanned pages are sent for visual reading.
-- Extracted document text is capped at 60,000 characters.
+- Extracted document text is capped at 30,000 characters.
 - Office archives are checked for excessive member counts and expanded size before parsing.
 - Uploaded files are never written to disk by the attachment processor.
 - Text found inside files and images is treated as untrusted source material, not as instructions to Nova.
