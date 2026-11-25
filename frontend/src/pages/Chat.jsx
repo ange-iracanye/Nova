@@ -1429,6 +1429,7 @@ const conversation =
       setMessages([]);
       setConversationId(null);
       setInput("");
+    setAttachments([]);
 
       const session =
         await createDemo();
@@ -1816,6 +1817,7 @@ const conversation =
     },
     [
       input,
+      attachments,
       loading,
       conversationId,
       mode,
