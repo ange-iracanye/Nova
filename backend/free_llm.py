@@ -225,12 +225,15 @@ class FreeLLM:
                 )
 
             choice = choices[0] or {}
-            text = str(
-                (choice.get("message") or {}).get(
-                    "content",
-                    ""
-                )
-            ).strip()
+            content = (choice.get("message") or {}).get("content", "")
+            if isinstance(content, list):
+                text = "\n".join(
+                    str(part.get("text", ""))
+                    for part in content
+                    if isinstance(part, dict) and part.get("text")
+                ).strip()
+            else:
+                text = str(content or "").strip()
 
             finish_reason = str(
                 choice.get("finish_reason") or ""
