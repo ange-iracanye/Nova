@@ -252,33 +252,44 @@ class FreeLLM:
             max_tokens
         )
 
-        # A provider can legally stop at its generation ceiling. Do not
-        # expose that partial draft to users. OpenRouter models can report
-        # this as either "length" or "max_tokens", depending on the route.
-        # Ask the same model for a concise, complete replacement instead.
-        if finish_reason in {"length", "max_tokens"} and text:
-            repair_prompt = (
-                f"{user}\n\n"
-                "IMPORTANT OUTPUT REQUIREMENT:\n"
-                "The previous generation was cut off before it finished. "
-                "Write a complete replacement answer to the student's "
-                "request. Do not mention this instruction or the previous "
-                "draft. Keep the answer concise enough to finish naturally. "
-                "Never stop in the middle of a word, sentence, bullet, or "
-                "section. End only after the answer is complete.\n\n"
-                f"Previous incomplete draft:\n{text}"
-            )
-
-            repaired, repaired_finish_reason = request_completion(
-                repair_prompt,
-                max(
-                    max_tokens,
-                    self.RESPONSE_TOKEN_LIMITS["long"]
+        # A provider can legally stop at its generation ceiling. Never
+        # expose a draft that the provider explicitly reports as truncated.
+        # Different OpenRouter routes use either "length" or "max_tokens".
+        truncated_reasons = {"length", "max_tokens"}
+        if finish_reason in truncated_reasons:
+            previous_draft = text
+            repaired = ""
+            for repair_attempt in range(2):
+                repair_prompt = (
+                    f"{user}\\n\\n"
+                    "IMPORTANT OUTPUT REQUIREMENT:\\n"
+                    "The previous generation was cut off before it finished. "
+                    "Write a complete replacement answer to the student's "
+                    "request. Do not mention this instruction or the previous "
+                    "draft. Keep the answer concise enough to finish naturally. "
+                    "Never stop in the middle of a word, sentence, bullet, or "
+                    "section. End only after the answer is complete.\\n\\n"
+                    f"Previous incomplete draft:\\n{previous_draft}"
                 )
-            )
 
-            if repaired and repaired_finish_reason != "length":
-                text = repaired
+                repaired, repaired_finish_reason = request_completion(
+                    repair_prompt,
+                    max(
+                        max_tokens,
+                        self.RESPONSE_TOKEN_LIMITS["long"]
+                    )
+                )
+
+                if repaired and repaired_finish_reason not in truncated_reasons:
+                    text = repaired
+                    break
+
+                previous_draft = repaired or previous_draft
+            else:
+                raise RuntimeError(
+                    "The AI provider repeatedly truncated Nova's answer. "
+                    "The incomplete draft was withheld instead of being shown."
+                )
 
         return text
 
