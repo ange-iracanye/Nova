@@ -21,6 +21,8 @@ import {
   FileText,
   History,
   Lightbulb,
+  Mic,
+  MicOff,
   LoaderCircle,
   LogOut,
   Menu,
@@ -728,6 +730,11 @@ export default function Chat() {
   const demoSessionRef = useRef(null);
 
   const [input, setInput] = useState("");
+  const [isListening, setIsListening] = useState(false);
+  const [speechLanguage, setSpeechLanguage] = useState(typeof navigator !== "undefined" && navigator.language ? navigator.language : "en-US");
+  const [speechError, setSpeechError] = useState("");
+  const recognitionRef = useRef(null);
+  const speechBaseRef = useRef("");
   const [attachments, setAttachments] = useState([]);
   const [loading, setLoading] = useState(false);
   const [sidebar, setSidebar] = useState(true);
@@ -783,6 +790,57 @@ export default function Chat() {
     currentUser?.email ||
     "Nova User";
 
+  const stopDictation = useCallback(() => {
+    try { recognitionRef.current?.stop(); } catch { /* Already stopped. */ }
+    recognitionRef.current = null;
+    setIsListening(false);
+  }, []);
+
+  const startDictation = useCallback(() => {
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+      setSpeechError("Voice typing is not supported by this browser. Try the latest Chrome or Edge, or use your device keyboard microphone.");
+      return;
+    }
+    if (recognitionRef.current) { stopDictation(); return; }
+    setSpeechError("");
+    speechBaseRef.current = input;
+    const recognition = new SpeechRecognition();
+    recognition.lang = speechLanguage || "en-US";
+    recognition.continuous = true;
+    recognition.interimResults = true;
+    recognition.maxAlternatives = 1;
+    recognition.onresult = (event) => {
+      let transcript = "";
+      for (let i = 0; i < event.results.length; i += 1) {
+        transcript += event.results[i]?.[0]?.transcript || "";
+      }
+      const separator = speechBaseRef.current && transcript ? " " : "";
+      setInput((speechBaseRef.current + separator + transcript).slice(0, MAX_INPUT));
+    };
+    recognition.onerror = (event) => {
+      const messages = {
+        "not-allowed": "Microphone permission was denied. Allow microphone access in your browser settings.",
+        "service-not-allowed": "The browser speech recognition service is unavailable.",
+        "no-speech": "No speech was detected. Try speaking closer to your microphone.",
+        "audio-capture": "No microphone was found. Check your device microphone.",
+        network: "Speech recognition needs an internet connection in this browser.",
+      };
+      setSpeechError(messages[event.error] || "Voice typing stopped unexpectedly.");
+      recognitionRef.current = null;
+      setIsListening(false);
+    };
+    recognition.onend = () => { recognitionRef.current = null; setIsListening(false); };
+    recognitionRef.current = recognition;
+    setIsListening(true);
+    try { recognition.start(); } catch {
+      recognitionRef.current = null;
+      setIsListening(false);
+      setSpeechError("The microphone could not be started. Please try again.");
+    }
+  }, [input, speechLanguage, stopDictation]);
+
+
   /* =======================================================
      CLEANUP
      ======================================================= */
@@ -792,6 +850,9 @@ export default function Chat() {
 
     return () => {
       mountedRef.current = false;
+
+      try { recognitionRef.current?.stop(); } catch { /* Already stopped. */ }
+      recognitionRef.current = null;
 
       try {
         abortRef.current?.abort();
@@ -3289,6 +3350,9 @@ const conversation =
                 />
 
                 <div className="mb-1 flex items-center gap-1">
+                  <button type="button" onClick={isListening ? stopDictation : startDictation} disabled={loading} aria-label={isListening ? "Stop voice typing" : "Start voice typing"} aria-pressed={isListening} title={isListening ? "Stop voice typing" : "Dictate a message"} className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border transition ${isListening ? "border-red-400/40 bg-red-500/15 text-red-300 animate-pulse" : "border-white/10 bg-white/[.035] text-slate-300 hover:border-sky-400/30 hover:bg-white/[.08]"}`}>
+                    {isListening ? <MicOff size={18} /> : <Mic size={18} />}
+                  </button>
                   {input && (
                     <button
                       onClick={() =>
@@ -3332,6 +3396,17 @@ const conversation =
                 </div>
               </div>
 
+              <div className="flex items-center justify-end px-3 pb-1">
+                <label className="flex items-center gap-2 text-[10px] text-slate-600">
+                  Dictation language
+                  <select value={speechLanguage} onChange={(event) => setSpeechLanguage(event.target.value)} disabled={isListening} aria-label="Dictation language" className="rounded-md border border-white/10 bg-[#111722] px-2 py-1 text-[10px] text-slate-300 outline-none disabled:opacity-50">
+                    <option value={typeof navigator !== "undefined" ? navigator.language : "en-US"}>Device language</option>
+                    <option value="fr-FR">Français</option><option value="en-US">English</option><option value="es-ES">Español</option><option value="de-DE">Deutsch</option><option value="it-IT">Italiano</option><option value="pt-PT">Português</option><option value="nl-NL">Nederlands</option><option value="ar-SA">العربية</option><option value="zh-CN">中文</option><option value="ja-JP">日本語</option><option value="ko-KR">한국어</option><option value="hi-IN">हिन्दी</option>
+                  </select>
+                </label>
+              </div>
+              {speechError && <div role="status" className="px-3 pb-2 text-[11px] text-amber-300">{speechError}</div>}
+              {isListening && <div className="flex items-center gap-2 px-3 pb-2 text-[11px] text-red-300" role="status" aria-live="polite"><span className="h-2 w-2 rounded-full bg-red-400 animate-pulse" />Listening… Speak naturally, then press the microphone again to stop.</div>}
               {/* COMPOSER FOOTER */}
               <div className="flex items-center justify-between border-t border-white/[.05] px-3 pt-2 text-[10px] text-slate-700">
                 <span className="flex items-center gap-2">
